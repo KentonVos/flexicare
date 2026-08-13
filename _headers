@@ -1,0 +1,21 @@
+# Cloudflare Pages header rules.
+#
+# Why this file exists: the whole point of moving off pinned jsDelivr tags is
+# that a push goes live WITHOUT editing the Webflow footer. That only works if
+# browsers don't sit on a stale copy. jsDelivr's default for an unpinned URL is
+# max-age=604800 (7 days in the browser) — which is why @main was never a real
+# option.
+#
+# max-age=0 + must-revalidate means the browser asks "changed?" on every load
+# and gets a tiny 304 when it hasn't. Updates are effectively instant; the cost
+# is one conditional request per file (HTTP/2 multiplexed, negligible).
+#
+# If you later want fewer round-trips and can live with a short delay, change
+# max-age=0 to max-age=60. Do NOT raise it much beyond that without going back
+# to pinned versions — long cache + floating URL is how you ship a fix nobody
+# receives.
+
+/src/*
+  Cache-Control: public, max-age=0, must-revalidate
+  Access-Control-Allow-Origin: *
+  X-Content-Type-Options: nosniff

@@ -14,6 +14,21 @@ Format:
 
 ---
 
+## 2026-08-13 — Fix persistent siblings snapping during page transitions (v1.0.1)
+- src/transition.js
+- Barba inserts the next container only AFTER leave() resolves, but beginOverlap()
+  pulled the leaving container out of flow at the START of leave(). For the length
+  of the leave animation the shared parent (content-flex-wrapper) had a hole in it,
+  so persistent siblings — top-section-wrapper above the container — reflowed into
+  the vacated space and snapped back when the next container landed.
+- beginOverlap() now parks a rigid, hidden placeholder (same box + margins,
+  flex:0 0 auto) in the container's slot; beforeEnter() removes it the moment the
+  real container is inserted. endOverlap() removes it as a backstop.
+- No Webflow change needed. The placeholder carries data-barba-placeholder for
+  debugging only.
+- Also added _headers (Cloudflare Pages cache rules) as part of moving hosting
+  off pinned jsDelivr tags — see docs/git-and-jsdelivr.md.
+
 ## 2025-08-13 — Set up repo, context docs, and move hosting to Git + jsDelivr
 - Added CLAUDE.md, ARCHITECTURE.md, README.md, this CHANGELOG, .gitignore
 - Captured the real Webflow head snippet in docs/webflow-head-snippet.md

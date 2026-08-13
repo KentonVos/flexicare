@@ -570,15 +570,53 @@
          vertically, so the incoming content lands BELOW the outgoing and snaps
          up when the old one is removed. Fix: pull the LEAVING container out of
          flow (absolute) at transition start, so the incoming container occupies
-         the correct slot immediately and animates in right where it belongs. */
+         the correct slot immediately and animates in right where it belongs.
+
+         BUT: Barba only inserts the next container AFTER leave() resolves
+         (order is leave → afterLeave → add → beforeEnter → enter). So between
+         "current goes absolute" and "next is inserted" the shared parent has a
+         hole in it, and any PERSISTENT sibling — e.g. top-section-wrapper above
+         the container — reflows into the vacated space for the length of the
+         leave animation, then snaps back. Fix: park a rigid placeholder of the
+         exact same box in the container's slot for the duration of that gap,
+         and drop it in beforeEnter, the moment the real container lands. */
   var overlapReset = null;
+  var overlapPlaceholder = null;
+  function removePlaceholder() {
+    if (overlapPlaceholder && overlapPlaceholder.parentNode)
+      overlapPlaceholder.parentNode.removeChild(overlapPlaceholder);
+    overlapPlaceholder = null;
+  }
   function beginOverlap(currentContainer) {
     var parent = currentContainer.parentElement;
     if (!parent) return;
     var parentPosWasStatic = getComputedStyle(parent).position === "static";
+    var cs = getComputedStyle(currentContainer);
     var r = currentContainer.getBoundingClientRect();
     var pr = parent.getBoundingClientRect();
     if (parentPosWasStatic) parent.style.position = "relative";
+
+    // Hold the slot open. Same border-box + margins as the container, but rigid
+    // (no flex grow/shrink) so the parent's layout is byte-identical to before.
+    // Inserted and the container un-flowed in the SAME task — nothing is painted
+    // in between, so there is no frame where both occupy space.
+    removePlaceholder(); // stale one from an interrupted transition
+    var ph = document.createElement("div");
+    ph.setAttribute("data-barba-placeholder", "");
+    ph.setAttribute("aria-hidden", "true");
+    ph.style.width = r.width + "px";
+    ph.style.height = r.height + "px";
+    ph.style.marginTop = cs.marginTop;
+    ph.style.marginRight = cs.marginRight;
+    ph.style.marginBottom = cs.marginBottom;
+    ph.style.marginLeft = cs.marginLeft;
+    ph.style.flex = "0 0 auto";
+    ph.style.alignSelf = cs.alignSelf;
+    ph.style.pointerEvents = "none";
+    ph.style.visibility = "hidden";
+    parent.insertBefore(ph, currentContainer.nextSibling);
+    overlapPlaceholder = ph;
+
     // freeze size so it doesn't reflow when it leaves flow
     currentContainer.style.width = r.width + "px";
     currentContainer.style.height = r.height + "px";
@@ -593,6 +631,7 @@
     };
   }
   function endOverlap() {
+    removePlaceholder(); // backstop: normally dropped in beforeEnter
     if (overlapReset) overlapReset();
   }
 
@@ -601,6 +640,10 @@
       {
         name: "stagger",
         beforeEnter(data) {
+          // The next container is now in the DOM, so the slot-holder has done
+          // its job — drop it before anything paints, or the parent would
+          // briefly be sized for two containers.
+          removePlaceholder();
           primeEnter(data.next.container, true); // navigation: prime reveals too
         },
         beforeOnce(data) {
