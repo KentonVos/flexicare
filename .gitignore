@@ -1,0 +1,12 @@
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+.vscode/
+*.log
+
+# Never commit secrets — this repo is public
+.env
+.env.*
+*.key
+*.pem
+secrets.*

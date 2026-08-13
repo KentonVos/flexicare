@@ -1,0 +1,670 @@
+/* ============================================================
+   Page Transitions v9 — Barba.js + GSAP, attribute-driven
+   ------------------------------------------------------------
+   Adds two things over v1:
+     • SYNCED REGIONS: persistent wrappers whose *contents* swap
+       (e.g. button-navigation-wrapper — the wrapper stays, its
+       buttons are replaced from the next page and cross-fade).
+     • NAMESPACE VISIBILITY: show/hide a persistent element based
+       on which page you're on (e.g. hide the nav buttons on the
+       landing page, reveal them everywhere else).
+
+   Requires (loaded first): @barba/core, gsap, and your
+   liquid-glass script (exposing LiquidGlass.scan).
+
+   ---- MARKUP ----
+   data-barba="wrapper"              once, wraps the whole shell
+   data-barba="container"            the ONE div whose contents swap
+                                     (put on glass-content-wrapper).
+                                     Always the literal word "container";
+                                     set once in your symbol, never varies.
+   (No per-page namespace needed — page identity is derived from the URL:
+    site root "/" or "/index" = landing, every other URL = a normal page.)
+
+   Inside the container, on animating elements:
+     data-anim="1"                   stagger order (number)
+     data-anim-from="up|down|left|right"   default "up"
+     data-anim-distance="40"         px, default 40
+     data-anim-fade="1"              opacity-only fade in/out (no transform).
+                                     Use INSTEAD of data-anim on elements that
+                                     have a glass press/tilt, so the fade and
+                                     the press don't fight over transform.
+
+   SYNCED REGION (persistent wrapper, OUTSIDE the container):
+     data-barba-sync="nav"           on button-navigation-wrapper.
+        Its innerHTML is replaced from the next page's matching
+        wrapper, then cross-faded. Must exist on every page with
+        the same data-barba-sync value.
+
+   VISIBILITY (persistent element, OUTSIDE the container):
+     data-show-except="landing"      hidden on the landing page (site
+                                     root), shown on all other pages.
+                                     Put on button-navigation-wrapper.
+                                     (Value matches URL-derived identity:
+                                     "landing" for root, "page" otherwise.)
+
+   PROGRESS BAR (persistent):
+     data-progress-bar               on the fill element
+     data-progress="0.5"             on each container, target 0..1
+
+   Tunables: window.PageTransition.config
+   ============================================================ */
+(function () {
+  "use strict";
+
+  if (!window.barba || !window.gsap) {
+    console.warn(
+      "[PageTransition] Barba and/or GSAP not found — load them before this script."
+    );
+    return;
+  }
+  var barba = window.barba,
+    gsap = window.gsap;
+
+  // Hide animating elements from the FIRST paint so an incoming container can
+  // never flash at full opacity before GSAP primes it. Gated behind a class
+  // added only now (libs confirmed) — so if this script never runs, nothing
+  // is left hidden. GSAP's inline opacity beats this rule when it animates in.
+  var fouc = document.createElement("style");
+  fouc.textContent =
+    ".lg-anim [data-anim]:not([data-text-reveal]),.lg-anim [data-anim-fade]:not([data-text-reveal]){opacity:0}";
+  document.head.appendChild(fouc);
+  document.documentElement.classList.add("lg-anim");
+
+  var config = {
+    duration: 0.55,
+    stagger: 0.08,
+    distance: 40,
+    ease: "power3.out",
+    easeOut: "power2.in",
+    progressDuration: 0.6,
+    syncFade: 0.4, // cross-fade duration for synced regions
+    visToggle: 0.4, // fade duration for opacity-only show/hide
+    navReveal: 0.85, // height reveal/collapse duration (reserve-space mode)
+    navSlide: 28, // px the buttons slide up from the bottom
+    navEase: "power3.inOut",
+  };
+  window.PageTransition = { config: config };
+
+  function animedEls(scope) {
+    var els = Array.prototype.slice
+      .call(scope.querySelectorAll("[data-anim]"))
+      .filter(function (el) {
+        // A data-text-reveal element may carry data-anim purely to claim a slot
+        // in the stagger order — the word-by-word reveal handles its animation,
+        // so it must NOT get the element-level opacity/transform tween.
+        return !el.hasAttribute("data-text-reveal");
+      });
+    els.sort(function (a, b) {
+      return (
+        (parseFloat(a.getAttribute("data-anim")) || 0) -
+        (parseFloat(b.getAttribute("data-anim")) || 0)
+      );
+    });
+    return els;
+  }
+
+  // Text-reveal elements taking part in the entrance stagger.
+  function revealEls(scope) {
+    return Array.prototype.slice.call(
+      scope.querySelectorAll("[data-text-reveal]")
+    );
+  }
+
+  // Opacity-only fade elements: fade in/out with NO transform, so they don't
+  // fight a glass press/tilt (which owns transform) on the same element.
+  function fadeEls(scope) {
+    var els = Array.prototype.slice.call(
+      scope.querySelectorAll("[data-anim-fade]")
+    );
+    els.sort(function (a, b) {
+      return (
+        (parseFloat(a.getAttribute("data-anim-fade")) || 0) -
+        (parseFloat(b.getAttribute("data-anim-fade")) || 0)
+      );
+    });
+    return els;
+  }
+
+  function offset(el) {
+    var dir = el.getAttribute("data-anim-from") || "up";
+    var d = parseFloat(el.getAttribute("data-anim-distance"));
+    if (isNaN(d)) d = config.distance;
+    switch (dir) {
+      case "down":
+        return { x: 0, y: -d };
+      case "left":
+        return { x: d, y: 0 };
+      case "right":
+        return { x: -d, y: 0 };
+      default:
+        return { x: 0, y: d };
+    }
+  }
+
+  /* ---------- main container in/out ---------- */
+  function leave(container) {
+    var els = animedEls(container),
+      fades = fadeEls(container),
+      reveals = window.TextReveal ? revealEls(container) : [];
+    var tl = gsap.timeline();
+    if (!els.length && !fades.length && !reveals.length) {
+      return tl.to(container, {
+        opacity: 0,
+        duration: config.duration * 0.6,
+        ease: config.easeOut,
+      });
+    }
+    if (els.length) {
+      tl.to(
+        els.reverse(),
+        {
+          opacity: 0,
+          y: function (i, el) {
+            return -offset(el).y * 0.6;
+          },
+          x: function (i, el) {
+            return -offset(el).x * 0.6;
+          },
+          duration: config.duration * 0.7,
+          ease: config.easeOut,
+          stagger: config.stagger * 0.6,
+        },
+        0
+      );
+    }
+    if (fades.length) {
+      tl.to(
+        fades,
+        {
+          opacity: 0,
+          duration: config.duration * 0.7,
+          ease: config.easeOut,
+          stagger: config.stagger * 0.6,
+        },
+        0
+      );
+    }
+    // Reveal headings are excluded from animedEls (their words own the entrance),
+    // so give them their own exit here: a quick fade + blur-out of the whole
+    // element (word-by-word is an entrance effect; on leave a unit blur reads
+    // cleanly and fast).
+    if (reveals.length) {
+      tl.to(
+        reveals,
+        {
+          opacity: 0,
+          filter: "blur(6px)",
+          duration: config.duration * 0.7,
+          ease: config.easeOut,
+          stagger: config.stagger * 0.6,
+        },
+        0
+      );
+    }
+    return tl;
+  }
+
+  // Set the hidden start state SYNCHRONOUSLY, before the browser paints the
+  // new container — prevents the "flash then jump".
+  function primeEnter(container, primeReveals) {
+    var els = animedEls(container),
+      fades = fadeEls(container);
+    if (els.length) {
+      gsap.set(els, {
+        opacity: 0,
+        x: function (i, el) {
+          return offset(el).x;
+        },
+        y: function (i, el) {
+          return offset(el).y;
+        },
+      });
+    }
+    if (fades.length) gsap.set(fades, { opacity: 0 });
+    // On navigation, prime the reveal words (hidden + blurred) so nothing
+    // flashes before PHASE 2 plays them at their slot. On first load
+    // (primeReveals=false) text-reveal's own boot() handles them.
+    var reveals = primeReveals && window.TextReveal ? revealEls(container) : [];
+    reveals.forEach(function (el) {
+      window.TextReveal.prime(el);
+      gsap.set(el, { opacity: 1 }); // element visible; words carry the reveal
+    });
+    if (!els.length && !fades.length && !reveals.length)
+      gsap.set(container, { opacity: 0 });
+  }
+
+  function enter(container, withReveals) {
+    var fades = fadeEls(container);
+    var tl = gsap.timeline();
+
+    // Merge animated elements with (on navigation) the text-reveal elements
+    // into one order, sorted by data-anim number, so the headline falls at its
+    // own slot in the stagger rather than before or after the whole group.
+    var items = [];
+    animedEls(container).forEach(function (el) {
+      items.push({
+        el: el,
+        type: "anim",
+        n: parseFloat(el.getAttribute("data-anim")) || 0,
+      });
+    });
+    if (withReveals && window.TextReveal) {
+      revealEls(container).forEach(function (el) {
+        var raw = el.getAttribute("data-anim");
+        var n = raw === null || raw === "" ? Infinity : parseFloat(raw) || 0;
+        items.push({ el: el, type: "reveal", n: n });
+      });
+    }
+    items.sort(function (a, b) {
+      return a.n - b.n;
+    });
+
+    if (!items.length && !fades.length) {
+      return tl.to(container, {
+        opacity: 1,
+        duration: config.duration,
+        ease: config.ease,
+      });
+    }
+
+    // Each item at its slot (index * stagger). Anim elements get the
+    // opacity/transform tween; reveal elements get their word timeline dropped
+    // in at the same offset so they blur in as part of the same cascade.
+    items.forEach(function (it, i) {
+      var at = i * config.stagger;
+      if (it.type === "anim") {
+        tl.to(
+          it.el,
+          {
+            opacity: 1,
+            x: 0,
+            y: 0,
+            duration: config.duration,
+            ease: config.ease,
+            clearProps: "transform",
+          },
+          at
+        );
+      } else {
+        // Fire the reveal exactly when the cascade reaches this slot. We do NOT
+        // nest TextReveal.play()'s timeline — a GSAP timeline auto-plays on
+        // creation, so nesting it made the reveal ignore its slot and start
+        // immediately. A positioned callback starts it on the right beat.
+        tl.call(
+          function (el) {
+            if (window.TextReveal) window.TextReveal.play(el);
+          },
+          [it.el],
+          at
+        );
+      }
+    });
+
+    if (fades.length) {
+      // NO clearProps here: the FOUC rule would otherwise reassert opacity:0.
+      tl.to(
+        fades,
+        {
+          opacity: 1,
+          duration: config.duration,
+          ease: config.ease,
+          stagger: config.stagger,
+        },
+        0
+      );
+    }
+    return tl;
+  }
+
+  /* ---------- synced regions (persistent wrapper, swapped innards) ----------
+         nextDoc is the parsed next-page document Barba provides. For each synced
+         wrapper on the current page, find the same [data-barba-sync=NAME] in the
+         next doc, replace innerHTML, then cross-fade + play its data-anim stagger. */
+  function syncRegions(nextDoc, skipEl) {
+    var current = document.querySelectorAll("[data-barba-sync]");
+    current.forEach(function (el) {
+      if (skipEl && el === skipEl) return; // nav reveal owns this one
+      var name = el.getAttribute("data-barba-sync");
+      var incoming = nextDoc.querySelector('[data-barba-sync="' + name + '"]');
+      if (!incoming) return;
+      // The persistent wrapper stays put — its opacity is NEVER touched, so the
+      // frame doesn't flash. Only the inner buttons animate: slide the current
+      // ones out, swap the innards, slide the new ones in.
+      var outgoing = navContent(el);
+      var tl = gsap.timeline();
+      if (outgoing.length) {
+        tl.to(
+          outgoing,
+          {
+            y: config.navSlide,
+            opacity: 0,
+            duration: config.syncFade * 0.5,
+            ease: config.easeOut,
+          },
+          0
+        );
+      }
+      tl.add(function () {
+        el.innerHTML = incoming.innerHTML;
+        if (window.LiquidGlass && window.LiquidGlass.scan)
+          window.LiquidGlass.scan();
+        var incomingKids = navContent(el);
+        gsap.set(incomingKids, { y: config.navSlide, opacity: 0 });
+        gsap.to(incomingKids, {
+          y: 0,
+          opacity: 1,
+          duration: config.syncFade,
+          ease: config.ease,
+          stagger: config.stagger,
+          clearProps: "transform",
+        });
+      });
+    });
+  }
+
+  /* ---------- page identity, derived from the URL ----------
+         Landing = site root ("/" or "/index[.html]"). Everything else
+         resolves to "page". So data-show-except="landing" hides an
+         element only at the root and shows it on every other URL —
+         no per-page attribute needed, and new pages just work.
+         Pass a URL (Barba gives the next page's href) or omit for current. */
+  function pageIdentity(href) {
+    var path;
+    try {
+      path = href ? new URL(href, location.origin).pathname : location.pathname;
+    } catch (e) {
+      path = location.pathname;
+    }
+    path = path.replace(/\/index(\.html?)?$/i, "/").replace(/\.html?$/i, "");
+    if (path === "" || path === "/") return "landing";
+    return "page";
+  }
+
+  /* ---------- visibility (data-show-except) ----------
+         Two modes per element:
+         • DEFAULT (opacity): fades opacity only, layout box always reserved, so
+           nothing reflows. Used for elements that should just fade in/out.
+         • RESERVE-SPACE (add data-nav-reveal): animates the element's HEIGHT
+           between 0 and its natural size, sliding its contents up from the
+           bottom. Neighbouring flex space (e.g. a flex:1 glass panel above it)
+           expands/contracts smoothly to fill. The glass is frozen during the
+           size change so its displacement map rebuilds once at the end, not
+           every frame. */
+  function glassFreeze() {
+    if (window.LiquidGlass && window.LiquidGlass.freeze)
+      window.LiquidGlass.freeze();
+  }
+  function glassSettle() {
+    if (window.LiquidGlass && window.LiquidGlass.unfreeze)
+      window.LiquidGlass.unfreeze(true);
+    else if (window.LiquidGlass && window.LiquidGlass.refreshAll)
+      window.LiquidGlass.refreshAll();
+  }
+
+  // The layer we fade/slide as the wrapper grows. Prefer an explicit inner
+  // content wrapper (data-nav-content, or the single child like
+  // button-navigation-glass-wrapper) so it works regardless of nesting depth;
+  // fall back to the wrapper's direct children.
+  function navContent(el) {
+    var explicit = el.querySelector("[data-nav-content]");
+    if (explicit) return [explicit];
+    if (el.children.length === 1) return [el.children[0]];
+    return Array.prototype.slice.call(el.children);
+  }
+
+  // Belt-and-suspenders: elements inside the nav wrapper are revealed as a
+  // unit by this animation, so a leftover data-anim / data-anim-fade on a
+  // button would be pinned to opacity 0 by the first-paint guard and never
+  // released. Strip those attributes (re-applied fresh each sync, so this is
+  // idempotent) and clear any forced opacity.
+  function clearStuckOpacity(el) {
+    el.querySelectorAll("[data-anim],[data-anim-fade]").forEach(function (n) {
+      n.removeAttribute("data-anim");
+      n.removeAttribute("data-anim-fade");
+      gsap.set(n, { clearProps: "opacity" });
+      n.style.opacity = "";
+    });
+  }
+
+  function navReveal(el, hide, instant) {
+    var kids = navContent(el);
+    el.style.overflow = "hidden";
+    clearStuckOpacity(el);
+    if (instant) {
+      if (hide) {
+        gsap.set(el, { height: 0, paddingTop: 0, paddingBottom: 0 });
+        gsap.set(kids, { y: config.navSlide, opacity: 0 });
+      } else {
+        gsap.set(el, {
+          height: "auto",
+          clearProps: "height,paddingTop,paddingBottom,overflow",
+        });
+        gsap.set(kids, { y: 0, opacity: 1, clearProps: "transform,opacity" });
+      }
+      el.style.pointerEvents = hide ? "none" : "";
+      el.__navHidden = hide;
+      return null;
+    }
+    // Only animate when the shown/hidden STATE actually changes — otherwise a
+    // page-to-page nav (both non-landing) would wrongly collapse & reopen.
+    if (el.__navHidden === hide) return null;
+    el.__navHidden = hide;
+
+    glassFreeze();
+    var tl = gsap.timeline({
+      onComplete: function () {
+        if (!hide) {
+          el.style.height = "auto";
+          el.style.overflow = "";
+          gsap.set(kids, { clearProps: "transform,opacity" });
+        }
+        el.style.pointerEvents = hide ? "none" : "";
+        glassSettle(); // rebuild displacement maps once, at the settled size
+      },
+    });
+    if (hide) {
+      tl.to(
+        kids,
+        {
+          y: config.navSlide,
+          opacity: 0,
+          duration: config.navReveal * 0.5,
+          ease: "power2.in",
+        },
+        0
+      ).to(
+        el,
+        {
+          height: 0,
+          paddingTop: 0,
+          paddingBottom: 0,
+          duration: config.navReveal,
+          ease: config.navEase,
+        },
+        0
+      );
+    } else {
+      el.style.pointerEvents = "";
+      gsap.set(el, { height: 0 });
+      gsap.set(kids, { y: config.navSlide, opacity: 0 });
+      // whole content fades in together as the wrapper grows
+      tl.to(
+        el,
+        { height: "auto", duration: config.navReveal, ease: config.navEase },
+        0
+      ).to(
+        kids,
+        {
+          y: 0,
+          opacity: 1,
+          duration: config.navReveal * 0.7,
+          ease: "power2.out",
+        },
+        config.navReveal * 0.2
+      );
+    }
+    return tl;
+  }
+
+  function applyVisibility(namespace, instant) {
+    var navTL = null;
+    document.querySelectorAll("[data-show-except]").forEach(function (el) {
+      var hideOn = (el.getAttribute("data-show-except") || "")
+        .split(",")
+        .map(function (s) {
+          return s.trim();
+        });
+      var shouldHide = hideOn.indexOf(namespace) !== -1;
+      if (el.hasAttribute("data-nav-reveal")) {
+        var tl = navReveal(el, shouldHide, instant);
+        if (tl) navTL = tl; // capture the (single) nav reveal timeline to await
+        return;
+      }
+      el.style.pointerEvents = shouldHide ? "none" : "";
+      if (instant) {
+        gsap.set(el, { opacity: shouldHide ? 0 : 1 });
+      } else {
+        gsap.to(el, {
+          opacity: shouldHide ? 0 : 1,
+          duration: config.visToggle,
+          ease: "power2.out",
+        });
+      }
+    });
+    return navTL;
+  }
+
+  // Silent innerHTML swap for a synced region (no cross-fade) — used when the
+  // nav reveal is going to animate the same wrapper, so it owns the motion.
+  function syncSwapSilent(nextDoc, el) {
+    var name = el.getAttribute("data-barba-sync");
+    if (!name) return;
+    var incoming = nextDoc.querySelector('[data-barba-sync="' + name + '"]');
+    if (!incoming) return;
+    el.innerHTML = incoming.innerHTML;
+    if (window.LiquidGlass && window.LiquidGlass.scan)
+      window.LiquidGlass.scan();
+  }
+
+  function updateProgress(nextContainer) {
+    var bar = document.querySelector("[data-progress-bar]");
+    if (!bar) return;
+    var target = nextContainer.getAttribute("data-progress");
+    if (target === null) return;
+    var pct = Math.max(0, Math.min(1, parseFloat(target) || 0)) * 100;
+    gsap.to(bar, {
+      width: pct + "%",
+      duration: config.progressDuration,
+      ease: "power2.inOut",
+    });
+  }
+
+  function reinit() {
+    if (window.LiquidGlass && window.LiquidGlass.scan)
+      window.LiquidGlass.scan();
+  }
+
+  /* ---------- overlap positioning ----------
+         During a transition both containers briefly share a parent and stack
+         vertically, so the incoming content lands BELOW the outgoing and snaps
+         up when the old one is removed. Fix: pull the LEAVING container out of
+         flow (absolute) at transition start, so the incoming container occupies
+         the correct slot immediately and animates in right where it belongs. */
+  var overlapReset = null;
+  function beginOverlap(currentContainer) {
+    var parent = currentContainer.parentElement;
+    if (!parent) return;
+    var parentPosWasStatic = getComputedStyle(parent).position === "static";
+    var r = currentContainer.getBoundingClientRect();
+    var pr = parent.getBoundingClientRect();
+    if (parentPosWasStatic) parent.style.position = "relative";
+    // freeze size so it doesn't reflow when it leaves flow
+    currentContainer.style.width = r.width + "px";
+    currentContainer.style.height = r.height + "px";
+    currentContainer.style.position = "absolute";
+    currentContainer.style.top = r.top - pr.top + "px";
+    currentContainer.style.left = r.left - pr.left + "px";
+    currentContainer.style.zIndex = "1";
+    currentContainer.style.pointerEvents = "none";
+    overlapReset = function () {
+      if (parentPosWasStatic && parent) parent.style.position = "";
+      overlapReset = null;
+    };
+  }
+  function endOverlap() {
+    if (overlapReset) overlapReset();
+  }
+
+  barba.init({
+    transitions: [
+      {
+        name: "stagger",
+        beforeEnter(data) {
+          primeEnter(data.next.container, true); // navigation: prime reveals too
+        },
+        beforeOnce(data) {
+          primeEnter(data.next.container, false); // first load: boot() handles reveals
+        },
+        async leave(data) {
+          beginOverlap(data.current.container); // free the slot for the incoming page
+          await leave(data.current.container);
+        },
+        async enter(data) {
+          window.scrollTo(0, 0);
+          var ns = pageIdentity(data.next.url && data.next.url.href);
+          var nextDoc = new DOMParser().parseFromString(
+            data.next.html,
+            "text/html"
+          );
+
+          // Will the nav's shown/hidden state change on this navigation?
+          var navEl = document.querySelector("[data-nav-reveal]");
+          var navWillAnimate = false;
+          if (navEl) {
+            var hideOn = (navEl.getAttribute("data-show-except") || "")
+              .split(",")
+              .map(function (s) {
+                return s.trim();
+              });
+            var shouldHide = hideOn.indexOf(ns) !== -1;
+            navWillAnimate = navEl.__navHidden !== shouldHide;
+          }
+
+          // Put the correct synced buttons in place. If the nav is about to
+          // animate its height/slide, swap silently and let the reveal move
+          // them; otherwise cross-fade them (page-to-page button change).
+          if (navEl && navWillAnimate) {
+            syncSwapSilent(nextDoc, navEl);
+            syncRegions(nextDoc, navEl); // handle any OTHER synced regions, skip navEl
+          } else {
+            syncRegions(nextDoc);
+          }
+
+          // PHASE 1 — nav leads: reserve/return space + slide buttons, alone.
+          var navTL = applyVisibility(ns, false);
+          if (navTL) await navTL; // GSAP timelines are thenable
+
+          // PHASE 2 — everything else animates in (headline included, at its slot).
+          updateProgress(data.next.container);
+          return enter(data.next.container, true);
+        },
+        once(data) {
+          var ns = pageIdentity();
+          applyVisibility(ns, true);
+          updateProgress(data.next.container);
+          return enter(data.next.container, false); // reveals handled by boot()
+        },
+      },
+    ],
+    timeout: 7000,
+  });
+
+  barba.hooks.afterEnter(function () {
+    endOverlap();
+    reinit();
+  });
+  barba.hooks.after(function () {
+    endOverlap();
+  });
+})();
