@@ -1,0 +1,15 @@
+{
+  // Cloudflare Workers config — this repo has NO build step and NO server code.
+  // It exists only to tell `wrangler deploy` which directory holds the static
+  // files, which is what the first deploy failed on ("Could not detect a
+  // directory containing static files").
+  //
+  // "assets.directory": "./" serves the repo root, so src/glass.js is reachable
+  // at https://<your-worker>/src/glass.js — matching the Webflow footer.
+  // Cache behaviour comes from the _headers file; see the comments in there.
+  "name": "flexicare",
+  "compatibility_date": "2026-08-13",
+  "assets": {
+    "directory": "./"
+  }
+}

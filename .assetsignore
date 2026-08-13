@@ -1,0 +1,9 @@
+# Files NOT to publish to the CDN. Everything here is already public on GitHub,
+# so this is tidiness, not secrecy — it keeps the served surface to just the
+# scripts Webflow actually loads.
+.git
+.gitignore
+.assetsignore
+wrangler.jsonc
+*.md
+docs
