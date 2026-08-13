@@ -26,8 +26,23 @@ Format:
   real container is inserted. endOverlap() removes it as a backstop.
 - No Webflow change needed. The placeholder carries data-barba-placeholder for
   debugging only.
-- Also added _headers (Cloudflare Pages cache rules) as part of moving hosting
-  off pinned jsDelivr tags — see docs/git-and-jsdelivr.md.
+- Also added _headers (Cloudflare cache rules) as part of moving hosting
+  off pinned jsDelivr tags — see docs/hosting-and-publishing.md.
+
+## 2026-08-13 — Hosting moves to Cloudflare Workers; no more footer pastes
+- Added _headers, wrangler.jsonc, .assetsignore
+- Renamed docs/git-and-jsdelivr.md → docs/hosting-and-publishing.md and rewrote it
+- Updated CLAUDE.md + README.md to describe the new workflow
+- Why: pinned jsDelivr tags meant pasting a new footer into Webflow on every
+  release. Unpinning was not an option — jsDelivr serves unpinned URLs with
+  max-age=604800, so returning visitors would hold stale JS for 7 days.
+- Now: Cloudflare Workers serves the repo root from main, with
+  Cache-Control: public, max-age=0, must-revalidate on /src/* — push and it's live.
+- WEBFLOW CHANGE (one time): footer script URLs move from
+  cdn.jsdelivr.net/gh/KentonVos/flexicare@vX.Y.Z/src/... to
+  https://flexicare.kenton-323.workers.dev/src/... — same files, same order.
+  After this paste, the footer only changes if the file LIST changes.
+- main is now live on every push. Version tags still cut as a rollback escape hatch.
 
 ## 2025-08-13 — Set up repo, context docs, and move hosting to Git + jsDelivr
 - Added CLAUDE.md, ARCHITECTURE.md, README.md, this CHANGELOG, .gitignore

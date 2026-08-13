@@ -62,24 +62,34 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
   (it survives glass rebuilds and Barba swaps). Don't refactor it to attach listeners
   to specific button nodes — that was the old, broken approach.
 
-## Editing + publishing workflow (Git + jsDelivr)
+## Editing + publishing workflow (Git + Cloudflare)
 
-This folder is a **Git repo pushed to GitHub**; **jsDelivr** serves the files to Webflow
-from GitHub. Full setup and rationale in `docs/git-and-jsdelivr.md`. The short version:
+This folder is a **Git repo pushed to GitHub**; **Cloudflare Workers** serves the files to
+Webflow straight from `main`. Full setup and rationale in `docs/hosting-and-publishing.md`.
+The short version:
 
 1. Edit the file(s) here in VS Code with me (Claude Code).
-2. Ask me to **commit, tag the next version, and push** — I run the git commands. We use
-   **version tags** (`v1.0.1`, `v1.0.2`, ...), never floating `@main`, because tagged
-   jsDelivr URLs update instantly and reliably (branch URLs cache ~12h and purge is flaky).
-3. I hand you the updated Webflow footer block with the new tag. Paste it into Webflow →
-   Project Settings → Custom Code → **Footer**, replacing the old block, and **Publish**.
+2. Ask me to **commit and push** — I run the git commands.
+3. Cloudflare auto-deploys in ~1 min. Hard-refresh. **Nothing to paste into Webflow.**
 4. Add a line to `CHANGELOG.md`.
 
+Live base URL: `https://flexicare.kenton-323.workers.dev` (e.g. `/src/glass.js`).
+
 Rules for me when publishing:
-- **Bump the tag every release; never reuse a tag.** After pushing, always output the full
-  footer block with the new `@vX.Y.Z` so the human can paste it.
-- If a release broke something, the fix is to point the footer at the previous tag — I
-  should offer that rollback rather than scrambling to hot-fix.
+- **`main` IS live.** Every push ships immediately to the real site — there is no
+  commit-now-publish-later gap. Don't push half-finished work to `main`; use a branch
+  (Cloudflare gives each branch its own preview URL).
+- **The Webflow footer only changes if the file LIST changes** (a script added, removed,
+  or renamed). Content changes need no Webflow step. Don't hand over a footer block
+  unless the list actually changed — it's noise, and pasting a stale one can pin the
+  site to old code.
+- Still **tag meaningful releases** (`v1.0.2`, ...) — tags are the emergency escape
+  hatch, since jsDelivr serves every tag permanently.
+- If a release broke the site: normally `git revert && git push`. If it's urgent, offer
+  to point the footer at a known-good jsDelivr tag for an instant fix — and remind the
+  human to put the footer back afterwards, or future pushes will silently do nothing.
+- `_headers` is what makes updates instant (`max-age=0, must-revalidate`). If someone
+  raises that value, unpinned URLs start serving stale code — don't.
 - The repo is **public**; never commit API keys, tokens, or secrets.
 
 Test on the **published or preview URL**, not the Designer — the camera (selfie page) and
