@@ -14,6 +14,24 @@ Format:
 
 ---
 
+## 2026-08-14 — Sync persistent shell classes across navigations (v1.0.3)
+- src/transition.js
+- Symptom: the 1.5rem flex gap above button-navigation-wrapper was missing after
+  navigating, but correct after a hard refresh.
+- Cause: Barba only swaps the container. The shell around it persists as whatever
+  the FIRST loaded page shipped, so per-page CLASSES on it go stale. Landing on the
+  site root left the shell as landing-glass-container (gap 0, justify-content
+  center) on pages whose own markup says glass-container (gap 24px, flex-start).
+  A refresh "fixed" it only because Webflow then served the correct shell.
+- Fix: syncShellClasses() walks the persistent tree on each navigation and copies
+  each element's class list from its positional counterpart in the next page's
+  document. Skips the container subtree (Barba owns it) and [data-barba-sync]
+  subtrees (innerHTML swap owns those, and their buttons carry runtime state
+  classes). Containers are excluded from positional matching because two exist
+  mid-transition. Abandons a branch on tagName mismatch rather than guessing.
+- No Webflow change needed. REQUIREMENT: keep the shell's STRUCTURE identical
+  across pages (same nesting and element order) — only classes may differ.
+
 ## 2026-08-13 — Fix persistent siblings snapping during page transitions (v1.0.1)
 - src/transition.js
 - Barba inserts the next container only AFTER leave() resolves, but beginOverlap()

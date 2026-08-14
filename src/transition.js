@@ -30,6 +30,17 @@
                                      have a glass press/tilt, so the fade and
                                      the press don't fight over transform.
 
+   PERSISTENT SHELL CLASSES (automatic — no attribute needed):
+     Everything outside the container persists across navigations, so any
+     per-page CLASS on the shell (e.g. landing-glass-container vs
+     glass-container, which differ in flex gap and justify-content) would
+     otherwise stay frozen at whatever the first-loaded page shipped. On each
+     navigation the shell's classes are copied from the next page's document,
+     matched by position in the tree. Nothing to set in Webflow — just keep the
+     shell's STRUCTURE identical across pages (same nesting, same element
+     order); only classes may differ. If the structure diverges, the mismatched
+     branch is skipped rather than guessed at.
+
    SYNCED REGION (persistent wrapper, OUTSIDE the container):
      data-barba-sync="nav"           on button-navigation-wrapper.
         Its innerHTML is replaced from the next page's matching
@@ -363,6 +374,58 @@
     });
   }
 
+  /* ---------- persistent shell classes ----------
+         Barba only swaps the container. EVERYTHING else — the whole shell
+         around it — is whatever the FIRST page you loaded shipped, forever.
+         So a per-page class on a persistent element is stale after the first
+         navigation: land on the site root and the shell stays
+         landing-glass-container (flex gap 0, justify-content center) even on
+         pages whose own markup says glass-container (gap 1.5rem, flex-start).
+         Hard-refreshing that page looked "fixed" only because Webflow then
+         served the right shell.
+
+         Fix: walk the persistent tree and copy each element's class list from
+         its structural counterpart in the next page's document. Matching is by
+         position, not by class — the classes are exactly what differs.
+
+         Deliberately skipped:
+           • the container and its subtree — Barba owns those
+           • [data-barba-sync] subtrees — their innerHTML is replaced wholesale,
+             classes included, and their buttons carry runtime state classes
+             (is-disabled/is-busy) that must not be clobbered
+         A tagName mismatch means the two pages' structures diverged, so that
+         branch is abandoned rather than guessed at. */
+  function isContainer(el) {
+    return el.getAttribute("data-barba") === "container";
+  }
+
+  // Children eligible for positional matching. Containers are dropped from BOTH
+  // sides because mid-transition the live DOM holds two of them (outgoing +
+  // incoming) while the next document holds one — leaving them in would shift
+  // every later sibling by one and copy classes onto the wrong elements.
+  function matchableKids(el) {
+    return Array.prototype.filter.call(el.children, function (n) {
+      return !isContainer(n) && !n.hasAttribute("data-barba-placeholder");
+    });
+  }
+
+  function walkShellClasses(cur, next) {
+    if (cur.tagName !== next.tagName) return; // structures diverged — don't guess
+    if (cur.className !== next.className) cur.className = next.className;
+    if (cur.hasAttribute("data-barba-sync")) return; // innerHTML swap owns the inside
+    var a = matchableKids(cur),
+      b = matchableKids(next);
+    var n = Math.min(a.length, b.length);
+    for (var i = 0; i < n; i++) walkShellClasses(a[i], b[i]);
+  }
+
+  function syncShellClasses(nextDoc) {
+    var wrapper = document.querySelector('[data-barba="wrapper"]');
+    var nextWrapper = nextDoc.querySelector('[data-barba="wrapper"]');
+    if (!wrapper || !nextWrapper) return;
+    walkShellClasses(wrapper, nextWrapper);
+  }
+
   /* ---------- page identity, derived from the URL ----------
          Landing = site root ("/" or "/index[.html]"). Everything else
          resolves to "page". So data-show-except="landing" hides an
@@ -660,6 +723,12 @@
             data.next.html,
             "text/html"
           );
+
+          // Bring the persistent shell's per-page classes up to date FIRST —
+          // they change flex gap / justify-content, so the nav reveal below
+          // must measure heights against the incoming page's layout, not the
+          // one we're leaving.
+          syncShellClasses(nextDoc);
 
           // Will the nav's shown/hidden state change on this navigation?
           var navEl = document.querySelector("[data-nav-reveal]");
