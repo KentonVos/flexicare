@@ -181,6 +181,12 @@
                    turbulence per frame is by far the most expensive
                    thing here, so leaving baseFrequency and seed
                    alone lets the browser cache the result.
+     feColorMatrix forces alpha to 1. NOT optional: turbulence writes
+                   noise into all four channels, and because filter
+                   results are stored premultiplied, a noisy alpha
+                   scales the R/G that the displacement reads for x/y.
+                   Without this you get per-pixel grain along the rim
+                   instead of warping.
      feOffset      animated. Scrolling the cached noise across the
                    element is what makes the bulges travel, at
                    almost no cost. Driven by the same closed
@@ -198,6 +204,13 @@
      data-orb-warp-drift="140"    how far the noise scrolls, px
      data-orb-warp-pulse="0.25"   swing in displacement depth (+/-,
                                   as a fraction), 0 = constant depth
+     data-orb-warp-smooth="0"     extra blur on the noise field, px.
+                                  Costs amplitude -- blurring averages
+                                  the channels toward 0.5, which is zero
+                                  displacement -- so raise -scale to
+                                  compensate. Usually unnecessary: lower
+                                  -detail is the better way to get
+                                  broader lobes
 
    WHERE: on the glass element itself, and/or on a glow group --
    never on an ANCESTOR of the glass. A `filter` makes an element a
@@ -311,6 +324,7 @@
       speed: 18,
       drift: 140,
       pulse: 0.25,
+      smooth: 0,
     },
     float: {
       x: 26,
@@ -775,6 +789,7 @@
     var speed = num(el, "data-orb-warp-speed", config.warp.speed);
     var drift = num(el, "data-orb-warp-drift", config.warp.drift);
     var pulse = num(el, "data-orb-warp-pulse", config.warp.pulse);
+    var smooth = num(el, "data-orb-warp-smooth", config.warp.smooth);
 
     var id = "orb-warp-" + ++warpSeq;
     var filter = svgEl("filter", {
@@ -802,8 +817,38 @@
         result: "noise",
       })
     );
+    // feTurbulence writes noise into ALL FOUR channels, alpha included, and
+    // filter results are stored PREMULTIPLIED -- so a noisy alpha scales the R
+    // and G that feDisplacementMap reads for x/y, turning a smooth field into
+    // per-pixel randomness. That reads as grain along the rim, not as warping.
+    // Force alpha opaque and keep RGB untouched.
+    filter.appendChild(
+      svgEl("feColorMatrix", {
+        in: "noise",
+        type: "matrix",
+        values: "1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0 1",
+        result: "field",
+      })
+    );
+
+    // Optional extra smoothing of the field. Note it costs amplitude: blurring
+    // averages the channels back toward 0.5, which is zero displacement, so
+    // raise data-orb-warp-scale to compensate. Sits BEFORE the offset so its
+    // inputs stay static and the browser can keep caching it.
+    var src = "field";
+    if (smooth) {
+      filter.appendChild(
+        svgEl("feGaussianBlur", {
+          in: "field",
+          stdDeviation: smooth,
+          result: "soft",
+        })
+      );
+      src = "soft";
+    }
+
     var offset = svgEl("feOffset", {
-      in: "noise",
+      in: src,
       dx: 0,
       dy: 0,
       result: "moved",

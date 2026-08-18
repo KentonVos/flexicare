@@ -191,8 +191,11 @@ rim, specular and edge as one already-composited image. Nothing can desync, for 
 reason skew can't (it happens after the glass has drawn), but it isn't limited to affine,
 so it produces concave bulges. Chain shape matters: `feTurbulence` is **static** (animating
 `baseFrequency`/`seed` recomputes the whole noise field per frame — by far the most
-expensive thing here), and an animated `feOffset` scrolls that cached noise so the bulges
-travel almost for free. Drift follows the same closed harmonic loop as PATH, so it's
+expensive thing here), an `feColorMatrix` then forces **alpha to 1** — not optional, since
+turbulence writes noise into all four channels and filter results are stored premultiplied,
+so a noisy alpha scales the R/G that the displacement reads for x/y and you get per-pixel
+grain along the rim instead of warping — and an animated `feOffset` scrolls that cached
+noise so the bulges travel almost for free. Drift follows the same closed harmonic loop as PATH, so it's
 seamless. Put it on the glass element itself and/or a glow group — **never on an ancestor
 of the glass**, since a `filter` makes an element a backdrop root and would leave the
 glass nothing behind it to refract (the module warns). The injected `<svg>` defs host is

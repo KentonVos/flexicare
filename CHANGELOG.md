@@ -14,6 +14,23 @@ Format:
 
 ---
 
+## 2026-08-18 — orb-motion: fix warp rendering as grain
+- src/orb-motion.js, ARCHITECTURE.md
+- data-orb-warp produced per-pixel grain along the rim instead of warping. feTurbulence
+  writes noise into ALL FOUR channels including alpha, and filter results are stored
+  premultiplied, so the noisy alpha was scaling the R/G that feDisplacementMap reads for
+  x/y — turning a smooth displacement field into random per-pixel offsets. Visible only
+  at the rim because that's the sole high-contrast edge.
+- Inserted feColorMatrix after the turbulence to force alpha to 1, RGB untouched.
+- New optional `data-orb-warp-smooth` (blur on the field, px). Placed before the offset so
+  its inputs stay static and cacheable. Costs amplitude — blurring averages the channels
+  toward 0.5, i.e. zero displacement — so lowering `-detail` is usually the better way to
+  get broader lobes.
+- CONFIRMED IN BROWSER: `filter` and `backdrop-filter` coexist on the same element in
+  Chrome; the glass kept refracting with the warp applied. That was the open risk from the
+  previous entry and it is now closed.
+- WEBFLOW: no change beyond what the previous entry described.
+
 ## 2026-08-18 — orb-motion: data-orb-warp, true non-affine silhouette
 - src/orb-motion.js, ARCHITECTURE.md
 - scale/skew can only turn a circle into a leaning ellipse; a lava-lamp silhouette has
