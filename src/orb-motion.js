@@ -195,10 +195,15 @@
 
      data-orb-warp-scale="26"     displacement in px -- how deep the
                                   bulges are. This is the main dial
-     data-orb-warp-detail="0.006" noise baseFrequency. Lower = fewer,
-                                  broader lobes (lava lamp). Higher =
-                                  crinkly, and it starts to read as
-                                  frosted glass rather than liquid
+     data-orb-warp-detail="0.006" noise baseFrequency, in cycles per
+                                  PIXEL -- so it belongs in the
+                                  thousandths. Usable range is roughly
+                                  0.002-0.02: 0.004 = broad lava-lamp
+                                  lobes, 0.02 = crinkly and reads as
+                                  frosted glass. Anything above ~0.08 is
+                                  a wavelength of a few px, i.e. grain
+                                  that can't form a lobe at any -scale;
+                                  the module clamps and warns there
      data-orb-warp-octaves="2"    noise detail levels
      data-orb-warp-speed="18"     seconds for one full drift loop
      data-orb-warp-drift="140"    how far the noise scrolls, px
@@ -216,7 +221,11 @@
    never on an ANCESTOR of the glass. A `filter` makes an element a
    backdrop root, so a filtered ancestor leaves the glass's
    backdrop-filter with nothing behind it to refract. The module
-   warns if it sees that.
+   warns if it sees that. In this project that means data-orb-warp
+   goes on glass-orb, NOT on orb-wrapper -- the wrapper is where the
+   squish goes, and those two attributes are not interchangeable.
+   To warp the glows too, give them their own group with its own
+   data-orb-warp, sibling to glass-orb rather than wrapping it.
 
    COST: the displacement is cheap, the turbulence is not -- but it's
    computed once and cached. Still, this is the most expensive thing
@@ -785,6 +794,24 @@
 
     var amp = num(el, "data-orb-warp-scale", config.warp.scale);
     var detail = num(el, "data-orb-warp-detail", config.warp.detail);
+
+    // baseFrequency is CYCLES PER PIXEL, so it lives in the thousandths. Above
+    // ~0.08 the noise wavelength is only a few pixels and the result is grain
+    // that cannot form a lobe at any displacement scale -- almost always a
+    // misplaced decimal point. Clamp it, loudly.
+    if (detail > 0.08) {
+      console.warn(
+        "[OrbMotion] data-orb-warp-detail=" +
+          detail +
+          " is far too high -- it is feTurbulence baseFrequency, in cycles per " +
+          "PIXEL, so this gives a noise wavelength of about " +
+          (1 / detail).toFixed(1) +
+          "px: per-pixel grain, not warping. Usable range is roughly " +
+          "0.002-0.02 (0.004 = broad lava-lamp lobes). Clamping to 0.08.",
+        el
+      );
+      detail = 0.08;
+    }
     var oct = num(el, "data-orb-warp-octaves", config.warp.octaves);
     var speed = num(el, "data-orb-warp-speed", config.warp.speed);
     var drift = num(el, "data-orb-warp-drift", config.warp.drift);

@@ -196,8 +196,12 @@ turbulence writes noise into all four channels and filter results are stored pre
 so a noisy alpha scales the R/G that the displacement reads for x/y and you get per-pixel
 grain along the rim instead of warping — and an animated `feOffset` scrolls that cached
 noise so the bulges travel almost for free. Drift follows the same closed harmonic loop as PATH, so it's
-seamless. Put it on the glass element itself and/or a glow group — **never on an ancestor
-of the glass**, since a `filter` makes an element a backdrop root and would leave the
+seamless. `data-orb-warp-detail` is that turbulence's `baseFrequency`, in cycles per *pixel*, so it
+belongs in the thousandths (~0.002–0.02); the module clamps and warns above 0.08, where the
+wavelength is a few pixels and the result is grain that can't form a lobe at any
+displacement scale. Put it on the glass element itself and/or a glow group — **never on an
+ancestor of the glass** (in this project: on `glass-orb`, not on `orb-wrapper`, which is
+where the squish goes), since a `filter` makes an element a backdrop root and would leave the
 glass nothing behind it to refract (the module warns). The injected `<svg>` defs host is
 tagged `data-js-injected` so `syncShellClasses` skips it.
 

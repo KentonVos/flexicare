@@ -14,6 +14,20 @@ Format:
 
 ---
 
+## 2026-08-18 — orb-motion: guard against a misplaced warp decimal point
+- src/orb-motion.js
+- `data-orb-warp-detail` is feTurbulence's baseFrequency, in cycles per PIXEL, so it lives
+  in the thousandths. A value of 0.6 gives a noise wavelength of ~1.7px — per-pixel grain
+  that cannot form a lobe at any displacement scale. Clamp above 0.08 and warn with the
+  computed wavelength and the usable range, since this is almost always a misplaced
+  decimal point rather than an intent.
+- Header now states explicitly that data-orb-warp belongs on glass-orb, NOT on
+  orb-wrapper (which is where the squish goes) — the two are not interchangeable — and
+  that warping the glows means giving them their own group beside glass-orb, not wrapping
+  it.
+- Still open: whether `filter` and `backdrop-filter` coexist on the SAME element in
+  Chrome. Untested so far, because the attribute had been on the wrapper.
+
 ## 2026-08-18 — orb-motion: fix warp rendering as grain
 - src/orb-motion.js, ARCHITECTURE.md
 - data-orb-warp produced per-pixel grain along the rim instead of warping. feTurbulence
@@ -26,9 +40,10 @@ Format:
   its inputs stay static and cacheable. Costs amplitude — blurring averages the channels
   toward 0.5, i.e. zero displacement — so lowering `-detail` is usually the better way to
   get broader lobes.
-- CONFIRMED IN BROWSER: `filter` and `backdrop-filter` coexist on the same element in
-  Chrome; the glass kept refracting with the warp applied. That was the open risk from the
-  previous entry and it is now closed.
+- CORRECTION (this claim was wrong when first written): this entry originally said the
+  browser had confirmed `filter` and `backdrop-filter` coexisting on one element. It had
+  not. The attribute was on orb-wrapper, an ANCESTOR of the glass, so the same-element
+  case was never exercised. That question is still open — see the entry above.
 - WEBFLOW: no change beyond what the previous entry described.
 
 ## 2026-08-18 — orb-motion: data-orb-warp, true non-affine silhouette
