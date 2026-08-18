@@ -63,8 +63,11 @@
                                    around 50 (0 disables the morph)
       data-orb-squish-scale="0.05" scale swing (+/-). 0 disables it
       data-orb-squish-uniform="0"  1 = scale both axes together (a breathe,
-                                   not a squash). REQUIRED on a glass node
-                                   -- see "GLASS" below
+                                   not a squash)
+      data-orb-squish-skew="0"     shear swing, +/- degrees on both axes.
+                                   Leans and rolls the shape, so it reads as
+                                   a warping blob rather than an ellipse that
+                                   grows and shrinks. Safe on glass
       data-orb-squish-duration="5" base seconds per morph step
       data-orb-squish-ease="sine.inOut"
 
@@ -98,10 +101,21 @@
    loop plus a toDataURL, which is why glass.js has freeze()/
    unfreeze() at all.
 
-   So on a glass node use ONLY a uniform breathe:
-     data-orb-squish-radius="0" data-orb-squish-uniform="1"
-                               data-orb-squish-scale="0.03"
-   and put the real blob morph on the soft gradient layers, which
+   AFFINE vs NON-AFFINE is the real line, though. border-radius is
+   non-affine: it changes the SILHOUETTE while the baked map still
+   describes a circle, so rim and edge separate. scale and skew are
+   affine -- they transform the element's finished rendering, rim and
+   map together, so those two cannot fall out of register with each
+   other. (The background refracted THROUGH the glass does get
+   stretched, which is a physical inaccuracy rather than a visible
+   seam, and for a squashed bubble it arguably looks right.)
+
+   So on a glass node: no radius morph, but scale + skew are fair
+   game, and skew is what makes an affine deform read as a warping
+   blob instead of an ellipse that merely grows:
+     data-orb-squish-radius="0" data-orb-squish-scale="0.05"
+                               data-orb-squish-skew="5"
+   Put any true silhouette morph on the soft gradient layers, which
    have no rim to fall out of register (data-orb-float-radius).
 
    ============================================================
@@ -159,6 +173,7 @@
       radius: 18,
       scale: 0.05,
       uniform: 0,
+      skew: 0,
       duration: 5,
       ease: "sine.inOut",
       vary: 0.35,
@@ -319,6 +334,19 @@
   // Endless chain of random-target morphs. A fresh target each step, so there
   // is no recognisable loop. Shared by SQUISH and FLOAT -- it writes
   // border-radius, never transform, so it composes with either.
+  // Each endless chain has exactly one live tween at a time. Hold it by name so
+  // a later chain can't evict an earlier one's handle and leave stop()/start()
+  // with nothing to pause.
+  function hold(state, key, tween) {
+    state.slots[key] = tween;
+    return tween;
+  }
+  function eachSlot(state, fn) {
+    Object.keys(state.slots).forEach(function (k) {
+      fn(state.slots[k]);
+    });
+  }
+
   function morphRadius(el, amp, base, ease, state) {
     var vary = config.squish.vary;
     var r = radiusTarget(amp);
@@ -332,28 +360,23 @@
         writeRadius(el, r);
       };
       to.onComplete = step;
-      state.tweens.push(gsap.to(r, to));
-      // keep the list from growing without bound over a long session
-      if (state.tweens.length > 8) state.tweens.shift();
+      hold(state, "radius", gsap.to(r, to));
     })();
   }
 
   // glass.js bakes its refraction from offsetWidth/offsetHeight and ONE corner
   // radius, so a morphing or non-uniformly scaled glass node desyncs its rim
   // from its painted edge. Full explanation in the header.
-  function warnIfGlass(el, amp, uniform) {
-    if (!el.hasAttribute("data-liquid-glass")) return;
-    if (!amp && uniform) return;
+  function warnIfGlass(el, amp) {
+    if (!amp || !el.hasAttribute("data-liquid-glass")) return;
     console.warn(
-      "[OrbMotion] " +
-        (amp
-          ? "border-radius morphing "
-          : "non-uniform scale ") +
-        "on a data-liquid-glass element will pull its refraction rim out of " +
-        "register with its painted edge -- glass bakes a displacement map " +
-        "from the layout box and one corner radius. Use " +
-        'data-orb-squish-radius="0" data-orb-squish-uniform="1" here, and put ' +
-        "the blob morph on the soft glow layers instead.",
+      "[OrbMotion] border-radius morphing on a data-liquid-glass element will " +
+        "pull its refraction rim out of register with its painted edge -- " +
+        "glass bakes a displacement map from the layout box and one corner " +
+        "radius, so the map stays a circle. Set data-orb-squish-radius=\"0\" " +
+        "here and get the warp from data-orb-squish-scale + " +
+        "data-orb-squish-skew (affine, so rim and map deform together); put " +
+        "any true silhouette morph on the soft glow layers instead.",
       el
     );
   }
@@ -371,14 +394,15 @@
     var amp = num(el, "data-orb-squish-radius", config.squish.radius);
     var sc = num(el, "data-orb-squish-scale", config.squish.scale);
     var uniform = num(el, "data-orb-squish-uniform", config.squish.uniform);
+    var sk = num(el, "data-orb-squish-skew", config.squish.skew);
     var base = num(el, "data-orb-squish-duration", config.squish.duration);
     var ease = el.getAttribute("data-orb-squish-ease") || config.squish.ease;
     var vary = config.squish.vary;
-    var state = { tweens: [], alive: true };
+    var state = { slots: {}, alive: true };
     el.__orbSquish = state;
     tracked.push(el);
 
-    warnIfGlass(el, amp, uniform);
+    warnIfGlass(el, amp);
     willChange(el, amp ? "transform, border-radius" : "transform");
 
     // 1. the blob silhouette.
@@ -404,8 +428,29 @@
           vars.scaleX = 1 + k;
           vars.scaleY = 1 - k * 0.8;
         }
-        state.tweens.push(gsap.to(el, vars));
-        if (state.tweens.length > 8) state.tweens.shift();
+        hold(state, "scale", gsap.to(el, vars));
+      })();
+    }
+
+    // 3. shear, on its own slower clock so it never lines up with the scale.
+    //    An affine deform of a circle is an ellipse; skewing it too makes that
+    //    ellipse lean and roll, which is what reads as a warping blob. Safe on
+    //    glass -- it deforms the rim and the displacement map as one unit.
+    if (sk) {
+      gsap.set(el, { skewX: 0, skewY: 0 });
+      (function stepSkew() {
+        if (!state.alive) return;
+        hold(
+          state,
+          "skew",
+          gsap.to(el, {
+            skewX: rnd(-sk, sk),
+            skewY: rnd(-sk, sk),
+            duration: base * 1.9 * rnd(1 - vary, 1 + vary),
+            ease: ease,
+            onComplete: stepSkew,
+          })
+        );
       })();
     }
   }
@@ -453,7 +498,7 @@
     // transform, so it composes with the wander above.
     var amp = num(el, "data-orb-float-radius", config.float.radius);
     if (amp) {
-      var state = { tweens: tweens, alive: true };
+      var state = { slots: {}, alive: true };
       el.__orbSquish = state; // reuse the squish slot so kill() clears the radius
       willChange(el, "transform, border-radius");
       morphRadius(el, amp, base * 0.4, config.squish.ease, state);
@@ -474,7 +519,7 @@
     }
     if (el.__orbSquish) {
       el.__orbSquish.alive = false;
-      el.__orbSquish.tweens.forEach(function (t) {
+      eachSlot(el.__orbSquish, function (t) {
         t.kill();
       });
       el.__orbSquish = null;
@@ -526,7 +571,7 @@
   function eachTween(fn) {
     tracked.forEach(function (el) {
       if (el.__orbTweens) el.__orbTweens.forEach(fn);
-      if (el.__orbSquish) el.__orbSquish.tweens.forEach(fn);
+      if (el.__orbSquish) eachSlot(el.__orbSquish, fn);
     });
   }
 

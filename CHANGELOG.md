@@ -14,6 +14,23 @@ Format:
 
 ---
 
+## 2026-08-18 — orb-motion: skew, so the warp survives the glass fix
+- src/orb-motion.js, ARCHITECTURE.md, CLAUDE.md
+- Killing the radius morph on the glass node also killed the abstract shape warping,
+  because scale alone only ever yields an axis-aligned ellipse. The real constraint is
+  affine vs non-affine, not transform vs radius: border-radius changes the silhouette
+  while the baked map still describes a circle, whereas scale and skew transform the
+  element's finished rendering — rim and displacement map together — so they cannot
+  desync from each other.
+- New `data-orb-squish-skew` (degrees, own slower clock). Shearing a scaled circle makes
+  the ellipse lean and roll, which reads as a warping blob. Safe on glass.
+- The glass warning is now scoped to the radius morph only; non-uniform scale is fine.
+- Each endless chain now holds its live tween in a named slot rather than a capped
+  array, so a third chain can't evict another's handle and leave stop()/start() with
+  nothing to pause.
+- WEBFLOW: no new file. On glass-orb drop `data-orb-squish-uniform` and set
+  `data-orb-squish-scale="0.05"`, `data-orb-squish-skew="5"` (keep radius at 0).
+
 ## 2026-08-18 — orb-motion: keep the squish off the glass node
 - src/orb-motion.js, ARCHITECTURE.md, CLAUDE.md
 - Morphing a `data-liquid-glass` element desyncs its refraction rim from its painted

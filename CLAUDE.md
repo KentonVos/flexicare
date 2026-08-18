@@ -56,12 +56,13 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
   navigations but NOT a hard page reload. That's why the controllers always navigate
   with `barba.go()`, never `window.location`. Don't "helpfully" change a `barba.go()`
   to a normal redirect.
-- **Never animate the GEOMETRY of a `data-liquid-glass` element** — not
-  `border-radius`, not a non-uniform scale. Glass bakes a displacement map from the
-  layout box plus one corner radius, so the refraction rim silently stops matching the
-  painted edge, and per-frame rebuilds are too expensive to be an option (that's what
-  `LiquidGlass.freeze()` exists for). Squish/morph a non-glass sibling or the soft glow
-  layers instead. See ARCHITECTURE.md § orb-motion.js.
+- **Never animate `border-radius` on a `data-liquid-glass` element.** Glass bakes a
+  displacement map from the layout box plus ONE corner radius, so a morphing silhouette
+  leaves the refraction rim describing a circle it no longer matches — and per-frame
+  rebuilds are too expensive to be an option (that's what `LiquidGlass.freeze()` exists
+  for). Affine deforms (`scale`, `skew`) are fine: they transform the finished rendering,
+  rim and map as one unit. So warp glass with scale + skew, and put any true silhouette
+  morph on a non-glass sibling or the soft glow layers. See ARCHITECTURE.md § orb-motion.js.
 - **Glass owns `transform`.** On any element with `data-liquid-glass` that also needs
   to animate in, use `data-anim-fade` (opacity only), never `data-anim` (which moves
   it). And never put `data-lg-press`/`data-lg-tilt` on the same element as a Webflow

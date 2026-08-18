@@ -175,8 +175,12 @@ transforms don't change) and a *single* `borderTopLeftRadius`, so a blob or a
 non-uniform scale pulls its refraction rim out of register with its painted edge, and
 nothing rebuilds because a transform isn't a resize. Per-frame rebuilds aren't
 affordable (`buildMap` is a per-pixel JS loop + `toDataURL` — the reason
-`freeze()`/`unfreeze()` exist). On a glass node use only
-`data-orb-squish-radius="0" data-orb-squish-uniform="1"`, and put the blob morph on
+`freeze()`/`unfreeze()` exist). The line is **affine vs non-affine**: `border-radius` changes the silhouette while the
+baked map still describes a circle, whereas `scale`/`skew` transform the element's
+finished rendering — rim and map together — so those can't desync from each other.
+On a glass node use `data-orb-squish-radius="0"` plus
+`data-orb-squish-scale` + `data-orb-squish-skew` (skew is what makes an affine deform
+read as a warping blob rather than an ellipse that merely grows), and put the blob morph on
 the soft glow layers via `data-orb-float-radius` (which writes `border-radius`, not
 `transform`, so it composes with the wander). The module warns if you get this wrong. Never put path/float on a node with
 `data-lg-press`/`data-lg-tilt` or `data-anim` — both also write `transform`; use
