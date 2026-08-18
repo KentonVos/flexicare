@@ -276,10 +276,14 @@
     fab.type = "button";
     fab.textContent = "Glass";
     fab.setAttribute("aria-label", "Toggle liquid glass tuner");
+    // Script-injected on <body> (the Barba wrapper) — keeps transition.js's
+    // shell class sync from treating it as authored markup.
+    fab.setAttribute("data-js-injected", "");
     document.body.appendChild(fab);
 
     var panel = document.createElement("div");
     panel.id = "lgt-panel";
+    panel.setAttribute("data-js-injected", ""); // see note on the fab above
     document.body.appendChild(panel);
 
     var targetOptions = ['<option value="all">All elements at once</option>'];

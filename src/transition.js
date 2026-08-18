@@ -384,62 +384,119 @@
          Hard-refreshing that page looked "fixed" only because Webflow then
          served the right shell.
 
-         Fix: walk the persistent tree and copy each element's class list from
-         its structural counterpart in the next page's document. Matching is by
-         position, not by class — the classes are exactly what differs.
+         Matching live elements to their counterparts in the next page's parsed
+         document is the whole difficulty: the classes are exactly what differs,
+         so they can't be the key, and sibling POSITION is unreliable because
+         scripts inject nodes that exist only in the live DOM (glass's per-element
+         .lg-layer overlay and its <svg> defs holder on body, the dev tuner's
+         panel, the selfie file input). An earlier version matched purely by
+         position and pasted padding-global's class onto a glass overlay.
 
-         Deliberately skipped:
-           • the container and its subtree — Barba owns those
-           • [data-barba-sync] subtrees — their innerHTML is replaced wholesale,
+         So two passes, strongest first:
+
+         1. ANCESTOR CHAINS — walk up from anchors that carry a unique ATTRIBUTE
+            (the container, synced regions, the nav, the progress bar). Attributes
+            are stable, and walking upward never touches siblings, so injected
+            nodes anywhere are irrelevant. This is what fixes the shell layout.
+
+         2. DOWNWARD from the container's parent — catches persistent SIBLINGS of
+            the container (e.g. top-section-wrapper) which have no attribute of
+            their own. Positional, so it is guarded: a child-count or tagName
+            mismatch abandons that branch, leaving classes stale rather than
+            wrong. Started at the container's parent, not at the wrapper, because
+            the wrapper is <body> where injected nodes guarantee a mismatch.
+
+         Deliberately never touched:
+           • the container itself and its subtree — Barba owns those
+           • [data-barba-sync] subtrees — innerHTML is replaced wholesale,
              classes included, and their buttons carry runtime state classes
-             (is-disabled/is-busy) that must not be clobbered
-         A tagName mismatch means the two pages' structures diverged, so that
-         branch is abandoned rather than guessed at. */
+             (is-disabled/is-busy) that must not be clobbered */
   function isContainer(el) {
     return el.getAttribute("data-barba") === "container";
   }
 
-  // Children eligible for positional matching. Three kinds of node are dropped
-  // so the two sides line up:
-  //   • containers — mid-transition the live DOM holds TWO (outgoing +
-  //     incoming) while the next document holds one
-  //   • our own leave-transition placeholder
-  //   • script-injected nodes that exist only in the live DOM: glass.js inserts
-  //     a .lg-layer overlay as the FIRST child of every glassed element. Miss
-  //     that and every later sibling is off by one — which is exactly how the
-  //     overlay once ended up wearing padding-global's class, producing an empty
-  //     padded div and a blank band above the content.
+  // Nodes that exist only in the live DOM and must never be positionally
+  // matched. Attributes, not classes: the class sync rewrites classNames, so a
+  // class is not a dependable marker for its own filter.
+  function isInjected(el) {
+    return (
+      el.hasAttribute("data-lg-layer") ||
+      el.hasAttribute("data-lg-defs") ||
+      el.hasAttribute("data-js-injected") ||
+      (el.classList && el.classList.contains("lg-layer"))
+    );
+  }
+
   function matchableKids(el) {
     return Array.prototype.filter.call(el.children, function (n) {
+      // Containers: mid-transition the live DOM holds TWO (outgoing + incoming)
+      // while the next document holds one.
       if (isContainer(n)) return false;
       if (n.hasAttribute("data-barba-placeholder")) return false;
-      // data-lg-layer first: transition.js rewrites classNames, so the class
-      // alone is not a dependable marker.
-      if (n.hasAttribute("data-lg-layer")) return false;
-      if (n.classList && n.classList.contains("lg-layer")) return false;
-      return true;
+      return !isInjected(n);
     });
   }
 
-  function walkShellClasses(cur, next) {
-    if (cur.tagName !== next.tagName) return; // structures diverged — don't guess
+  function copyClass(cur, next) {
+    if (cur.tagName !== next.tagName) return false; // diverged — don't guess
     if (cur.className !== next.className) cur.className = next.className;
+    return true;
+  }
+
+  // PASS 2: positional, guarded.
+  function walkShellClasses(cur, next) {
+    if (!copyClass(cur, next)) return;
     if (cur.hasAttribute("data-barba-sync")) return; // innerHTML swap owns the inside
     var a = matchableKids(cur),
       b = matchableKids(next);
-    // The counts MUST agree. If they don't, a node exists on one side only and
-    // positional matching would write classes onto the wrong elements — much
-    // worse than leaving them stale, since a wrong class can inject padding or
-    // hide content. Abandon this branch instead of matching what we can.
+    // Counts MUST agree. A mismatch means a node exists on one side only, and
+    // matching by position would write classes onto the WRONG elements — far
+    // worse than stale, since a wrong class can inject padding or hide content.
     if (a.length !== b.length) return;
     for (var i = 0; i < a.length; i++) walkShellClasses(a[i], b[i]);
   }
+
+  // PASS 1: walk up both chains in lockstep. Immune to injected siblings.
+  function syncAncestors(liveEl, nextEl, wrapper) {
+    var a = liveEl.parentElement,
+      b = nextEl.parentElement;
+    while (a && b) {
+      if (!copyClass(a, b)) return;
+      if (a === wrapper) return;
+      a = a.parentElement;
+      b = b.parentElement;
+    }
+  }
+
+  // Anchors identified by a unique attribute, present on both pages.
+  var SHELL_ANCHORS = [
+    '[data-barba="container"]',
+    "[data-barba-sync]",
+    "[data-nav-reveal]",
+    "[data-show-except]",
+    "[data-progress-bar]",
+  ];
 
   function syncShellClasses(nextDoc) {
     var wrapper = document.querySelector('[data-barba="wrapper"]');
     var nextWrapper = nextDoc.querySelector('[data-barba="wrapper"]');
     if (!wrapper || !nextWrapper) return;
-    walkShellClasses(wrapper, nextWrapper);
+
+    SHELL_ANCHORS.forEach(function (sel) {
+      var live = document.querySelector(sel);
+      var next = nextDoc.querySelector(sel);
+      if (!live || !next) return;
+      // The anchor's OWN class too — except the container's, which belongs to
+      // Barba (querySelector finds the OUTGOING one mid-transition, and the
+      // incoming one already carries the right class).
+      if (!isContainer(live)) copyClass(live, next);
+      syncAncestors(live, next, wrapper);
+    });
+
+    var c = document.querySelector('[data-barba="container"]');
+    var nc = nextDoc.querySelector('[data-barba="container"]');
+    if (c && nc && c.parentElement && nc.parentElement)
+      walkShellClasses(c.parentElement, nc.parentElement);
   }
 
   /* ---------- page identity, derived from the URL ----------

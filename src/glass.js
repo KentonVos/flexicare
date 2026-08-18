@@ -87,6 +87,10 @@
     svg.setAttribute("width", "0");
     svg.setAttribute("height", "0");
     svg.setAttribute("aria-hidden", "true");
+    // Marks this as script-injected: it is a child of <body>, which is also the
+    // Barba wrapper, so transition.js's class sync must not count it as authored
+    // markup when matching siblings positionally.
+    svg.setAttribute("data-lg-defs", "");
     svg.style.cssText = "position:absolute;width:0;height:0;overflow:hidden";
     defs = document.createElementNS(NS, "defs");
     svg.appendChild(defs);

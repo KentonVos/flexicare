@@ -424,6 +424,9 @@
     input.setAttribute("capture", "user");
     input.style.cssText =
       "position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;";
+    // Script-injected on <body> (the Barba wrapper) — keeps transition.js's
+    // shell class sync from treating it as authored markup.
+    input.setAttribute("data-js-injected", "");
     document.body.appendChild(input);
     state.fileInput = input;
     return input;

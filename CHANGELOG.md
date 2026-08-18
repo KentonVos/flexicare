@@ -14,6 +14,26 @@ Format:
 
 ---
 
+## 2026-08-14 — Class sync: anchor on ancestor chains, not sibling position (v1.0.5)
+- src/transition.js, src/glass.js, src/slider.js, src/flexicare-selfie.js
+- Symptom: v1.0.4's count-equality guard fired at the WRAPPER root (16 live children
+  vs 15), so it bailed immediately and no classes synced at all — the 1.5rem nav gap
+  came back.
+- Cause: data-barba="wrapper" is on <body>, and glass.js appends its <svg> defs holder
+  there. Any body-level injected node guarantees a count mismatch at the root, which
+  under the guard means "sync nothing".
+- Fix, pass 1: syncAncestors() walks UP from anchors carrying a unique attribute
+  (container, [data-barba-sync], [data-nav-reveal], [data-show-except],
+  [data-progress-bar]) copying classes along the ancestor chain. Walking upward never
+  looks at siblings, so injected nodes cannot affect it. This is what fixes the shell.
+- Fix, pass 2: the guarded positional walk now starts at the CONTAINER'S PARENT rather
+  than the wrapper, so it still catches persistent siblings like top-section-wrapper
+  without being killed by body-level injections.
+- All script-injected nodes are now marked with attributes (data-lg-defs on glass's
+  svg, data-js-injected on the tuner fab/panel and the selfie file input) and filtered
+  via isInjected(). Attributes, not classes — the sync rewrites classNames.
+- No Webflow change needed.
+
 ## 2026-08-14 — Fix blank band above content caused by class-sync misalignment (v1.0.4)
 - src/transition.js, src/glass.js
 - Symptom (regression from v1.0.3): after navigating, an empty div with class
