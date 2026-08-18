@@ -14,6 +14,27 @@ Format:
 
 ---
 
+## 2026-08-18 — orb-motion: organic multi-timescale warp
+- src/orb-motion.js, ARCHITECTURE.md
+- New `data-orb-squish-organic`, **default on** (visual change on deploy, no attribute
+  edit needed; set "0" to restore the old stepped mode). Scale and skew now come from one
+  constant-speed driver as a sum of three sines at harmonic ratios (1,2,5 for scale;
+  1,3 for skew), weights summing to 1 so the swing still peaks at the stated amplitude.
+  Stepped mode eased to one random target at a time, so everything moved at one tempo;
+  summed harmonics give a slow swell with faster ripples on top. Verified: stays inside
+  the amplitude, seamless at the wrap, 6 direction changes per cycle vs 2 for one sine.
+- Cheaper as well — one driver tween per element instead of an endless chain.
+- A lava lamp is mostly NON-affine, and affine transforms of a circle are always
+  ellipses (nesting more squish layers cannot help: affine of affine is affine), so the
+  bulging has to come from inside the membrane. Documented the route: float-radius on
+  the glows plus a gooey `filter: blur() contrast()` group — which must NOT be an
+  ancestor of the glass element, since a filter creates a containing block and breaks
+  backdrop-filter.
+- WEBFLOW: no new file, no required attribute change. Optional: raise
+  `data-orb-squish-duration` to ~9 for a slower lava-lamp tempo, add
+  `data-orb-float-radius="24"` to the glows, and wrap the glows in a filtered
+  `glow-group` div (sibling of glass-orb, painted behind it) for the merge effect.
+
 ## 2026-08-18 — orb-motion: inner layers follow the warp
 - src/orb-motion.js, ARCHITECTURE.md
 - The glows are SIBLINGS of glass-orb, so with the squish on glass-orb they warped

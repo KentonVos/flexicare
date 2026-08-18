@@ -75,6 +75,8 @@
                                    grows and shrinks. Safe on glass
       data-orb-squish-duration="5" base seconds per morph step
       data-orb-squish-ease="sine.inOut"
+      data-orb-squish-organic="1"  0 = the older stepped mode, one random
+                                   target at a time. See ORGANIC below
 
    WHERE TO PUT IT: on orb-wrapper -- the ancestor shared by the
    glass and the glows -- with a static border-radius 50% and
@@ -121,6 +123,42 @@
                                data-orb-squish-skew="5"
    Put any true silhouette morph on the soft gradient layers, which
    have no rim to fall out of register (data-orb-float-radius).
+
+   ============================================================
+   ORGANIC  (data-orb-squish-organic) -- multi-timescale drive
+   ------------------------------------------------------------
+   Stepped mode eases to one random target at a time, so every
+   deformation takes about the same length of time -- which is what
+   makes it read as "animated" rather than alive. Organic mode
+   instead SUMS THREE SINES per channel at harmonic ratios (1, 2, 5
+   for scale; 1, 3 for skew) off a single constant-speed driver:
+
+     k = amp * (0.6*sin(a+p1) + 0.3*sin(2a+p2) + 0.1*sin(5a+p3))
+
+   The weights sum to 1, so the swing still peaks at `amp`, but the
+   motion now has a slow swell with faster ripples riding on top --
+   several timescales at once, which is what real viscous motion
+   looks like. Integer harmonics keep the loop exactly periodic, so
+   it's seamless; the driver period is 3x the base duration so the
+   repeat is too long to notice.
+
+   Cheaper than stepped mode too: one driver tween per element
+   instead of an endless chain of them.
+
+   A LAVA LAMP, though, is mostly non-affine -- a bulge swells on one
+   side while the rest stays put -- and affine transforms of a circle
+   are always ellipses, so no amount of scale/skew on the membrane
+   will bulge it, and nesting more of them can't either (affine
+   composed with affine is still affine). Get that part from the
+   layers INSIDE the membrane, which have no baked map to respect:
+     - data-orb-float-radius on the glows, for true silhouette morph
+     - and a "gooey" filter on a group wrapping the glows, so they
+       merge and separate with a liquid neck as they drift:
+         filter: blur(24px) contrast(12)
+       That group must NOT be an ancestor of the glass element -- a
+       `filter` creates a containing block and would break its
+       backdrop-filter. Put the glows in their own div inside
+       orb-wrapper, sibling to (and painted behind) glass-orb.
 
    ============================================================
    FLOAT  (data-orb-float) -- wander inside the parent
@@ -211,6 +249,7 @@
       scale: 0.05,
       uniform: 0,
       skew: 0,
+      organic: 1,
       duration: 5,
       ease: "sine.inOut",
       vary: 0.35,
@@ -451,11 +490,66 @@
     // 1. the blob silhouette.
     if (amp) morphRadius(el, amp, base, ease, state);
 
-    // 2. scale. Counter-phase by default -- x up while y goes down ~80% as
+    var organic = num(el, "data-orb-squish-organic", config.squish.organic);
+
+    // 2a. ORGANIC: one driver, three summed sines per channel, so the deform
+    //     has a slow swell with faster ripples riding on it instead of a single
+    //     tempo. Weights sum to 1, so the swing still peaks at the amplitude.
+    if (organic && (sc || sk)) {
+      var d = { a: 0 };
+      var p1 = rnd(0, Math.PI * 2),
+        p2 = rnd(0, Math.PI * 2),
+        p3 = rnd(0, Math.PI * 2),
+        q1 = rnd(0, Math.PI * 2),
+        q2 = rnd(0, Math.PI * 2),
+        q3 = rnd(0, Math.PI * 2),
+        q4 = rnd(0, Math.PI * 2);
+
+      gsap.set(el, { scaleX: 1, scaleY: 1, skewX: 0, skewY: 0 });
+
+      hold(
+        state,
+        "deform",
+        gsap.to(d, {
+          a: Math.PI * 2,
+          // 3x the base period: long enough that the (seamless) repeat isn't
+          // something the eye can latch onto.
+          duration: base * 3,
+          ease: "none",
+          repeat: -1,
+          onUpdate: function () {
+            var a = d.a;
+            var vars = {};
+            if (sc) {
+              var k =
+                sc *
+                (0.6 * Math.sin(a + p1) +
+                  0.3 * Math.sin(2 * a + p2) +
+                  0.1 * Math.sin(5 * a + p3));
+              if (uniform) {
+                vars.scale = 1 + k;
+              } else {
+                vars.scaleX = 1 + k;
+                vars.scaleY = 1 - k * 0.8;
+              }
+            }
+            if (sk) {
+              vars.skewX =
+                sk * (0.6 * Math.sin(a + q1) + 0.4 * Math.sin(3 * a + q2));
+              vars.skewY =
+                sk * (0.6 * Math.sin(2 * a + q3) + 0.4 * Math.sin(a + q4));
+            }
+            gsap.set(el, vars);
+          },
+        })
+      );
+    }
+
+    // 2b. STEPPED: scale. Counter-phase by default -- x up while y goes down ~80% as
     //    much, roughly volume-preserving, which is what reads as "squishy"
     //    rather than "pulsing bigger and smaller". Uniform mode keeps both
     //    axes together: less alive, but the only kind a glass rim survives.
-    if (sc) {
+    if (sc && !organic) {
       gsap.set(el, { scaleX: 1, scaleY: 1 });
       (function stepScale() {
         if (!state.alive) return;
@@ -479,7 +573,7 @@
     //    An affine deform of a circle is an ellipse; skewing it too makes that
     //    ellipse lean and roll, which is what reads as a warping blob. Safe on
     //    glass -- it deforms the rim and the displacement map as one unit.
-    if (sk) {
+    if (sk && !organic) {
       gsap.set(el, { skewX: 0, skewY: 0 });
       (function stepSkew() {
         if (!state.alive) return;

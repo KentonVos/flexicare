@@ -176,6 +176,24 @@ agreement, and a *static* `border-radius: 50%` + `overflow: hidden` on that wrap
 what guarantees the glows can never escape the boundary. Keep that radius static —
 morphing it would clip the glass rim non-affinely.
 
+`data-orb-squish-organic` (default **on**) drives scale and skew from one constant-speed
+driver as a sum of three sines at harmonic ratios (1, 2, 5 for scale; 1, 3 for skew,
+weights summing to 1 so the swing still peaks at the stated amplitude). That gives a slow
+swell with faster ripples riding on it — several timescales at once — where the older
+stepped mode eased to one random target at a time and so had a single recognisable tempo.
+Integer harmonics keep it exactly periodic and therefore seamless, with the driver period
+at 3× the base duration. It's also cheaper: one driver tween per element instead of an
+endless chain. `data-orb-squish-organic="0"` restores stepped mode.
+
+A lava-lamp look is mostly **non-affine** — a bulge swells on one side while the rest
+stays put — and affine transforms of a circle are always ellipses, so no scale/skew on the
+membrane can bulge it, and nesting more squish layers can't either (affine ∘ affine is
+affine). That part has to come from the layers *inside* the membrane, which have no baked
+map to respect: `data-orb-float-radius` for true silhouette morph, plus a gooey
+`filter: blur(24px) contrast(12)` on a group wrapping the glows so they merge and separate
+with a liquid neck. **That group must not be an ancestor of the glass element** — a
+`filter` creates a containing block and would break its `backdrop-filter`.
+
 `data-orb-float-follow` makes an inner layer read as liquid rather than a decal. A child
 already inherits the ancestor's transform, so to make it *lag*, the writer sets the ratio
 of a smoothed copy of the host's deform to its live one — `inherited * (lagged / live)
