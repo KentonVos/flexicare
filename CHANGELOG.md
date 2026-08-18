@@ -14,6 +14,26 @@ Format:
 
 ---
 
+## 2026-08-18 — NEW src/orb-tuner.js: live tuner for orb-motion
+- NEW src/orb-tuner.js; README.md, ARCHITECTURE.md, CLAUDE.md, docs/hosting-and-publishing.md
+- Dev-only control panel gated behind `?orbtune` (or `?tune`, so it can sit beside the
+  glass tuner; its FAB is offset so they don't overlap). Force with
+  localStorage.setItem('orbTunerAlways','1').
+- Sliders for every data-orb-* knob across path / squish / warp / float, seeded from the
+  attributes the elements already carry, so it opens showing the truth rather than defaults.
+- orb-motion reads attributes only when it attaches, so each edit writes the attribute then
+  calls OrbMotion.kill(el) + refresh(). Motion therefore RESTARTS on every change — a
+  visible jump mid-drag — in exchange for the panel and a fresh load agreeing exactly.
+- A group's dropdown can attach a behaviour to an element that carries no attribute yet
+  (so warp can be trialled before committing it in Webflow). Nothing is ever removed from
+  another element.
+- "Copy attributes" emits a per-element paste-ready list with defaults omitted.
+- Panel carries the placement rules we kept hitting: squish on the shared ancestor, warp on
+  the glass ITSELF, and a note that Float's "all" mode flattens per-element differences.
+- init() is idempotent — found via a jsdom harness where a double boot stacked two panels
+  and re-seeded state mid-drag.
+- WEBFLOW: **the footer file list changed** — add orb-tuner.js last, after slider.js.
+
 ## 2026-08-18 — orb-motion: guard against a misplaced warp decimal point
 - src/orb-motion.js
 - `data-orb-warp-detail` is feTurbulence's baseFrequency, in cycles per PIXEL, so it lives

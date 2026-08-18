@@ -38,6 +38,7 @@ flexicare-onboarding.js  page controller
 flexicare-selfie.js      page controller
 flexicare-quiz.js        page controller (also needs glass for option styling)
 slider.js                dev-only tuner; needs glass.js
+orb-tuner.js             dev-only tuner; needs orb-motion.js
 ```
 
 The controllers rely on `transition.js`'s `afterEnter` (which calls `LiquidGlass.scan()`)
@@ -240,6 +241,19 @@ the soft glow layers via `data-orb-float-radius` (which writes `border-radius`, 
 `data-lg-press`/`data-lg-tilt` or `data-anim` — both also write `transform`; use
 `data-anim-fade`. Respects `prefers-reduced-motion`. API: `refresh(scope)`, `stop()`,
 `start()`, `kill(el)`. Knobs documented in the file header.
+
+### orb-tuner.js → dev-only
+Live control panel for orb-motion, gated behind `?orbtune` (or `?tune`, so it can sit
+beside the glass tuner — its FAB is offset to avoid overlapping). Sliders for every
+`data-orb-*` knob, seeded from whatever the elements already carry so the panel opens
+showing the truth rather than defaults. Because orb-motion reads attributes only when it
+attaches, each change writes the attribute then `OrbMotion.kill(el)` + `refresh()` — so
+motion restarts on every edit (a visible jump mid-drag), in exchange for the panel and a
+fresh page load behaving identically. A group's dropdown can also *attach* a behaviour to
+an element that has no attribute yet; nothing is ever removed from another element.
+"Copy attributes" emits a per-element, paste-ready list with defaults omitted. `init()` is
+idempotent — a second evaluation would otherwise stack a second panel and re-seed state
+mid-drag. Injected nodes carry `data-js-injected`.
 
 ### flexicare-core.js → `window.Flexicare` (`FC`)
 The persistent brain. Holds:

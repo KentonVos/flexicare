@@ -73,6 +73,8 @@ load-bearing (see ARCHITECTURE.md); GSAP and Barba are libraries and stay pinned
 <script src="https://flexicare.kenton-323.workers.dev/src/flexicare-quiz.js"></script>
 <!-- dev-only tuner, loaded last; gated behind ?tune in the URL -->
 <script src="https://flexicare.kenton-323.workers.dev/src/slider.js"></script>
+<!-- dev-only orb tuner; gated behind ?orbtune -->
+<script src="https://flexicare.kenton-323.workers.dev/src/orb-tuner.js"></script>
 ```
 
 Separately, the **Head** holds the `window.__fcLayout` snippet, which is NOT in this repo

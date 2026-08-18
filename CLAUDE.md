@@ -36,7 +36,10 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
 6. `src/flexicare-onboarding.js` — `/onboarding` page controller.
 7. `src/flexicare-selfie.js` — selfie-capture page controller.
 8. `src/flexicare-quiz.js` — `/archetype` quiz + later FLEX stage.
-9. `src/slider.js` — **NOT a content slider.** This is the "Liquid Glass Tuner", a dev-only control panel gated behind `?tune` in the URL. Ignore it for production changes unless the task is about tuning glass presets.
+9. `src/orb-tuner.js` — dev-only orb-motion control panel, gated behind `?orbtune`
+   (or `?tune`). Writes the `data-orb-*` attributes live and hands back a paste-ready
+   list. Ignore for production changes.
+10. `src/slider.js` — **NOT a content slider.** This is the "Liquid Glass Tuner", a dev-only control panel gated behind `?tune` in the URL. Ignore it for production changes unless the task is about tuning glass presets.
 
 ## Things that will bite you if you forget them
 
