@@ -161,6 +161,56 @@
        orb-wrapper, sibling to (and painted behind) glass-orb.
 
    ============================================================
+   WARP  (data-orb-warp) -- true non-affine silhouette
+   ------------------------------------------------------------
+   Opt-in; off unless the attribute is present.
+
+   scale and skew can only ever turn a circle into a leaning
+   ellipse. For a silhouette with CONCAVE bulges -- the lava-lamp
+   shape -- you need a non-affine deform, and the one kind that
+   doesn't fight the glass is a POST-RENDER one: an SVG
+   feDisplacementMap applied via `filter` warps the element's
+   finished rendering, so the refracted backdrop, the rim, the
+   specular and the edge all bend together as one already-composited
+   image. Nothing can fall out of register, for the same reason skew
+   can't -- it happens after the glass has drawn itself -- except
+   this isn't limited to affine.
+
+   The filter chain, and why it's shaped this way:
+     feTurbulence  static noise field. NEVER animated: recomputing
+                   turbulence per frame is by far the most expensive
+                   thing here, so leaving baseFrequency and seed
+                   alone lets the browser cache the result.
+     feOffset      animated. Scrolling the cached noise across the
+                   element is what makes the bulges travel, at
+                   almost no cost. Driven by the same closed
+                   harmonic loop as PATH, so it never jumps.
+     feDisplacementMap  bends SourceGraphic by that noise.
+
+     data-orb-warp-scale="26"     displacement in px -- how deep the
+                                  bulges are. This is the main dial
+     data-orb-warp-detail="0.006" noise baseFrequency. Lower = fewer,
+                                  broader lobes (lava lamp). Higher =
+                                  crinkly, and it starts to read as
+                                  frosted glass rather than liquid
+     data-orb-warp-octaves="2"    noise detail levels
+     data-orb-warp-speed="18"     seconds for one full drift loop
+     data-orb-warp-drift="140"    how far the noise scrolls, px
+     data-orb-warp-pulse="0.25"   swing in displacement depth (+/-,
+                                  as a fraction), 0 = constant depth
+
+   WHERE: on the glass element itself, and/or on a glow group --
+   never on an ANCESTOR of the glass. A `filter` makes an element a
+   backdrop root, so a filtered ancestor leaves the glass's
+   backdrop-filter with nothing behind it to refract. The module
+   warns if it sees that.
+
+   COST: the displacement is cheap, the turbulence is not -- but it's
+   computed once and cached. Still, this is the most expensive thing
+   in the module; check it on the weakest phone you care about, and
+   drop data-orb-warp-octaves to 1 if it's tight.
+
+   ============================================================
    FLOAT  (data-orb-float) -- wander inside the parent
    ------------------------------------------------------------
    Same harmonic loop as PATH but tuned for the inner glows, with a
@@ -254,6 +304,14 @@
       ease: "sine.inOut",
       vary: 0.35,
     },
+    warp: {
+      scale: 26,
+      detail: 0.006,
+      octaves: 2,
+      speed: 18,
+      drift: 140,
+      pulse: 0.25,
+    },
     float: {
       x: 26,
       y: 22,
@@ -270,7 +328,8 @@
   var PATH = "[data-orb-path]";
   var SQUISH = "[data-orb-squish]";
   var FLOAT = "[data-orb-float]";
-  var ALL = PATH + "," + SQUISH + "," + FLOAT;
+  var WARP = "[data-orb-warp]";
+  var ALL = PATH + "," + SQUISH + "," + FLOAT + "," + WARP;
 
   var reduceMotion =
     window.matchMedia &&
@@ -666,6 +725,140 @@
     tracked.push(el);
   }
 
+  /* =============================== WARP =============================== */
+
+  var SVGNS = "http://www.w3.org/2000/svg";
+  var warpHost = null;
+  var warpSeq = 0;
+
+  function warpDefs() {
+    if (warpHost) return warpHost;
+    warpHost = document.createElementNS(SVGNS, "svg");
+    // Injected into persistent DOM, so tag it: transition.js's shell class sync
+    // has to be able to tell script-injected nodes from authored Webflow markup.
+    warpHost.setAttribute("data-js-injected", "");
+    warpHost.setAttribute("aria-hidden", "true");
+    warpHost.setAttribute("width", "0");
+    warpHost.setAttribute("height", "0");
+    warpHost.style.cssText =
+      "position:absolute;width:0;height:0;overflow:hidden;pointer-events:none";
+    document.body.appendChild(warpHost);
+    return warpHost;
+  }
+
+  function svgEl(name, attrs) {
+    var n = document.createElementNS(SVGNS, name);
+    Object.keys(attrs).forEach(function (k) {
+      n.setAttribute(k, attrs[k]);
+    });
+    return n;
+  }
+
+  function warp(el) {
+    if (reduceMotion || el.__orbWarp) return;
+
+    // A filter on an ancestor of the glass makes that ancestor a backdrop root,
+    // leaving the glass nothing behind it to refract.
+    if (el.querySelector && el.querySelector("[data-liquid-glass]")) {
+      console.warn(
+        "[OrbMotion] data-orb-warp is on an ANCESTOR of a data-liquid-glass " +
+          "element. A filter makes an element a backdrop root, so the glass " +
+          "will have nothing behind it left to refract. Put the warp on the " +
+          "glass element itself, and/or on a glow group beside it.",
+        el
+      );
+    }
+
+    var amp = num(el, "data-orb-warp-scale", config.warp.scale);
+    var detail = num(el, "data-orb-warp-detail", config.warp.detail);
+    var oct = num(el, "data-orb-warp-octaves", config.warp.octaves);
+    var speed = num(el, "data-orb-warp-speed", config.warp.speed);
+    var drift = num(el, "data-orb-warp-drift", config.warp.drift);
+    var pulse = num(el, "data-orb-warp-pulse", config.warp.pulse);
+
+    var id = "orb-warp-" + ++warpSeq;
+    var filter = svgEl("filter", {
+      id: id,
+      // Room to spare: the displaced edge and the scrolled noise both need to
+      // reach outside the element's own box.
+      x: "-35%",
+      y: "-35%",
+      width: "170%",
+      height: "170%",
+      // sRGB, or the browser converts to linearRGB first and the displacement
+      // channels no longer mean what we wrote into them.
+      "color-interpolation-filters": "sRGB",
+      filterUnits: "objectBoundingBox",
+    });
+
+    // Static, so the browser can cache it. Animating baseFrequency or seed here
+    // would recompute the whole noise field every frame.
+    filter.appendChild(
+      svgEl("feTurbulence", {
+        type: "fractalNoise",
+        baseFrequency: detail,
+        numOctaves: Math.max(1, Math.round(oct)),
+        seed: Math.round(rnd(1, 999)),
+        result: "noise",
+      })
+    );
+    var offset = svgEl("feOffset", {
+      in: "noise",
+      dx: 0,
+      dy: 0,
+      result: "moved",
+    });
+    filter.appendChild(offset);
+    var disp = svgEl("feDisplacementMap", {
+      in: "SourceGraphic",
+      in2: "moved",
+      scale: amp,
+      xChannelSelector: "R",
+      yChannelSelector: "G",
+    });
+    filter.appendChild(disp);
+
+    warpDefs().appendChild(filter);
+    el.style.filter = "url(#" + id + ")";
+    willChange(el, (el.style.willChange ? el.style.willChange + ", " : "") + "filter");
+
+    // Scroll the cached noise on a closed harmonic loop -- same trick as PATH,
+    // so it returns to its start exactly and never jumps.
+    var s = { a: 0 };
+    var p1 = rnd(0, Math.PI * 2),
+      p2 = rnd(0, Math.PI * 2),
+      p3 = rnd(0, Math.PI * 2),
+      p4 = rnd(0, Math.PI * 2),
+      p5 = rnd(0, Math.PI * 2);
+
+    var tween = gsap.to(s, {
+      a: Math.PI * 2,
+      duration: speed,
+      ease: "none",
+      repeat: -1,
+      onUpdate: function () {
+        var a = s.a;
+        offset.setAttribute(
+          "dx",
+          (drift * (0.7 * Math.sin(a + p1) + 0.3 * Math.sin(2 * a + p2))).toFixed(2)
+        );
+        offset.setAttribute(
+          "dy",
+          (drift * (0.7 * Math.sin(2 * a + p3) + 0.3 * Math.sin(a + p4))).toFixed(2)
+        );
+        if (pulse) {
+          disp.setAttribute(
+            "scale",
+            (amp * (1 + pulse * Math.sin(3 * a + p5))).toFixed(2)
+          );
+        }
+      },
+    });
+
+    el.__orbWarp = { id: id, filter: filter, tween: tween };
+    tracked.push(el);
+  }
+
   /* ============================== FOLLOW ============================== */
 
   function findHost(el) {
@@ -716,6 +909,13 @@
   /* ======================= scan / prune / boot ======================= */
 
   function killEl(el) {
+    if (el.__orbWarp) {
+      el.__orbWarp.tween.kill();
+      if (el.__orbWarp.filter.parentNode)
+        el.__orbWarp.filter.parentNode.removeChild(el.__orbWarp.filter);
+      el.__orbWarp = null;
+      el.style.filter = "";
+    }
     if (el.__orbTick) {
       gsap.ticker.remove(el.__orbTick);
       el.__orbTick = null;
@@ -753,6 +953,7 @@
     root.querySelectorAll(PATH).forEach(path);
     root.querySelectorAll(SQUISH).forEach(squish);
     root.querySelectorAll(FLOAT).forEach(float);
+    root.querySelectorAll(WARP).forEach(warp);
   }
 
   function wireBarba() {
@@ -781,6 +982,7 @@
     tracked.forEach(function (el) {
       if (el.__orbTweens) el.__orbTweens.forEach(fn);
       if (el.__orbSquish) eachSlot(el.__orbSquish, fn);
+      if (el.__orbWarp) fn(el.__orbWarp.tween);
     });
   }
 

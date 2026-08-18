@@ -14,6 +14,29 @@ Format:
 
 ---
 
+## 2026-08-18 — orb-motion: data-orb-warp, true non-affine silhouette
+- src/orb-motion.js, ARCHITECTURE.md
+- scale/skew can only turn a circle into a leaning ellipse; a lava-lamp silhouette has
+  CONCAVE bulges. New opt-in `data-orb-warp` gets there with an SVG feDisplacementMap
+  applied via `filter`, which warps the element's finished rendering — refracted backdrop,
+  rim, specular, edge — as one already-composited image. Same reason skew is safe (it
+  happens after the glass draws itself), minus the affine restriction.
+- Chain is feTurbulence (STATIC, so the browser caches the noise field) -> feOffset
+  (animated, scrolls the cached noise so bulges travel almost free) -> feDisplacementMap.
+  Animating baseFrequency/seed instead would recompute turbulence every frame.
+- Drift uses the same closed harmonic loop as PATH, so it is seamless. Verified: noise
+  offset returns exactly to its start, turbulence attributes untouched during animation,
+  kill() removes both the CSS and the filter node.
+- Warns if placed on an ANCESTOR of a glass element: a filter makes an element a backdrop
+  root, which would leave the glass nothing behind it to refract.
+- The injected <svg> defs host is tagged `data-js-injected` so transition.js's shell class
+  sync skips it.
+- NOT YET BROWSER-VERIFIED: whether Chrome honours `backdrop-filter` on an element that
+  also carries `filter`. If the glass goes flat when the warp is added, that interaction
+  is the cause — fall back to warping a glow group only.
+- WEBFLOW: no new file. Opt in by adding `data-orb-warp` to glass-orb (plus
+  `data-orb-warp-scale` / `-detail` to taste).
+
 ## 2026-08-18 — orb-motion: organic multi-timescale warp
 - src/orb-motion.js, ARCHITECTURE.md
 - New `data-orb-squish-organic`, **default on** (visual change on deploy, no attribute

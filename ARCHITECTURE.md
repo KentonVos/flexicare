@@ -185,6 +185,19 @@ Integer harmonics keep it exactly periodic and therefore seamless, with the driv
 at 3× the base duration. It's also cheaper: one driver tween per element instead of an
 endless chain. `data-orb-squish-organic="0"` restores stepped mode.
 
+`data-orb-warp` (opt-in) is the true non-affine route: an SVG `feDisplacementMap` applied
+through `filter`, which warps the element's *finished rendering* — refracted backdrop,
+rim, specular and edge as one already-composited image. Nothing can desync, for the same
+reason skew can't (it happens after the glass has drawn), but it isn't limited to affine,
+so it produces concave bulges. Chain shape matters: `feTurbulence` is **static** (animating
+`baseFrequency`/`seed` recomputes the whole noise field per frame — by far the most
+expensive thing here), and an animated `feOffset` scrolls that cached noise so the bulges
+travel almost for free. Drift follows the same closed harmonic loop as PATH, so it's
+seamless. Put it on the glass element itself and/or a glow group — **never on an ancestor
+of the glass**, since a `filter` makes an element a backdrop root and would leave the
+glass nothing behind it to refract (the module warns). The injected `<svg>` defs host is
+tagged `data-js-injected` so `syncShellClasses` skips it.
+
 A lava-lamp look is mostly **non-affine** — a bulge swells on one side while the rest
 stays put — and affine transforms of a circle are always ellipses, so no scale/skew on the
 membrane can bulge it, and nesting more squish layers can't either (affine ∘ affine is
