@@ -14,6 +14,33 @@ Format:
 
 ---
 
+## 2026-08-18 — Orb: final tuned values, and the warp/refraction trade-off
+- ARCHITECTURE.md, CLAUDE.md, src/orb-motion.js (header only — no behaviour change)
+- Values tuned live via ?orbtune and now set as attributes in Webflow:
+    orb-container   data-orb-path-x=26 -y=23 -duration=17 -spin=40
+    orb-wrapper     data-orb-squish-radius=0 -scale=0.06 -skew=2 -duration=9.5
+                    data-orb-warp-scale=15 -detail=0.004 -speed=4 -drift=165 -pulse=0.05
+    both glows      data-orb-float-x=18 -y=16 -scale=0.1 -duration=50 -spin=300
+                    -radius=22 -follow=1.1
+  Defaults were omitted deliberately (path-direction, squish-organic/-uniform,
+  warp-octaves/-smooth), so any attribute that IS present is a deliberate departure.
+- CONFIRMED IN BROWSER, and accepted: `data-orb-warp` sits on `orb-wrapper`, an ancestor of
+  `glass-orb`, and this HAS switched the glass refraction off — a `filter` makes an element
+  a backdrop root, so the glass has nothing behind it left to refract. The predicted
+  consequence is real.
+- Kept anyway, on purpose: the orb is the bottom-most layer of the page, so nothing
+  underneath it is worth refracting, and warping the wrapper deforms the glass and both
+  glows together as a single shape, which is the intended look. orb-motion.js logs its
+  placement warning on every load — **that warning is expected here and must not be
+  "fixed"** by moving the warp onto glass-orb, which would restore a refraction of nothing
+  and break the unified silhouette. Recorded in CLAUDE.md, ARCHITECTURE.md and the
+  orb-motion.js header so a fresh session can't undo it by following the general rule.
+- Note the two glows now share follow=1.1; the earlier per-glow 0.4/0.55 split was
+  flattened by tuning them through the panel's "All" mode.
+- Also tidied CLAUDE.md: orb-motion.js had been wedged under item 4 without its own number,
+  and the two dev tuners were listed in the wrong order relative to the Webflow footer.
+- WEBFLOW: attributes already applied. No footer change.
+
 ## 2026-08-18 — NEW src/orb-tuner.js: live tuner for orb-motion
 - NEW src/orb-tuner.js; README.md, ARCHITECTURE.md, CLAUDE.md, docs/hosting-and-publishing.md
 - Dev-only control panel gated behind `?orbtune` (or `?tune`, so it can sit beside the
@@ -46,7 +73,9 @@ Format:
   that warping the glows means giving them their own group beside glass-orb, not wrapping
   it.
 - Still open: whether `filter` and `backdrop-filter` coexist on the SAME element in
-  Chrome. Untested so far, because the attribute had been on the wrapper.
+  Chrome. Untested so far, because the attribute had been on the wrapper. (Later resolved
+  as moot — see the "final tuned values" entry: the warp stays on the wrapper by choice, so
+  the same-element case is never exercised in this project.)
 
 ## 2026-08-18 — orb-motion: fix warp rendering as grain
 - src/orb-motion.js, ARCHITECTURE.md

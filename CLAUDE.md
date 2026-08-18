@@ -29,17 +29,17 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
 2. `src/transition.js` — `window.PageTransition`. **The only file that calls `barba.init()`.** Owns page transitions. Needs Barba, GSAP, LiquidGlass.
 3. `src/text-reveal.js` — `window.TextReveal`. Word-by-word headline reveals; driven by transition.js.
 4. `src/background-motion.js` — `window.BackgroundMotion`. Background glow drift/orbit.
-   `src/orb-motion.js` — `window.OrbMotion`. The landing-page orb: path + squish + float.
-   Unlike background-motion it targets elements INSIDE the Barba container, so it
+5. `src/orb-motion.js` — `window.OrbMotion`. The landing-page orb: path + squish + warp +
+   float. Unlike background-motion it targets elements INSIDE the Barba container, so it
    re-scans on `afterEnter` and prunes tweens for removed nodes.
-5. `src/flexicare-core.js` — `window.Flexicare` (aka `FC`). The persistent brain: config, session id, buffered selfie, API helper, journey reset. **First of the Flexicare scripts.**
-6. `src/flexicare-onboarding.js` — `/onboarding` page controller.
-7. `src/flexicare-selfie.js` — selfie-capture page controller.
-8. `src/flexicare-quiz.js` — `/archetype` quiz + later FLEX stage.
-9. `src/orb-tuner.js` — dev-only orb-motion control panel, gated behind `?orbtune`
-   (or `?tune`). Writes the `data-orb-*` attributes live and hands back a paste-ready
-   list. Ignore for production changes.
+6. `src/flexicare-core.js` — `window.Flexicare` (aka `FC`). The persistent brain: config, session id, buffered selfie, API helper, journey reset. **First of the Flexicare scripts.**
+7. `src/flexicare-onboarding.js` — `/onboarding` page controller.
+8. `src/flexicare-selfie.js` — selfie-capture page controller.
+9. `src/flexicare-quiz.js` — `/archetype` quiz + later FLEX stage.
 10. `src/slider.js` — **NOT a content slider.** This is the "Liquid Glass Tuner", a dev-only control panel gated behind `?tune` in the URL. Ignore it for production changes unless the task is about tuning glass presets.
+11. `src/orb-tuner.js` — dev-only orb-motion control panel, gated behind `?orbtune`
+    (or `?tune`, so it can sit beside the glass tuner). Writes the `data-orb-*` attributes
+    live and hands back a paste-ready list. Ignore for production changes.
 
 ## Things that will bite you if you forget them
 
@@ -59,6 +59,13 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
   navigations but NOT a hard page reload. That's why the controllers always navigate
   with `barba.go()`, never `window.location`. Don't "helpfully" change a `barba.go()`
   to a normal redirect.
+- **The orb's `data-orb-warp` is on `orb-wrapper` ON PURPOSE, and that has switched the
+  glass refraction OFF.** A `filter` makes an element a backdrop root, so a filtered
+  ancestor leaves `glass-orb` with nothing behind it to refract. This was measured, not
+  guessed, and accepted: the orb is the bottom-most layer, so there is nothing underneath
+  worth refracting, and warping the wrapper deforms the glass and both glows as one shape.
+  `orb-motion.js` warns about this placement on every load — **the warning is expected
+  here; do not "fix" it** by moving the warp onto `glass-orb`.
 - **Never animate `border-radius` on a `data-liquid-glass` element.** Glass bakes a
   displacement map from the layout box plus ONE corner radius, so a morphing silhouette
   leaves the refraction rim describing a circle it no longer matches — and per-frame

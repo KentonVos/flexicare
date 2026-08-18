@@ -31,6 +31,8 @@
      orb-container  ->  data-orb-path      (drifts + rotates)
      orb-wrapper    ->  data-orb-squish    (warps the whole bubble;
                         border-radius 50% + overflow hidden, static)
+                    +  data-orb-warp      (see WARP: deliberate here,
+                        and it switches the glass refraction off)
      glass-orb      ->  (glass only -- inherits the wrapper's warp)
      green-orb-glow ->  data-orb-float + data-orb-float-follow
      blue-orb-glow  ->  data-orb-float + data-orb-float-follow
@@ -217,15 +219,24 @@
                                   -detail is the better way to get
                                   broader lobes
 
-   WHERE: on the glass element itself, and/or on a glow group --
-   never on an ANCESTOR of the glass. A `filter` makes an element a
-   backdrop root, so a filtered ancestor leaves the glass's
-   backdrop-filter with nothing behind it to refract. The module
-   warns if it sees that. In this project that means data-orb-warp
-   goes on glass-orb, NOT on orb-wrapper -- the wrapper is where the
-   squish goes, and those two attributes are not interchangeable.
-   To warp the glows too, give them their own group with its own
-   data-orb-warp, sibling to glass-orb rather than wrapping it.
+   WHERE: a `filter` makes an element a backdrop root, so putting this
+   on an ANCESTOR of the glass leaves the glass's backdrop-filter with
+   nothing behind it to refract. The module warns when it sees that.
+
+   THIS PROJECT DOES IT ANYWAY, ON PURPOSE. data-orb-warp is on
+   orb-wrapper, an ancestor of glass-orb, and the glass refraction is
+   consequently off -- measured in the browser, not predicted. It was
+   accepted because the orb is the bottom-most layer of the page:
+   nothing sits underneath it worth refracting, and warping the
+   wrapper deforms the glass and both glows together as one shape,
+   which is the look the design wanted. So the console warning is
+   EXPECTED here. Do not "fix" it by moving the warp to glass-orb --
+   that would restore a refraction of nothing and break the unified
+   silhouette.
+
+   Elsewhere, or if anything is ever layered behind the orb, the
+   correct placement is the glass element itself and/or a glow group
+   beside it (never wrapping it).
 
    COST: the displacement is cheap, the turbulence is not -- but it's
    computed once and cached. Still, this is the most expensive thing

@@ -200,11 +200,20 @@ noise so the bulges travel almost for free. Drift follows the same closed harmon
 seamless. `data-orb-warp-detail` is that turbulence's `baseFrequency`, in cycles per *pixel*, so it
 belongs in the thousandths (~0.002–0.02); the module clamps and warns above 0.08, where the
 wavelength is a few pixels and the result is grain that can't form a lobe at any
-displacement scale. Put it on the glass element itself and/or a glow group — **never on an
-ancestor of the glass** (in this project: on `glass-orb`, not on `orb-wrapper`, which is
-where the squish goes), since a `filter` makes an element a backdrop root and would leave the
-glass nothing behind it to refract (the module warns). The injected `<svg>` defs host is
-tagged `data-js-injected` so `syncShellClasses` skips it.
+displacement scale.
+
+Placement has a real consequence: a `filter` makes an element a backdrop root, so putting
+the warp on an **ancestor** of the glass leaves the glass nothing behind it to refract. The
+module warns about it. **In this project the warp is deliberately on `orb-wrapper`, an
+ancestor of `glass-orb`, and the glass refraction is knowingly off as a result** — confirmed
+in the browser, not just predicted. That was accepted because the orb is the bottom-most
+layer of the page: there is nothing underneath it worth refracting, and warping the wrapper
+deforms the glass and both glows together as one shape, which is what the design wanted.
+**Do not "fix" this by moving the warp onto `glass-orb`** — it would restore a refraction of
+nothing and break the unified silhouette. The alternative placement (on the glass itself,
+and/or on a glow group beside it) remains correct for any context where something *is*
+behind the orb. The injected `<svg>` defs host is tagged `data-js-injected` so
+`syncShellClasses` skips it.
 
 A lava-lamp look is mostly **non-affine** — a bulge swells on one side while the rest
 stays put — and affine transforms of a circle are always ellipses, so no scale/skew on the
