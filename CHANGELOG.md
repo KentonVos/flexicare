@@ -14,6 +14,24 @@ Format:
 
 ---
 
+## 2026-08-18 — orb-motion: keep the squish off the glass node
+- src/orb-motion.js, ARCHITECTURE.md, CLAUDE.md
+- Morphing a `data-liquid-glass` element desyncs its refraction rim from its painted
+  edge: glass bakes its displacement map from offsetWidth/offsetHeight (transforms
+  don't change those) and a SINGLE borderTopLeftRadius fed to makeSDF as a uniform
+  rounded rect, so 7 of the 8 border-radius values are invisible to it and scaleX/scaleY
+  squash the finished backdrop-filter output. Nothing rebuilds either — a transform
+  isn't a resize, so ResizeObserver never fires.
+- New `data-orb-squish-uniform="1"` — scales both axes together, the only kind of
+  scale a baked glass rim survives.
+- New `data-orb-float-radius` — the blob morph on the soft glow layers, where there's
+  no rim to fall out of register. Writes border-radius, not transform, so it composes
+  with the float wander.
+- Warns on the console if a glass node is given a radius morph or a non-uniform scale.
+- WEBFLOW: no new file. On glass-orb set `data-orb-squish-radius="0"`,
+  `data-orb-squish-uniform="1"`, `data-orb-squish-scale="0.03"`; add
+  `data-orb-float-radius="20"` to green-orb-glow / blue-orb-glow.
+
 ## 2026-08-18 — Fluid orb motion on the landing page
 - NEW src/orb-motion.js; README.md, ARCHITECTURE.md, CLAUDE.md, docs/hosting-and-publishing.md
 - Adds `window.OrbMotion`: `data-orb-path` (outer wander + slow spin),

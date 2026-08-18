@@ -169,7 +169,16 @@ background-motion, but for elements INSIDE the Barba container, so it re-scans o
 endless random-target chains — this is the "squishy bubble") →
 `data-orb-float` (inner glows wandering, each with its own phase/clock).
 The radius morph only *shows* where something is painted or clipped, so the squish
-element needs a background or `overflow: hidden`. Never put path/float on a node with
+element needs a background or `overflow: hidden`. **Never morph a `data-liquid-glass`
+node**: glass bakes its displacement map from `offsetWidth`/`offsetHeight` (which
+transforms don't change) and a *single* `borderTopLeftRadius`, so a blob or a
+non-uniform scale pulls its refraction rim out of register with its painted edge, and
+nothing rebuilds because a transform isn't a resize. Per-frame rebuilds aren't
+affordable (`buildMap` is a per-pixel JS loop + `toDataURL` — the reason
+`freeze()`/`unfreeze()` exist). On a glass node use only
+`data-orb-squish-radius="0" data-orb-squish-uniform="1"`, and put the blob morph on
+the soft glow layers via `data-orb-float-radius` (which writes `border-radius`, not
+`transform`, so it composes with the wander). The module warns if you get this wrong. Never put path/float on a node with
 `data-lg-press`/`data-lg-tilt` or `data-anim` — both also write `transform`; use
 `data-anim-fade`. Respects `prefers-reduced-motion`. API: `refresh(scope)`, `stop()`,
 `start()`, `kill(el)`. Knobs documented in the file header.

@@ -62,6 +62,9 @@
       data-orb-squish-radius="18"  radius swing, +/- percentage points
                                    around 50 (0 disables the morph)
       data-orb-squish-scale="0.05" scale swing (+/-). 0 disables it
+      data-orb-squish-uniform="0"  1 = scale both axes together (a breathe,
+                                   not a squash). REQUIRED on a glass node
+                                   -- see "GLASS" below
       data-orb-squish-duration="5" base seconds per morph step
       data-orb-squish-ease="sine.inOut"
 
@@ -77,6 +80,31 @@
    (scale) but show no morph.
 
    ============================================================
+   GLASS -- do NOT morph a data-liquid-glass element
+   ------------------------------------------------------------
+   glass.js bakes its refraction into a displacement map built from
+   (a) offsetWidth/offsetHeight -- the LAYOUT box, which transforms
+   do not change -- and (b) ONE corner radius, borderTopLeftRadius,
+   fed to makeSDF as a uniform rounded rect. So on a glass node:
+     - 7 of the 8 border-radius values are invisible to it. Its rim
+       stays a circle while the painted edge becomes a blob, and the
+       two visibly separate.
+     - scaleX/scaleY squash the finished backdrop-filter output, so
+       the glow seen THROUGH the glass stretches out of register
+       with the real background behind it. ResizeObserver never
+       fires either (a transform is not a resize), so nothing
+       rebuilds.
+   Rebuilding per frame is not an option: buildMap is a per-pixel JS
+   loop plus a toDataURL, which is why glass.js has freeze()/
+   unfreeze() at all.
+
+   So on a glass node use ONLY a uniform breathe:
+     data-orb-squish-radius="0" data-orb-squish-uniform="1"
+                               data-orb-squish-scale="0.03"
+   and put the real blob morph on the soft gradient layers, which
+   have no rim to fall out of register (data-orb-float-radius).
+
+   ============================================================
    FLOAT  (data-orb-float) -- wander inside the parent
    ------------------------------------------------------------
    Same harmonic loop as PATH but tuned for the inner glows, with a
@@ -87,6 +115,12 @@
      data-orb-float-scale="0.08"  breathe swing (+/-), 0 = off
      data-orb-float-duration="14" base seconds (varies +/-30%)
      data-orb-float-spin="0"      seconds per 360deg turn (0 = off)
+     data-orb-float-radius="0"    border-radius blob morph, same as
+                                  data-orb-squish-radius. Safe to combine
+                                  with float because the morph writes
+                                  border-radius, not transform. This is
+                                  where the squishy look belongs once the
+                                  glass node is off limits.
 
    ============================================================
    Global defaults: window.OrbMotion.config
@@ -124,6 +158,7 @@
     squish: {
       radius: 18,
       scale: 0.05,
+      uniform: 0,
       duration: 5,
       ease: "sine.inOut",
       vary: 0.35,
@@ -134,6 +169,7 @@
       scale: 0.08,
       duration: 14,
       spin: 0,
+      radius: 0,
       vary: 0.3,
     },
   };
@@ -280,6 +316,48 @@
       "%";
   }
 
+  // Endless chain of random-target morphs. A fresh target each step, so there
+  // is no recognisable loop. Shared by SQUISH and FLOAT -- it writes
+  // border-radius, never transform, so it composes with either.
+  function morphRadius(el, amp, base, ease, state) {
+    var vary = config.squish.vary;
+    var r = radiusTarget(amp);
+    writeRadius(el, r);
+    (function step() {
+      if (!state.alive) return;
+      var to = radiusTarget(amp);
+      to.duration = base * rnd(1 - vary, 1 + vary);
+      to.ease = ease;
+      to.onUpdate = function () {
+        writeRadius(el, r);
+      };
+      to.onComplete = step;
+      state.tweens.push(gsap.to(r, to));
+      // keep the list from growing without bound over a long session
+      if (state.tweens.length > 8) state.tweens.shift();
+    })();
+  }
+
+  // glass.js bakes its refraction from offsetWidth/offsetHeight and ONE corner
+  // radius, so a morphing or non-uniformly scaled glass node desyncs its rim
+  // from its painted edge. Full explanation in the header.
+  function warnIfGlass(el, amp, uniform) {
+    if (!el.hasAttribute("data-liquid-glass")) return;
+    if (!amp && uniform) return;
+    console.warn(
+      "[OrbMotion] " +
+        (amp
+          ? "border-radius morphing "
+          : "non-uniform scale ") +
+        "on a data-liquid-glass element will pull its refraction rim out of " +
+        "register with its painted edge -- glass bakes a displacement map " +
+        "from the layout box and one corner radius. Use " +
+        'data-orb-squish-radius="0" data-orb-squish-uniform="1" here, and put ' +
+        "the blob morph on the soft glow layers instead.",
+      el
+    );
+  }
+
   function squish(el) {
     if (reduceMotion || el.__orbSquish) return;
     if (el.hasAttribute("data-orb-float")) {
@@ -292,6 +370,7 @@
 
     var amp = num(el, "data-orb-squish-radius", config.squish.radius);
     var sc = num(el, "data-orb-squish-scale", config.squish.scale);
+    var uniform = num(el, "data-orb-squish-uniform", config.squish.uniform);
     var base = num(el, "data-orb-squish-duration", config.squish.duration);
     var ease = el.getAttribute("data-orb-squish-ease") || config.squish.ease;
     var vary = config.squish.vary;
@@ -299,45 +378,33 @@
     el.__orbSquish = state;
     tracked.push(el);
 
+    warnIfGlass(el, amp, uniform);
     willChange(el, amp ? "transform, border-radius" : "transform");
 
-    // 1. endless border-radius morph -- a fresh random target each step,
-    //    so there's no recognisable loop.
-    if (amp) {
-      var r = radiusTarget(amp);
-      writeRadius(el, r);
-      (function stepRadius() {
-        if (!state.alive) return;
-        var to = radiusTarget(amp);
-        to.duration = base * rnd(1 - vary, 1 + vary);
-        to.ease = ease;
-        to.onUpdate = function () {
-          writeRadius(el, r);
-        };
-        to.onComplete = stepRadius;
-        var t = gsap.to(r, to);
-        state.tweens.push(t);
-        // keep the list from growing without bound over a long session
-        if (state.tweens.length > 8) state.tweens.shift();
-      })();
-    }
+    // 1. the blob silhouette.
+    if (amp) morphRadius(el, amp, base, ease, state);
 
-    // 2. counter-phase scale -- x up while y goes down ~80% as much.
-    //    Roughly volume-preserving, which is what reads as "squishy"
-    //    rather than "pulsing bigger and smaller".
+    // 2. scale. Counter-phase by default -- x up while y goes down ~80% as
+    //    much, roughly volume-preserving, which is what reads as "squishy"
+    //    rather than "pulsing bigger and smaller". Uniform mode keeps both
+    //    axes together: less alive, but the only kind a glass rim survives.
     if (sc) {
       gsap.set(el, { scaleX: 1, scaleY: 1 });
       (function stepScale() {
         if (!state.alive) return;
         var k = rnd(-sc, sc);
-        var t = gsap.to(el, {
-          scaleX: 1 + k,
-          scaleY: 1 - k * 0.8,
+        var vars = {
           duration: base * 1.3 * rnd(1 - vary, 1 + vary),
           ease: ease,
           onComplete: stepScale,
-        });
-        state.tweens.push(t);
+        };
+        if (uniform) {
+          vars.scale = 1 + k;
+        } else {
+          vars.scaleX = 1 + k;
+          vars.scaleY = 1 - k * 0.8;
+        }
+        state.tweens.push(gsap.to(el, vars));
         if (state.tweens.length > 8) state.tweens.shift();
       })();
     }
@@ -379,6 +446,17 @@
           delay: -rnd(0, dur), // negative delay = start partway through
         })
       );
+    }
+
+    // Soft gradient layers have no refraction rim to fall out of register, so
+    // this is where the blob morph belongs. It writes border-radius, not
+    // transform, so it composes with the wander above.
+    var amp = num(el, "data-orb-float-radius", config.float.radius);
+    if (amp) {
+      var state = { tweens: tweens, alive: true };
+      el.__orbSquish = state; // reuse the squish slot so kill() clears the radius
+      willChange(el, "transform, border-radius");
+      morphRadius(el, amp, base * 0.4, config.squish.ease, state);
     }
 
     el.__orbTweens = tweens;
