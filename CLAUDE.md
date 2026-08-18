@@ -29,6 +29,9 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
 2. `src/transition.js` — `window.PageTransition`. **The only file that calls `barba.init()`.** Owns page transitions. Needs Barba, GSAP, LiquidGlass.
 3. `src/text-reveal.js` — `window.TextReveal`. Word-by-word headline reveals; driven by transition.js.
 4. `src/background-motion.js` — `window.BackgroundMotion`. Background glow drift/orbit.
+   `src/orb-motion.js` — `window.OrbMotion`. The landing-page orb: path + squish + float.
+   Unlike background-motion it targets elements INSIDE the Barba container, so it
+   re-scans on `afterEnter` and prunes tweens for removed nodes.
 5. `src/flexicare-core.js` — `window.Flexicare` (aka `FC`). The persistent brain: config, session id, buffered selfie, API helper, journey reset. **First of the Flexicare scripts.**
 6. `src/flexicare-onboarding.js` — `/onboarding` page controller.
 7. `src/flexicare-selfie.js` — selfie-capture page controller.

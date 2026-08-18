@@ -16,7 +16,8 @@ on `window.Flexicare` and survive navigation.
 Two layers:
 
 - **Engine** — reusable visual + navigation code: `glass.js`, `transition.js`,
-  `text-reveal.js`, `background-motion.js`, and the dev-only `slider.js` tuner.
+  `text-reveal.js`, `background-motion.js`, `orb-motion.js`, and the dev-only
+  `slider.js` tuner.
 - **App** — the funnel itself: `flexicare-core.js` (state) plus three page controllers.
 
 ### Load order and why it's fixed
@@ -31,6 +32,7 @@ glass.js                 LiquidGlass.scan must exist before transition.js uses i
 transition.js            calls barba.init() ONCE; registers the transition + afterEnter(glass scan)
 text-reveal.js           needs GSAP; transition.js drives its reveals
 background-motion.js     needs GSAP; attaches its Barba reaction when Barba is present
+orb-motion.js            needs GSAP; re-scans the new container on Barba afterEnter
 flexicare-core.js        first Flexicare script; registers journey-reset afterEnter
 flexicare-onboarding.js  page controller
 flexicare-selfie.js      page controller
@@ -157,6 +159,20 @@ circles the viewport) → `data-drift` (blobs that wander in place). Never stack
 on one element (the module warns). Runs on elements OUTSIDE the Barba container so it's
 created once and never torn down. Respects `prefers-reduced-motion`. API:
 `refresh(scope)`, `stop()`, `start()`, `kill(el)`. Knobs documented in the file header.
+
+### orb-motion.js → `window.OrbMotion`
+The landing-page orb. Same "one transform per DOM level" discipline as
+background-motion, but for elements INSIDE the Barba container, so it re-scans on
+`afterEnter` and prunes tweens whose element left the DOM:
+`data-orb-path` (outer shell: closed harmonic wander + constant spin) →
+`data-orb-squish` (8-value `border-radius` morph + counter-phase `scaleX`/`scaleY`,
+endless random-target chains — this is the "squishy bubble") →
+`data-orb-float` (inner glows wandering, each with its own phase/clock).
+The radius morph only *shows* where something is painted or clipped, so the squish
+element needs a background or `overflow: hidden`. Never put path/float on a node with
+`data-lg-press`/`data-lg-tilt` or `data-anim` — both also write `transform`; use
+`data-anim-fade`. Respects `prefers-reduced-motion`. API: `refresh(scope)`, `stop()`,
+`start()`, `kill(el)`. Knobs documented in the file header.
 
 ### flexicare-core.js → `window.Flexicare` (`FC`)
 The persistent brain. Holds:

@@ -66,6 +66,7 @@ load-bearing (see ARCHITECTURE.md); GSAP and Barba are libraries and stay pinned
 <script src="https://flexicare.kenton-323.workers.dev/src/transition.js"></script>
 <script src="https://flexicare.kenton-323.workers.dev/src/text-reveal.js"></script>
 <script src="https://flexicare.kenton-323.workers.dev/src/background-motion.js"></script>
+<script src="https://flexicare.kenton-323.workers.dev/src/orb-motion.js"></script>
 <script src="https://flexicare.kenton-323.workers.dev/src/flexicare-core.js"></script>
 <script src="https://flexicare.kenton-323.workers.dev/src/flexicare-selfie.js"></script>
 <script src="https://flexicare.kenton-323.workers.dev/src/flexicare-onboarding.js"></script>

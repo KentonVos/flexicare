@@ -14,6 +14,19 @@ Format:
 
 ---
 
+## 2026-08-18 — Fluid orb motion on the landing page
+- NEW src/orb-motion.js; README.md, ARCHITECTURE.md, CLAUDE.md, docs/hosting-and-publishing.md
+- Adds `window.OrbMotion`: `data-orb-path` (outer wander + slow spin),
+  `data-orb-squish` (8-value border-radius morph + counter-phase scaleX/scaleY for a
+  squishy-bubble surface), `data-orb-float` (inner glows wandering on their own clocks).
+  Layered one transform-writer per DOM level so they compose instead of fighting.
+- First module that animates INSIDE the Barba container: it re-scans on
+  `barba.hooks.afterEnter` and kills tweens for elements no longer in the document.
+- WEBFLOW: the footer file list changed — add `orb-motion.js` right after
+  `background-motion.js`. Then add the attributes in the Designer:
+  orb-container → `data-orb-path`, orb-wrapper → `data-orb-squish` (+ `overflow: hidden`),
+  green-orb-glow / blue-orb-glow → `data-orb-float`.
+
 ## 2026-08-14 — Docs brought in line with the code and the new hosting
 - ARCHITECTURE.md, CLAUDE.md, CHANGELOG.md
 - ARCHITECTURE.md § transition.js now documents the shell-persistence machinery:

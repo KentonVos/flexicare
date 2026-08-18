@@ -37,11 +37,12 @@ flexicare/
 ├── docs/
 │   ├── webflow-head-snippet.md   ← the head snippet that lives in Webflow (site head)
 │   └── hosting-and-publishing.md ← hosting + publish + rollback workflow
-└── src/               ← the nine scripts (served by Cloudflare from /src/)
+└── src/               ← the ten scripts (served by Cloudflare from /src/)
     ├── glass.js
     ├── transition.js
     ├── text-reveal.js
     ├── background-motion.js
+    ├── orb-motion.js
     ├── flexicare-core.js
     ├── flexicare-onboarding.js
     ├── flexicare-selfie.js
