@@ -529,6 +529,11 @@
   function makeLayers(el, st) {
     var overlay = document.createElement("div");
     overlay.className = "lg-layer";
+    // Also tag it with an ATTRIBUTE, not just a class: transition.js has to be
+    // able to tell script-injected nodes apart from authored Webflow markup when
+    // it syncs the shell's classes across a Barba navigation, and a class is the
+    // one thing that operation overwrites.
+    overlay.setAttribute("data-lg-layer", "");
     el.insertBefore(overlay, el.firstChild);
     st.overlay = overlay;
   }

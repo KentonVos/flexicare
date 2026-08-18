@@ -399,13 +399,25 @@
     return el.getAttribute("data-barba") === "container";
   }
 
-  // Children eligible for positional matching. Containers are dropped from BOTH
-  // sides because mid-transition the live DOM holds two of them (outgoing +
-  // incoming) while the next document holds one — leaving them in would shift
-  // every later sibling by one and copy classes onto the wrong elements.
+  // Children eligible for positional matching. Three kinds of node are dropped
+  // so the two sides line up:
+  //   • containers — mid-transition the live DOM holds TWO (outgoing +
+  //     incoming) while the next document holds one
+  //   • our own leave-transition placeholder
+  //   • script-injected nodes that exist only in the live DOM: glass.js inserts
+  //     a .lg-layer overlay as the FIRST child of every glassed element. Miss
+  //     that and every later sibling is off by one — which is exactly how the
+  //     overlay once ended up wearing padding-global's class, producing an empty
+  //     padded div and a blank band above the content.
   function matchableKids(el) {
     return Array.prototype.filter.call(el.children, function (n) {
-      return !isContainer(n) && !n.hasAttribute("data-barba-placeholder");
+      if (isContainer(n)) return false;
+      if (n.hasAttribute("data-barba-placeholder")) return false;
+      // data-lg-layer first: transition.js rewrites classNames, so the class
+      // alone is not a dependable marker.
+      if (n.hasAttribute("data-lg-layer")) return false;
+      if (n.classList && n.classList.contains("lg-layer")) return false;
+      return true;
     });
   }
 
@@ -415,8 +427,12 @@
     if (cur.hasAttribute("data-barba-sync")) return; // innerHTML swap owns the inside
     var a = matchableKids(cur),
       b = matchableKids(next);
-    var n = Math.min(a.length, b.length);
-    for (var i = 0; i < n; i++) walkShellClasses(a[i], b[i]);
+    // The counts MUST agree. If they don't, a node exists on one side only and
+    // positional matching would write classes onto the wrong elements — much
+    // worse than leaving them stale, since a wrong class can inject padding or
+    // hide content. Abandon this branch instead of matching what we can.
+    if (a.length !== b.length) return;
+    for (var i = 0; i < a.length; i++) walkShellClasses(a[i], b[i]);
   }
 
   function syncShellClasses(nextDoc) {

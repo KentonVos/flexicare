@@ -14,6 +14,23 @@ Format:
 
 ---
 
+## 2026-08-14 — Fix blank band above content caused by class-sync misalignment (v1.0.4)
+- src/transition.js, src/glass.js
+- Symptom (regression from v1.0.3): after navigating, an empty div with class
+  padding-global appeared above the content, adding a large blank band. Gone on refresh.
+- Cause: glass.js inserts <div class="lg-layer"> as the FIRST child of every glassed
+  element. That node exists in the live DOM but not in the parsed next document, so
+  inside glass-background-container the live children were [lg-layer, padding-global]
+  against [padding-global]. walkShellClasses matched by Math.min and paired
+  lg-layer <-> padding-global, copying padding-global's class onto the glass overlay.
+- Fix: matchableKids() now also drops glass overlays, and walkShellClasses() REQUIRES
+  the two child counts to be equal — a mismatch abandons that branch (stale classes)
+  instead of misaligning. Math.min was the real defect: it let a length mismatch
+  silently shift every later sibling.
+- glass.js now tags the overlay with data-lg-layer as well as .lg-layer, because the
+  class sync overwrites classNames and a class is not a dependable marker.
+- No Webflow change needed.
+
 ## 2026-08-14 — Sync persistent shell classes across navigations (v1.0.3)
 - src/transition.js
 - Symptom: the 1.5rem flex gap above button-navigation-wrapper was missing after
