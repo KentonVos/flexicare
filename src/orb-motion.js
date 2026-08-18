@@ -23,12 +23,17 @@
    attribute on its own element -- the module warns if you stack
    PATH and FLOAT (both write x/y/rotation) on one node.
 
-   Intended for this project:
+   Intended for this project. Note the squish sits on the WRAPPER,
+   the ancestor shared by the glass and the glows: one affine warp
+   there deforms all of them as a single unit, so they cannot drift
+   out of agreement with each other, and the wrapper's static
+   circular overflow:hidden is what keeps the glows contained.
      orb-container  ->  data-orb-path      (drifts + rotates)
-     orb-wrapper    ->  data-orb-squish    (squishy bubble)
-     glass-orb      ->  data-orb-float     (or squish, see below)
-     green-orb-glow ->  data-orb-float     (wanders inside)
-     blue-orb-glow  ->  data-orb-float     (wanders inside)
+     orb-wrapper    ->  data-orb-squish    (warps the whole bubble;
+                        border-radius 50% + overflow hidden, static)
+     glass-orb      ->  (glass only -- inherits the wrapper's warp)
+     green-orb-glow ->  data-orb-float + data-orb-float-follow
+     blue-orb-glow  ->  data-orb-float + data-orb-float-follow
 
    ============================================================
    PATH  (data-orb-path) -- slow fluid wander + rotation
@@ -71,13 +76,12 @@
       data-orb-squish-duration="5" base seconds per morph step
       data-orb-squish-ease="sine.inOut"
 
-   WHERE TO PUT IT -- pick one of these two:
-     a) On orb-wrapper, plus `overflow: hidden` on it in Webflow.
-        The morphing radius then clips glass-orb and both glows, so
-        the whole bubble silhouette squishes. Most convincing.
-     b) On glass-orb (the element that actually paints the circle),
-        and put data-orb-squish-scale on orb-wrapper for the squash.
-        Use this if you can't set overflow: hidden.
+   WHERE TO PUT IT: on orb-wrapper -- the ancestor shared by the
+   glass and the glows -- with a static border-radius 50% and
+   overflow: hidden. Everything below it then warps as one unit and
+   nothing can escape the boundary. Putting it on glass-orb instead
+   leaves the glows as siblings that warp independently of the glass
+   and spill outside it.
    Radius morphing only shows where something is painted or clipped:
    an element with no background and no overflow:hidden will squash
    (scale) but show no morph.
@@ -135,6 +139,39 @@
                                   border-radius, not transform. This is
                                   where the squishy look belongs once the
                                   glass node is off limits.
+     data-orb-float-follow="0"    seconds of LAG behind the warping
+                                  ancestor (0 = off). See FOLLOW below.
+
+   ============================================================
+   FOLLOW  (data-orb-float-follow) -- liquid inside the membrane
+   ------------------------------------------------------------
+   A child already INHERITS its ancestor's transform, so with the
+   squish on a shared ancestor the inner layers deform along with the
+   bubble -- but rigidly, like a decal printed on it. Real liquid
+   lags the container that squeezes it.
+
+   The trick: the child renders the deform the host had a moment ago,
+   by writing the RATIO of a smoothed copy of the host's deform to
+   its live one --
+       inherited * (lagged / live) == lagged
+   -- so the inheritance is cancelled out and replaced by the lagged
+   value. Skews subtract instead of dividing, because they compose
+   additively. Smoothing is exponential and dt-based, so it feels the
+   same at 60Hz and 120Hz.
+
+   It also squeezes the wander along whichever axis the host is
+   narrowing, so a layer stays proportionally placed inside instead
+   of being pushed out and clipped away.
+
+   Needs an ancestor carrying data-orb-squish (it warns if there
+   isn't one). Runs on gsap.ticker, removed by kill().
+
+   REQUIRES, in Webflow, on the ancestor that squishes:
+     - a STATIC border-radius (50% for a circle) and overflow: hidden,
+       which is what actually guarantees nothing escapes. Keep that
+       radius static: morphing it would clip the glass rim
+       non-affinely and reintroduce the desync described above.
+   Values: 0.25-0.5 reads as water, 0.8+ as something viscous.
 
    ============================================================
    Global defaults: window.OrbMotion.config
@@ -185,6 +222,7 @@
       duration: 14,
       spin: 0,
       radius: 0,
+      follow: 0,
       vary: 0.3,
     },
   };
@@ -218,7 +256,10 @@
 
   // One constant-speed driver, integer harmonics => exactly periodic,
   // so the loop wraps with no jump and no turnaround.
-  function wander(el, ax, ay, duration, store) {
+  // `hug`, when given, is a live {x, y} multiplier read every frame -- used by
+  // FOLLOW to shrink the wander along whichever axis the parent is squeezing,
+  // so a layer stays proportionally placed inside instead of being clipped away.
+  function wander(el, ax, ay, duration, store, hug) {
     var p1 = rnd(0, Math.PI * 2),
       p2 = rnd(0, Math.PI * 2),
       p3 = rnd(0, Math.PI * 2),
@@ -227,9 +268,11 @@
 
     function render() {
       var a = s.a;
+      var hx = hug ? hug.x : 1;
+      var hy = hug ? hug.y : 1;
       gsap.set(el, {
-        x: ax * (0.7 * Math.sin(a + p1) + 0.3 * Math.sin(3 * a + p2)),
-        y: ay * (0.7 * Math.sin(2 * a + p3) + 0.3 * Math.sin(a + p4)),
+        x: ax * hx * (0.7 * Math.sin(a + p1) + 0.3 * Math.sin(3 * a + p2)),
+        y: ay * hy * (0.7 * Math.sin(2 * a + p3) + 0.3 * Math.sin(a + p4)),
       });
     }
     render();
@@ -468,30 +511,51 @@
     willChange(el, "transform");
     gsap.set(el, { x: 0, y: 0 });
 
+    // FOLLOW: lag the warping ancestor, so the layer reads as liquid inside a
+    // membrane rather than a decal glued to it.
+    var lag = num(el, "data-orb-float-follow", config.float.follow);
+    var host = lag ? findHost(el) : null;
+    if (lag && !host) {
+      console.warn(
+        "[OrbMotion] data-orb-float-follow needs an ancestor carrying " +
+          "data-orb-squish to follow; none found. Ignoring.",
+        el
+      );
+      lag = 0;
+    }
+    var hug = lag ? { x: 1, y: 1 } : null;
+
     wander(
       el,
       num(el, "data-orb-float-x", config.float.x),
       num(el, "data-orb-float-y", config.float.y),
       base,
-      tweens
+      tweens,
+      hug
     );
     spin(el, num(el, "data-orb-float-spin", config.float.spin), 1, tweens);
 
-    // Breathe on its own clock so it never syncs with the wander.
+    // Breathe on its own clock so it never syncs with the wander. Under FOLLOW
+    // it has to run through a proxy: the follow writer owns scaleX/scaleY, and
+    // a tween on `scale` would fight it for the same two properties.
     var sc = num(el, "data-orb-float-scale", config.float.scale);
+    var breathe = { v: 1 };
     if (sc) {
       var dur = base * 0.55;
       tweens.push(
-        gsap.to(el, {
-          scale: 1 + rnd(-sc, sc),
+        gsap.to(lag ? breathe : el, {
           duration: dur,
           ease: "sine.inOut",
           repeat: -1,
           yoyo: true,
           delay: -rnd(0, dur), // negative delay = start partway through
+          v: lag ? 1 + rnd(-sc, sc) : undefined,
+          scale: lag ? undefined : 1 + rnd(-sc, sc),
         })
       );
     }
+
+    if (lag) followHost(el, host, lag, hug, breathe);
 
     // Soft gradient layers have no refraction rim to fall out of register, so
     // this is where the blob morph belongs. It writes border-radius, not
@@ -508,9 +572,60 @@
     tracked.push(el);
   }
 
+  /* ============================== FOLLOW ============================== */
+
+  function findHost(el) {
+    var n = el.parentNode;
+    while (n && n.nodeType === 1) {
+      if (n.hasAttribute("data-orb-squish")) return n;
+      n = n.parentNode;
+    }
+    return null;
+  }
+
+  // The child already INHERITS the host's transform, so to make it lag we write
+  // the ratio between a smoothed copy of the host's deform and its live one:
+  //   inherited * (lagged / live) == lagged
+  // i.e. the child ends up rendering the deform the host had a moment ago.
+  // Skews subtract rather than divide because they compose additively.
+  function followHost(el, host, tau, hug, breathe) {
+    var L = null;
+    function tick(time, dt) {
+      var sx = gsap.getProperty(host, "scaleX") || 1;
+      var sy = gsap.getProperty(host, "scaleY") || 1;
+      var kx = gsap.getProperty(host, "skewX") || 0;
+      var ky = gsap.getProperty(host, "skewY") || 0;
+      if (!L) L = { sx: sx, sy: sy, kx: kx, ky: ky };
+
+      // Frame-rate independent exponential smoothing: same feel at 60 or 120Hz.
+      var a = 1 - Math.exp(-(dt / 1000) / tau);
+      L.sx += (sx - L.sx) * a;
+      L.sy += (sy - L.sy) * a;
+      L.kx += (kx - L.kx) * a;
+      L.ky += (ky - L.ky) * a;
+
+      // Squeeze the wander along whichever axis the host is narrowing.
+      hug.x = sx;
+      hug.y = sy;
+
+      gsap.set(el, {
+        scaleX: (L.sx / sx) * breathe.v,
+        scaleY: (L.sy / sy) * breathe.v,
+        skewX: L.kx - kx,
+        skewY: L.ky - ky,
+      });
+    }
+    gsap.ticker.add(tick);
+    el.__orbTick = tick;
+  }
+
   /* ======================= scan / prune / boot ======================= */
 
   function killEl(el) {
+    if (el.__orbTick) {
+      gsap.ticker.remove(el.__orbTick);
+      el.__orbTick = null;
+    }
     if (el.__orbTweens) {
       el.__orbTweens.forEach(function (t) {
         t.kill();

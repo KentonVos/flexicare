@@ -167,7 +167,23 @@ background-motion, but for elements INSIDE the Barba container, so it re-scans o
 `data-orb-path` (outer shell: closed harmonic wander + constant spin) →
 `data-orb-squish` (8-value `border-radius` morph + counter-phase `scaleX`/`scaleY`,
 endless random-target chains — this is the "squishy bubble") →
-`data-orb-float` (inner glows wandering, each with its own phase/clock).
+`data-orb-float` (inner glows wandering, each with its own phase/clock) +
+`data-orb-float-follow` (lag the warping ancestor).
+
+Put the squish on the **shared ancestor** (`orb-wrapper`), not on the glass: one affine
+warp there deforms the glass and the glows as a single unit so they can't drift out of
+agreement, and a *static* `border-radius: 50%` + `overflow: hidden` on that wrapper is
+what guarantees the glows can never escape the boundary. Keep that radius static —
+morphing it would clip the glass rim non-affinely.
+
+`data-orb-float-follow` makes an inner layer read as liquid rather than a decal. A child
+already inherits the ancestor's transform, so to make it *lag*, the writer sets the ratio
+of a smoothed copy of the host's deform to its live one — `inherited * (lagged / live)
+== lagged` — cancelling the inheritance and substituting the lagged value. Skews subtract
+instead of dividing (they compose additively). Smoothing is exponential and dt-based, so
+it feels identical at 60Hz and 120Hz. It also squeezes the wander amplitude along
+whichever axis the host is narrowing, so a layer stays proportionally inside rather than
+being pushed out and clipped. Runs on `gsap.ticker`; `kill()` removes it.
 The radius morph only *shows* where something is painted or clipped, so the squish
 element needs a background or `overflow: hidden`. **Never morph a `data-liquid-glass`
 node**: glass bakes its displacement map from `offsetWidth`/`offsetHeight` (which

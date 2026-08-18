@@ -14,6 +14,28 @@ Format:
 
 ---
 
+## 2026-08-18 — orb-motion: inner layers follow the warp
+- src/orb-motion.js, ARCHITECTURE.md
+- The glows are SIBLINGS of glass-orb, so with the squish on glass-orb they warped
+  independently of it and spilled outside. Fix is structural: the squish belongs on
+  orb-wrapper, the ancestor they share, so one affine warp deforms glass and glows as a
+  single unit; a static border-radius 50% + overflow hidden there is what actually
+  contains them.
+- New `data-orb-float-follow="<seconds>"` — inner layers LAG the warping ancestor so
+  they read as liquid rather than a decal. A child already inherits the host transform,
+  so the writer sets the ratio of a smoothed copy of the host's deform to its live one
+  (`inherited * (lagged/live) == lagged`), cancelling the inheritance and substituting
+  the lagged value. Skews subtract rather than divide (additive composition). Exponential
+  dt-based smoothing, so identical feel at 60 and 120Hz. Warns if no squishing ancestor.
+- Follow also squeezes the wander amplitude along whichever axis the host is narrowing,
+  so a layer stays proportionally placed inside instead of being clipped away.
+- The breathe tween now runs through a proxy under follow, since the follow writer owns
+  scaleX/scaleY and a tween on `scale` would fight it for the same two properties.
+- Runs on gsap.ticker; kill() removes the ticker callback.
+- WEBFLOW: no new file. Move `data-orb-squish*` from glass-orb to orb-wrapper; give
+  orb-wrapper `border-radius: 50%` + `overflow: hidden`; add
+  `data-orb-float-follow="0.4"` to green-orb-glow / blue-orb-glow.
+
 ## 2026-08-18 — orb-motion: skew, so the warp survives the glass fix
 - src/orb-motion.js, ARCHITECTURE.md, CLAUDE.md
 - Killing the radius morph on the glass node also killed the abstract shape warping,
