@@ -11,9 +11,9 @@ is the front end (structure + styling + the `data-*` attributes on elements). Th
 scripts add all the behaviour: a liquid-glass UI, Barba.js page transitions, and a
 quiz that talks to a backend API.
 
-The scripts are pushed to **GitHub** and served to Webflow by **jsDelivr** via `<script
-src>` tags. This local folder is the **source of truth**. See "Editing + publishing
-workflow" below.
+The scripts are pushed to **GitHub** and served to Webflow by **Cloudflare Workers** via
+`<script src>` tags. This local folder is the **source of truth**. See "Editing +
+publishing workflow" below.
 
 - **Plain ES5-style JavaScript.** No build step, no framework, no npm, no TypeScript,
   no JSX. Match the existing style (IIFEs, `var`, no optional chaining).
@@ -57,6 +57,16 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
   to animate in, use `data-anim-fade` (opacity only), never `data-anim` (which moves
   it). And never put `data-lg-press`/`data-lg-tilt` on the same element as a Webflow
   transform interaction.
+- **Only the container swaps; the whole shell persists.** Anything outside
+  `data-barba="container"` is whatever the FIRST page loaded shipped — including its
+  per-page CLASSES. `transition.js` fixes this (`syncShellClasses` + a leave-transition
+  placeholder), and three separate bugs came from it. Two rules if you touch that code:
+  never match elements by class (classes are what differ), and mark anything you inject
+  into persistent DOM with `data-js-injected` so the sync skips it. Full notes in
+  ARCHITECTURE.md § transition.js.
+- **The shell's STRUCTURE must match across pages** (same nesting, same element order);
+  only classes may differ. Adding a wrapper div on one page only will silently stop that
+  branch from syncing. If you change shell structure in Webflow, do it on every page.
 - **The click model is event delegation.** Controllers attach ONE listener to
   `document` and re-resolve the target by attribute at click time. This is deliberate
   (it survives glass rebuilds and Barba swaps). Don't refactor it to attach listeners
@@ -99,7 +109,8 @@ Barba both need a real `https` page. Hard-refresh (Cmd/Ctrl+Shift+R) after publi
 
 - For anything non-trivial, read `ARCHITECTURE.md` first — it has the module details,
   data flow, and the full Webflow attribute contracts.
-- Keep changes small and one file at a time so pasting to CodeSandbox stays simple.
+- Keep changes small and reviewable. There is no paste step any more — a push is the
+  publish — so prefer one coherent change per commit.
 - Preserve the existing comment blocks at the top of each file — they are the contract
   for the Webflow side and for future sessions.
 - If you change an attribute name or add a new `data-*` hook, say so explicitly in your

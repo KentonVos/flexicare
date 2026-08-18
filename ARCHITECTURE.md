@@ -106,6 +106,42 @@ Barba + GSAP page transitions. **Calls `barba.init()` — the only place.** Mark
   `data-progress-bar` + `data-progress="0..1"` per container.
 - Tunables in `window.PageTransition.config`.
 
+**The persistence problem (read this before touching transition.js).** Barba swaps ONLY
+the container. Everything else — the entire shell — stays as whatever the FIRST page you
+loaded shipped. Three separate bugs came out of that, and three mechanisms now handle it:
+
+1. **Leave-transition placeholder** (`beginOverlap` / `removePlaceholder`). Barba inserts
+   the next container only AFTER `leave()` resolves, so pulling the leaving container out
+   of flow leaves a hole in the shared parent for the whole leave animation, and
+   persistent siblings reflow into it and snap back. A rigid hidden placeholder (same box
+   + margins, `flex:0 0 auto`, `data-barba-placeholder`) holds the slot; `beforeEnter`
+   drops it the moment the real container lands, `endOverlap` as a backstop.
+2. **Shell class sync** (`syncShellClasses`). Per-page CLASSES on persistent elements go
+   stale — e.g. `landing-glass-container` (gap 0, centered) vs `glass-container`
+   (gap 1.5rem, flex-start). Two passes: `syncAncestors` walks UP from attribute-identified
+   anchors (container, `[data-barba-sync]`, `[data-nav-reveal]`, `[data-show-except]`,
+   `[data-progress-bar]`) — immune to injected siblings, and the pass that matters; then a
+   guarded positional walk from the CONTAINER'S PARENT catches attribute-less siblings like
+   `top-section-wrapper`.
+3. **Injected-node filtering** (`isInjected`). Scripts add nodes that exist only in the
+   live DOM, so positional matching must skip them: glass's per-element `.lg-layer`
+   overlay (`data-lg-layer`) and its `<svg>` defs holder on body (`data-lg-defs`), the
+   tuner fab/panel and the selfie file input (`data-js-injected`).
+
+Hard rules learned the hard way:
+- **Never match by class** — classes are exactly what differs.
+- **Mark injected nodes with an ATTRIBUTE, never a class** — the sync rewrites classNames,
+  so a class cannot protect against the class-rewriter.
+- **Never positionally match with `Math.min`.** Counts must be EQUAL or the branch is
+  abandoned. A mismatch previously pasted `padding-global`'s class onto a glass overlay,
+  producing an empty padded div. Stale classes are a visible nuisance; misaligned ones
+  inject padding and hide content.
+- `data-barba="wrapper"` is on **`<body>`**, which always holds injected children — never
+  anchor a positional walk there.
+- **Webflow requirement:** the shell's STRUCTURE must stay identical across pages (same
+  nesting, same element order). Only classes may differ. Add a wrapper on one page only
+  and that branch silently stops syncing (by design — it fails safe, not wrong).
+
 ### text-reveal.js → `window.TextReveal`
 Splits `data-text-reveal` elements into words and fades+deblurs them, staggered. On
 navigation the reveal is **driven by transition.js** (it primes the words and plays them
@@ -192,6 +228,9 @@ version-string drift, not a real dependency mismatch.)
 - **Respect `prefers-reduced-motion`.**
 - **Plain ES5 style**: IIFE, `"use strict"`, `var`, no arrow functions / optional chaining /
   template-literal-only assumptions. Keep it consistent with the file you're editing.
+- **Mark anything injected into persistent DOM** with `data-js-injected` (or a `data-lg-*`
+  marker in glass.js). transition.js's class sync filters on those attributes; an unmarked
+  node added to `<body>` or the shell can misalign it. See the transition.js notes above.
 
 ---
 

@@ -1,6 +1,6 @@
 # CHANGELOG
 
-Newest first. One entry per change you push to CodeSandbox. Keep it plain:
+Newest first. One entry per change you push. Keep it plain:
 what changed, which file, and why. This is how a fresh session (and future you)
 knows the current state without re-reading every file.
 
@@ -13,6 +13,17 @@ Format:
 ```
 
 ---
+
+## 2026-08-14 — Docs brought in line with the code and the new hosting
+- ARCHITECTURE.md, CLAUDE.md, CHANGELOG.md
+- ARCHITECTURE.md § transition.js now documents the shell-persistence machinery:
+  the leave placeholder, syncShellClasses' two passes, isInjected filtering, and the
+  hard rules (never match by class; mark injected nodes with an ATTRIBUTE; counts must
+  be equal, never Math.min; <body> is the Barba wrapper so never anchor a positional
+  walk there; shell structure must match across pages).
+- CLAUDE.md: fixed two stale lines (jsDelivr → Cloudflare Workers; dropped the
+  "pasting to CodeSandbox" instruction) and added the shell-persistence gotchas.
+- No code change.
 
 ## 2026-08-14 — Class sync: anchor on ancestor chains, not sibling position (v1.0.5)
 - src/transition.js, src/glass.js, src/slider.js, src/flexicare-selfie.js
