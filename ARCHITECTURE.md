@@ -113,9 +113,12 @@ Barba + GSAP page transitions. **Calls `barba.init()` — the only place.** Mark
   `data-anim-from="up|down|left|right"`, `data-anim-distance="40"`, or `data-anim-fade="N"`
   (opacity-only — use this instead of `data-anim` on glass elements).
 - Persistent, outside the container: `data-barba-sync="nav"` (a wrapper whose innards are
-  swapped + cross-faded per page), `data-show-except="landing"` (hide on landing, show
-  elsewhere; page identity is derived from the URL — root = "landing", everything else =
-  "page"), `data-nav-reveal` (animate height instead of just opacity),
+  swapped + cross-faded per page), `data-show-except="landing"` (a comma LIST of
+  identities to hide on; page identity is derived from the URL — root = "landing",
+  everything else = "page" — unless the incoming container carries
+  `data-page-id="<identity>"`, which overrides it and is how a non-root page borrows the
+  landing chrome, e.g. the reveal page keeping the nav collapsed),
+  `data-nav-reveal` (animate height instead of just opacity),
   `data-progress-bar` + `data-progress="0..1"` per container.
 - Tunables in `window.PageTransition.config`.
 

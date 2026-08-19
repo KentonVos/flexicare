@@ -14,6 +14,17 @@ Format:
 
 ---
 
+## 2026-08-19 — Page identity can be overridden per page (nav hidden on the reveal)
+- src/transition.js, ARCHITECTURE.md
+- pageIdentity() now honours data-page-id on the INCOMING Barba container and falls back
+  to the URL as before. data-page-id="landing" on a container therefore gives that page
+  the landing page's chrome — which is how /meet-your-two-selves keeps the nav collapsed.
+  Read from data.next.container so it applies on the way in, not a frame late.
+- WEBFLOW SIDE: add data-page-id="landing" to the /meet-your-two-selves Barba container.
+  Nothing else changes; data-show-except stays "landing" on the nav wrapper.
+
+---
+
 ## 2026-08-18 — Meet your two selves: the archetype reveal page (replaces /loading)
 - NEW src/flexicare-reveal.js; src/flexicare-core.js, src/flexicare-onboarding.js,
   src/flexicare-quiz.js; NEW docs/api-contract.md; CLAUDE.md, ARCHITECTURE.md, README.md

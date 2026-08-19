@@ -21,6 +21,14 @@
    (No per-page namespace needed — page identity is derived from the URL:
     site root "/" or "/index" = landing, every other URL = a normal page.)
 
+   data-page-id="landing"            OPTIONAL, on a container. Overrides the
+                                     URL-derived identity for that page, so a
+                                     page that isn't the root can still get the
+                                     landing page's chrome — e.g. the reveal
+                                     page uses it to keep the nav collapsed.
+                                     Any value works; it's matched against
+                                     data-show-except, which takes a list.
+
    Inside the container, on animating elements:
      data-anim="1"                   stagger order (number)
      data-anim-from="up|down|left|right"   default "up"
@@ -49,7 +57,10 @@
 
    VISIBILITY (persistent element, OUTSIDE the container):
      data-show-except="landing"      hidden on the landing page (site
-                                     root), shown on all other pages.
+                                     root, or any container carrying
+                                     data-page-id="landing"), shown elsewhere.
+                                     The value is a LIST: "landing,reveal"
+                                     hides it on both identities.
                                      Put on button-navigation-wrapper.
                                      (Value matches URL-derived identity:
                                      "landing" for root, "page" otherwise.)
@@ -505,7 +516,18 @@
          element only at the root and shows it on every other URL —
          no per-page attribute needed, and new pages just work.
          Pass a URL (Barba gives the next page's href) or omit for current. */
-  function pageIdentity(href) {
+  function pageIdentity(href, container) {
+    // An explicit override on the container wins over the URL. That's how a
+    // page other than the root borrows the landing page's chrome (e.g. the
+    // reveal page hides the nav): data-page-id="landing" on its container.
+    // Read from the INCOMING container so it applies on the way in, not a
+    // frame late.
+    var el =
+      container ||
+      document.querySelector('[data-barba="container"][data-page-id]');
+    var override = el && el.getAttribute && el.getAttribute("data-page-id");
+    if (override) return override.trim();
+
     var path;
     try {
       path = href ? new URL(href, location.origin).pathname : location.pathname;
@@ -791,7 +813,10 @@
         },
         async enter(data) {
           window.scrollTo(0, 0);
-          var ns = pageIdentity(data.next.url && data.next.url.href);
+          var ns = pageIdentity(
+            data.next.url && data.next.url.href,
+            data.next.container
+          );
           var nextDoc = new DOMParser().parseFromString(
             data.next.html,
             "text/html"
@@ -835,7 +860,7 @@
           return enter(data.next.container, true);
         },
         once(data) {
-          var ns = pageIdentity();
+          var ns = pageIdentity(null, data.next.container);
           applyVisibility(ns, true);
           updateProgress(data.next.container);
           return enter(data.next.container, false); // reveals handled by boot()
