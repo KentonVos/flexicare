@@ -18,7 +18,7 @@ Two layers:
 - **Engine** — reusable visual + navigation code: `glass.js`, `transition.js`,
   `text-reveal.js`, `background-motion.js`, `orb-motion.js`, and the dev-only
   `slider.js` tuner.
-- **App** — the funnel itself: `flexicare-core.js` (state) plus three page controllers.
+- **App** — the funnel itself: `flexicare-core.js` (state) plus four page controllers.
 
 ### Load order and why it's fixed
 
@@ -37,6 +37,7 @@ flexicare-core.js        first Flexicare script; registers journey-reset afterEn
 flexicare-onboarding.js  page controller
 flexicare-selfie.js      page controller
 flexicare-quiz.js        page controller (also needs glass for option styling)
+flexicare-reveal.js      page controller (archetype reveal; core only)
 slider.js                dev-only tuner; needs glass.js
 orb-tuner.js             dev-only tuner; needs orb-motion.js
 ```
@@ -67,7 +68,16 @@ Pages, in order, and where state is created:
    Each pick is `POST /sessions/{id}/answers` (upsert). After the 5th,
    `POST /routing/preview` returns the archetype (A/B/C) → stored on `Flexicare.archetype`.
    Then navigates to `data-quiz-done`.
-5. **Quiz — FLEX stage** (a later page with `data-quiz-stage="FLEX"`) — same renderer,
+5. **Reveal** (`/meet-your-two-selves`, `flexicare-reveal.js`) — the archetype beat, and
+   the page that replaced `/loading`. Confirms the archetype (already on
+   `Flexicare.archetype`; on a hard reload recovered from `GET /sessions/{id}` +
+   `POST /routing/preview`), personalises copy (`FC.firstName`, `archetype_label`,
+   `FC.echo`), shows the matching `[data-reveal-for]` copy variants, and **polls**
+   `GET /sessions/{id}/images` every ~2.5s for the generated with/without-cover pair.
+   The images never block: copy and CTA render immediately, images fade in when ready,
+   and `PENDING`/`FAILED`/timeout all fall through to `[data-reveal-images-fallback]`.
+   CTA → the FLEX quiz page.
+6. **Quiz — FLEX stage** (a later page with `data-quiz-stage="FLEX"`) — same renderer,
    shows only FLEX questions whose `archetype` matches. After the last,
    `POST /sessions/{id}/finish` → `Flexicare.result`.
 
@@ -312,6 +322,40 @@ answer; tag its text `[data-quiz-option-label]`; may carry `data-liquid-glass`),
 `-loading`, `-error`. Selected option gets `is-selected` (or `data-selected-class`). This
 controller drives the `[data-progress-bar]` width directly as questions advance.
 
+### flexicare-reveal.js
+`/meet-your-two-selves` — the archetype reveal between ROUTING and FLEX. Config on the
+`[data-reveal]` wrapper: `data-reveal-next` (CTA target: the FLEX page), `-onboarding`
+(bounce if no session id), `-routing` (bounce if the archetype can't be recovered),
+`-lang`, `-poll` (ms, default 2500, min 1000), `-timeout` (ms, default 90000), `-debug`.
+Copy slots: `[data-reveal-name]` (+ `[data-reveal-name-wrap]`, hidden when there's no
+name), `-archetype-label`, `-echo`.
+
+**The copy database.** Per-archetype card copy is NOT six duplicated cards — it's one
+hidden Webflow Embed marked `[data-reveal-copy]` containing `[data-copy-for="A|B|C|*"]`
+blocks of `[data-copy="<slot>"]` elements (a `<script type="application/json"
+data-reveal-copy>` block is accepted as an alternative). The slot name *is* the target's
+Webflow ID — `data-copy="with-cover-heading"` writes into `#with-cover-heading`
+(`[data-reveal-slot="…"]` also works). The design's four slots are
+`with-cover-heading` / `without-cover-heading` / `with-cover-text` /
+`without-cover-text`. Copy is inserted as HTML, so inline markup survives. An
+archetype's slot **replaces** the `*`/`default` one rather than merging. Repeating a
+slot name gives it several items and the target cycles through them — all cycling slots
+share ONE interval (`data-reveal-cycle`, default 4000ms, min 1200) so the two cards
+change in step, with a `data-reveal-cycle-fade` crossfade (GSAP; hard cut under reduced
+motion or with GSAP absent). Invalid JSON warns and leaves the Webflow copy untouched.
+`Flexicare.reveal.copy("A")` dumps what the database resolves to.
+
+Structural variants: `[data-reveal-for="A"]` (comma-separated list allowed) still hides
+non-matching blocks, for differences the copy database can't express; the wrapper also
+gets `data-archetype` for CSS-only variants. Images: `[data-reveal-image="with|without"]` (an `<img>` gets
+`src`, anything else gets `background-image`; both get `is-loaded` after decode),
+`-images-loading`, `-images-fallback`, and `data-reveal-state="loading|ready|fallback"`
+on the wrapper. Buttons: `-next`, `-back`. **The image poll is fire-and-forget** — it runs
+in parallel with the archetype resolution and can never block or break the page; presigned
+image URLs expire after 10 minutes, so they're read fresh from the poll and never stored.
+Async work is guarded by a run token that teardown bumps, so a fast navigation can't write
+into the next page's DOM.
+
 ### slider.js → the Liquid Glass Tuner (dev only)
 Despite the name, this is a floating control panel for tuning glass parameters live. Gated:
 only appears when the URL contains `?tune` (or `localStorage.lgTunerAlways = "1"`). Use it
@@ -347,4 +391,5 @@ version-string drift, not a real dependency mismatch.)
 - **GSAP** and **@barba/core** — loaded from CDN in Webflow before these scripts.
 - **The selfie overlay embed** — a Webflow Embed (countdown + preview markup + CSS) placed
   inside `[data-selfie-stage]`.
-- **The backend API** at `Flexicare.config.apiBase` (currently staging).
+- **The backend API** at `Flexicare.config.apiBase` (currently staging). Full endpoint
+  contract: `docs/api-contract.md`.

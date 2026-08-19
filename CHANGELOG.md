@@ -14,6 +14,33 @@ Format:
 
 ---
 
+## 2026-08-18 — Meet your two selves: the archetype reveal page (replaces /loading)
+- NEW src/flexicare-reveal.js; src/flexicare-core.js, src/flexicare-onboarding.js,
+  src/flexicare-quiz.js; NEW docs/api-contract.md; CLAUDE.md, ARCHITECTURE.md, README.md
+- The routing quiz now goes straight to /meet-your-two-selves — there is no /loading page.
+  The new controller confirms the archetype (recovering it from the session on a hard
+  reload), personalises the copy, shows the per-archetype [data-reveal-for] variants, and
+  polls GET /sessions/{id}/images for the generated with/without-cover pair. The images
+  never block: the copy and the CTA are live immediately, and PENDING/FAILED/timeout all
+  fall through to [data-reveal-images-fallback].
+- Per-archetype card copy comes from a COPY DATABASE, not duplicated cards: one hidden
+  [data-reveal-copy] embed of [data-copy-for="A|B|C|*"] blocks whose [data-copy] slot
+  names map to the element IDs on the page (#with-cover-heading, #with-cover-text, and
+  the without- pair). Repeat a slot name and that target cycles through the items on one
+  shared timer (data-reveal-cycle / -cycle-fade), so both cards change together.
+- core: FC.firstName + FC.setFirstName (onboarding stores the name; resetJourney clears it,
+  along with the new FC.images). quiz: the data-quiz-done fallback is now
+  /meet-your-two-selves instead of /loading.
+- docs/api-contract.md is the backend developer's handover — every endpoint, payload and
+  error code, including the photo/image flow. Read it before touching Flexicare.api().
+- WEBFLOW SIDE: the script LIST changed — add flexicare-reveal.js to the footer (after
+  flexicare-quiz.js, before slider.js). New page /meet-your-two-selves needs [data-reveal]
+  and the data-reveal-* attributes, the copy embed, and IDs on the four copy elements;
+  set data-reveal-next to the FLEX quiz page slug, and
+  data-quiz-done="/meet-your-two-selves" on the /archetype [data-quiz] wrapper.
+
+---
+
 ## 2026-08-18 — Orb: final tuned values, and the warp/refraction trade-off
 - ARCHITECTURE.md, CLAUDE.md, src/orb-motion.js (header only — no behaviour change)
 - Values tuned live via ?orbtune and now set as attributes in Webflow:

@@ -16,7 +16,8 @@
          • R03 has drives_echo — its chosen option LABEL is stashed on
            Flexicare.echo for later pages to echo into copy.
          • After the 5th: POST /routing/preview → store the archetype
-           (A/B/C) on Flexicare.archetype, then navigate to data-quiz-done.
+           (A/B/C) on Flexicare.archetype, then navigate to data-quiz-done
+           (the reveal page — /meet-your-two-selves — NOT a loading screen).
 
        FLEX stage (a later page, set data-quiz-stage="FLEX"):
          • Same renderer. Shows only the FLEX questions whose
@@ -42,8 +43,9 @@
                                 init. Optional config attributes on it:
                                   data-quiz-stage="ROUTING"    (default) | "FLEX"
                                   data-quiz-lang="en"          (default core lang)
-                                  data-quiz-done="/loading"    where to go when the
-                                     stage completes (ROUTING → loading screen;
+                                  data-quiz-done="/meet-your-two-selves"  where to
+                                     go when the stage completes (ROUTING → the
+                                     archetype reveal, flexicare-reveal.js;
                                      FLEX → results/product page)
                                   data-quiz-onboarding="/onboarding"  bounce target
                                      if there's no session id
@@ -591,7 +593,7 @@
           FC.archetype = res.archetype;
           FC.archetypeLabel = res.archetype_label;
           state.done = true;
-          go(attr(state.wrap, "data-quiz-done", "/loading"));
+          go(attr(state.wrap, "data-quiz-done", "/meet-your-two-selves"));
         })
         .catch(function (err) {
           setBusy(false);

@@ -13,6 +13,8 @@
      • layout mode (desktop / tablet / mobile) — see FC.isTablet()
      • the session id  (sessionStorage — the ONLY thing we must
        persist locally; treated as a secret, never logged)
+     • the user's first name (FC.firstName — set by onboarding, used by
+       later pages to personalise copy; recoverable from GET /sessions/{id})
      • the buffered selfie Blob  (IN MEMORY — survives Barba swaps,
        intentionally NOT survives a hard reload; downscaled by the
        selfie page before it lands here so size is never a concern)
@@ -110,6 +112,19 @@
     } catch (e) {}
   };
 
+  /* ------------------------- first name ------------------------- */
+  /* Set by the onboarding page from the form (and/or the session response).
+       Later pages personalise copy with it ("Meet your two selves, Lerato").
+       In memory only — a hard reload recovers it from GET /sessions/{id}
+       (`first_name`), which is why the reveal page re-reads the session. */
+  FC.firstName = FC.firstName || null;
+
+  FC.setFirstName = function (name) {
+    name = (name || "").trim();
+    FC.firstName = name || null;
+    return FC.firstName;
+  };
+
   /* ---------------- buffered selfie (in-memory Blob) ---------------- */
   // Shape: { blob, type, width, height } or null.
   FC.photo = FC.photo || null;
@@ -195,12 +210,14 @@
   FC.resetJourney = function () {
     FC.clearSession();
     FC.clearPhoto();
+    FC.firstName = null;
     FC.answers = null;
     FC._synced = null;
     FC.archetype = null;
     FC.archetypeLabel = null;
     FC.echo = null;
     FC.result = null;
+    FC.images = null;
     return FC;
   };
 

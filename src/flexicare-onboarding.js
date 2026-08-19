@@ -10,7 +10,8 @@
      Collects first name, WhatsApp number, gender (required), and the
      T&Cs consent, then on submit:
        1. Creates the session   POST /sessions  { language, first_name, gender }
-          → stores the id via Flexicare.setSessionId (secret, sessionStorage).
+          → stores the id via Flexicare.setSessionId (secret, sessionStorage)
+          and the first name via Flexicare.setFirstName (used by later pages).
        2. Uploads the buffered selfie IF one exists (selfie path):
           presign → PUT to storage → confirm  (kicks off image generation).
           Runs in the SAME interaction (presigned URL expires in 10 min).
@@ -283,6 +284,9 @@
       var id = session && session.id;
       if (!id) throw new Error("No session id returned");
       FC.setSessionId(id);
+      // Later pages ("Meet your two selves, <name>") need this; the API has it
+      // too, so a hard reload can recover it from GET /sessions/{id}.
+      FC.setFirstName((session && session.first_name) || f.name);
       return id;
     });
   }

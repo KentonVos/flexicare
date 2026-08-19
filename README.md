@@ -35,9 +35,10 @@ flexicare/
 ├── CHANGELOG.md       ← running log of what you pushed
 ├── README.md          ← this file
 ├── docs/
+│   ├── api-contract.md           ← the backend API contract (endpoints, payloads)
 │   ├── webflow-head-snippet.md   ← the head snippet that lives in Webflow (site head)
 │   └── hosting-and-publishing.md ← hosting + publish + rollback workflow
-└── src/               ← the eleven scripts (served by Cloudflare from /src/)
+└── src/               ← the twelve scripts (served by Cloudflare from /src/)
     ├── glass.js
     ├── transition.js
     ├── text-reveal.js
@@ -47,6 +48,7 @@ flexicare/
     ├── flexicare-onboarding.js
     ├── flexicare-selfie.js
     ├── flexicare-quiz.js
+    ├── flexicare-reveal.js
     ├── slider.js       ← liquid-glass tuner (dev-only, ?tune)
     └── orb-tuner.js    ← orb-motion tuner (dev-only, ?orbtune)
 ```

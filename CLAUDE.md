@@ -36,8 +36,11 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
 7. `src/flexicare-onboarding.js` — `/onboarding` page controller.
 8. `src/flexicare-selfie.js` — selfie-capture page controller.
 9. `src/flexicare-quiz.js` — `/archetype` quiz + later FLEX stage.
-10. `src/slider.js` — **NOT a content slider.** This is the "Liquid Glass Tuner", a dev-only control panel gated behind `?tune` in the URL. Ignore it for production changes unless the task is about tuning glass presets.
-11. `src/orb-tuner.js` — dev-only orb-motion control panel, gated behind `?orbtune`
+10. `src/flexicare-reveal.js` — `/meet-your-two-selves`, the archetype reveal (the page
+    that replaced `/loading`): recovers/confirms the archetype, personalises copy, and
+    polls for the generated with/without-cover image pair.
+11. `src/slider.js` — **NOT a content slider.** This is the "Liquid Glass Tuner", a dev-only control panel gated behind `?tune` in the URL. Ignore it for production changes unless the task is about tuning glass presets.
+12. `src/orb-tuner.js` — dev-only orb-motion control panel, gated behind `?orbtune`
     (or `?tune`, so it can sit beside the glass tuner). Writes the `data-orb-*` attributes
     live and hands back a paste-ready list. Ignore for production changes.
 
@@ -52,9 +55,15 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
   repo: it sets `window.__fcLayout` (viewport/layout mode) before first paint, in
   Webflow → Site Settings → Custom Code → **Head**. If `Flexicare.layout.forced` is
   `false` on a large tablet, that snippet is missing. See `docs/webflow-head-snippet.md`.
+- **There is NO `/loading` page.** The routing quiz goes straight to
+  `/meet-your-two-selves` (`flexicare-reveal.js`), which resolves the archetype and polls
+  for the generated images *while the copy is already on screen*. Don't reintroduce a
+  blocking loading screen — the reveal page never waits on images to render.
 - **The API base URL is STAGING** in `flexicare-core.js`
   (`api-staging-discovery.injozitech.com`). It must be swapped to production before
-  go-live. This is the single config touchpoint for the backend.
+  go-live. This is the single config touchpoint for the backend. The **full backend
+  contract** (every endpoint, payload, error code, the photo/image flow) is in
+  `docs/api-contract.md` — read it before touching anything that calls `Flexicare.api()`.
 - **The buffered selfie lives in memory only** (`Flexicare.photo`). It survives Barba
   navigations but NOT a hard page reload. That's why the controllers always navigate
   with `barba.go()`, never `window.location`. Don't "helpfully" change a `barba.go()`
