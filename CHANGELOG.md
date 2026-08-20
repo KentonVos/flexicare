@@ -20,8 +20,9 @@ Format:
   to the URL as before. data-page-id="landing" on a container therefore gives that page
   the landing page's chrome — which is how /meet-your-two-selves keeps the nav collapsed.
   Read from data.next.container so it applies on the way in, not a frame late.
-- WEBFLOW SIDE: add data-page-id="landing" to the /meet-your-two-selves Barba container.
-  Nothing else changes; data-show-except stays "landing" on the nav wrapper.
+- WEBFLOW SIDE (done + tested live): data-page-id="landing" is on the /meet-your-two-selves
+  Barba container. Nothing else changed; data-show-except stays "landing" on the nav
+  wrapper. Because the nav is hidden there, that page's CTA lives INSIDE the container.
 
 ---
 

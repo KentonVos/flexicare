@@ -359,6 +359,11 @@ image URLs expire after 10 minutes, so they're read fresh from the poll and neve
 Async work is guarded by a run token that teardown bumps, so a fast navigation can't write
 into the next page's DOM.
 
+The page's container also carries `data-page-id="landing"` (see transition.js) so the nav
+stays collapsed here exactly as it does on the landing page — which means **the CTA must
+live inside the container**, not in the synced nav region, or it would be hidden with the
+nav.
+
 ### slider.js → the Liquid Glass Tuner (dev only)
 Despite the name, this is a floating control panel for tuning glass parameters live. Gated:
 only appears when the URL contains `?tune` (or `localStorage.lgTunerAlways = "1"`). Use it
