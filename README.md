@@ -34,8 +34,8 @@ flexicare/
 ├── ARCHITECTURE.md    ← deep reference (read on demand)
 ├── CHANGELOG.md       ← running log of what you pushed
 ├── README.md          ← this file
-├── AVATAR-BACKEND-QUESTIONS.md  ← open questions sent to the backend dev
-│                                  (avatar catalog / stored vs generated images)
+├── AVATAR-BACKEND-QUESTIONS.md  ← questions sent to the backend dev, with the
+│                                  answers recorded inline (Q5–Q8 still open)
 ├── docs/
 │   ├── api-contract.md           ← the backend API contract (endpoints, payloads)
 │   ├── avatar-loading-state.md   ← the avatar-grid skeleton/shimmer

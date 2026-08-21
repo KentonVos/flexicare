@@ -14,6 +14,54 @@ Format:
 
 ---
 
+## Where things stand — 2026-08-21
+
+A snapshot for the next session, so nothing below has to be re-derived. Details are in
+the dated entries under it.
+
+**Journey as it stands:** landing → selfie **or** avatar picker → onboarding → `/archetype`
+(ROUTING quiz) → `/meet-your-two-selves` (reveal) → FLEX stage. The journey is **not
+finished**; the current pass is polishing what exists rather than adding pages.
+
+**Recently done (all live on `main`):**
+- Loading skeletons on the two pages that fetch before they can paint — the avatar grid
+  and the quiz options. Both stamp state on Barba `beforeEnter` (before the incoming page
+  is visible) and **inject their own CSS**, because Barba never swaps the `<head>` and
+  page-level head CSS is missing on every `barba.go()` arrival. See
+  `docs/avatar-loading-state.md` and `docs/quiz-loading-state.md`.
+- The avatar picker displays the **transparent-background** renders from
+  `GET /avatars/web` and gates selection on `GET /avatars` — two endpoints joined on `id`.
+  "Unavailable" now means *not pickable*, never *no image*.
+
+**Waiting on the backend (no frontend work pending):**
+- The dev is generating the missing **with/without-cover image pairs**. Only 19 of 90
+  avatar slots were selectable on 2026-08-21 (black/male 9/9, black/female 9/9,
+  coloured/female 1/9); a slot becomes selectable the moment its pair is approved, with
+  no republish needed. Re-measure with the loop in `AVATAR-BACKEND-QUESTIONS.md`.
+- Still unanswered there: Q6 (is `AvatarRace` final?), Q7 (rate limits on `/avatars`),
+  Q8 (does the avatar `PATCH` write the session's `gender`?). None blocking.
+- Asked for, not blocking: a `selectable`/`baked` flag (or the transparent url) on the
+  `/avatars` response — that would let the picker drop its second request.
+
+**Known pre-go-live task:** the API base in `flexicare-core.js` is still **staging**
+(`api-staging-discovery.injozitech.com`).
+
+**Webflow attributes added this pass** (set them in the Designer, they aren't in code):
+`data-avatar-state="loading"` and `data-quiz-state="loading"` as static attributes on
+`[data-avatar]` / `[data-quiz]`, plus `data-quiz-skeleton-count`. Optional:
+`data-avatar-transparent="off"`, `data-avatar-skeleton="off"`, `data-quiz-skeleton="off"`,
+`data-loading-class`.
+
+**Next up:** other bugs and page-transition issues (fresh session).
+
+---
+
+## 2026-08-21 — Docs: state of play + avatar coverage measurement
+- README.md, AVATAR-BACKEND-QUESTIONS.md, CHANGELOG.md
+- Recorded the measured staging coverage (19/90 selectable, every avatar `status: READY`
+  — the gap is the scenario pairs), the go-ahead to generate all of them, and a
+  copy-paste loop for re-measuring. Added the "Where things stand" snapshot above.
+
 ## 2026-08-21 — Avatar picker: show the transparent-background faces
 - src/flexicare-avatar.js, docs/api-contract.md, ARCHITECTURE.md, CLAUDE.md
 - The picker now DISPLAYS the transparent-background webp renders from

@@ -96,6 +96,15 @@ later screen), re-fetching the whole 9-item catalog just to recover one URL is w
 
 ## 5. What's the catalog coverage on staging right now?
 
+> **ANSWERED (2026-08-21, verbally).** Measured against staging that day: **19 of 90 slots
+> selectable** — black/male 9/9, black/female 9/9, coloured/female 1/9, and 0/9 for the
+> other seven combinations. Every one of the 90 avatars reports `status: READY`, so the
+> portraits are all done; what was missing is the **with/without-cover pair** each avatar
+> needs before §3.7 publishes its `url` (and before `PATCH …/photo/avatar` stops
+> returning `409`). Kenton has given the dev the go-ahead to **generate all of them**.
+> No frontend work: the picker re-fetches on every entry and filter change, so cards
+> become selectable as their pairs land. Re-measure with the loop in the note below.
+
 How many of the 10 race × gender combinations currently have all 9 avatars at
 `status: "READY"`?
 
@@ -141,6 +150,21 @@ we'd like to `PATCH /contact/phone` right after session create — while the ses
 
 - ~~**A single-avatar endpoint** (`GET /avatars/{id}` returning a fresh presigned URL)~~ —
   no longer needed: `GET /sessions/{id}/photo` covers the avatar case (Q4).
+
+### Re-measuring coverage
+
+```sh
+B=https://api-staging-discovery.injozitech.com/api/v1
+for combo in black:male black:female white:male white:female indian:male \
+             indian:female asian:male asian:female coloured:male coloured:female; do
+  r=${combo%%:*}; g=${combo##*:}
+  curl -s "$B/avatars?race=$r&gender=$g" | python3 -c "
+import sys,json; a=json.load(sys.stdin).get('avatars',[])
+print('$r/$g', sum(1 for x in a if x.get('url')), '/', len(a))"
+done
+```
+
+`url` present = selectable. `status` is not the signal (§3.7).
 
 ### One inconsistency worth a reply
 
