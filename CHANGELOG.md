@@ -14,6 +14,62 @@ Format:
 
 ---
 
+## 2026-08-20 — Avatar picker: the no-selfie path (+ contact/phone wiring)
+- NEW src/flexicare-avatar.js; src/flexicare-core.js, src/flexicare-onboarding.js;
+  docs/api-contract.md, docs/hosting-and-publishing.md, CLAUDE.md, ARCHITECTURE.md;
+  NEW AVATAR-BACKEND-QUESTIONS.md
+- New page controller for the avatar picker — the route for users who don't want to be
+  photographed. Gender + race pills drive GET /avatars?race=&gender= (always 9: 3 age
+  groups x 3 variants). Non-READY slots are unselectable placeholders (the catalog is
+  admin-curated). Filter changes are debounced 180ms and the catalog is re-fetched on every
+  entry, because those urls are presigned (~10 min) — only the chosen id is kept.
+- The grid supports TWO builds. STATIC (the path we're using): nine authored
+  [data-avatar-slot="1".."9"] cards, numbered in reading order — the API's 9 always come
+  back young_adult 1-3, middle_aged 1-3, elder 1-3 — filled in place and never removed, so
+  the Designer's per-card styling/flex wrapper/glass all survive. Because the filters say
+  which SET is loaded, the card attribute needs no race/gender: one name covers all 10
+  sets. CLONE (fallback): one [data-avatar-option-template], used only when no slot cards
+  exist.
+- The filter pills may be a Tabs component's tab-links, but NOTHING may depend on Webflow's
+  Tabs JS — it binds once on DOMContentLoaded, so after a Barba swap the panes stop
+  switching and w--current stops moving. Style the selected state on is-selected (which
+  this script toggles) and keep gender/race as sibling rows, not nested Tabs.
+- The race pill VALUE is the API enum, not the label: the design's "Mixed" pill is
+  data-avatar-race="coloured". Wrapper config uses -url/-default suffixes
+  (data-avatar-next-url, -back-url, -gender-default, -race-default) so the wrapper is never
+  matched by the pill/button queries.
+- core: FC.avatar + setAvatar/getAvatar/hasAvatar/clearAvatar and FC.avatarGender, both
+  cleared by resetJourney. Selfie and avatar are MUTUALLY EXCLUSIVE — setAvatar() clears
+  FC.photo and setPhoto() clears FC.avatar, so whichever the user did last is what ships.
+- onboarding: sends whichever is buffered — selfie upload as before, or the new
+  PATCH /sessions/{id}/photo/avatar { avatar_id } (the picker can't send it itself; that
+  endpoint needs the session id, which is created here). Also now sends the WhatsApp number
+  via PATCH /sessions/{id}/contact/phone — that endpoint accepts IN_PROGRESS sessions, so it
+  no longer waits for a results screen. Both run in parallel and neither blocks navigation.
+  The gender pills pre-fill from FC.avatarGender when the user came via the picker.
+- Reveal page UNTOUCHED, deliberately: both paths converge on GET /sessions/{id}/images, so
+  there is nothing to branch on. Whether the avatar's outcome pair is pre-generated/stored
+  or re-rendered per session is a backend question — see AVATAR-BACKEND-QUESTIONS.md (also
+  noted in api-contract.md §3.8). The four new copy fields on a READY /images response
+  (heading_with/without, subtext_with/without) are intentionally IGNORED: the reveal page's
+  Webflow copy database stays the source of truth for those slots.
+- WEBFLOW SIDE — needed:
+  1. FOOTER CHANGED (a script was added). New list, in order — note flexicare-reveal.js was
+     also missing from the copy in docs/hosting-and-publishing.md; check the live footer has
+     it:
+       glass.js, transition.js, text-reveal.js, background-motion.js, orb-motion.js,
+       flexicare-core.js, flexicare-selfie.js, flexicare-avatar.js,
+       flexicare-onboarding.js, flexicare-quiz.js, flexicare-reveal.js,
+       then the dev-only slider.js + orb-tuner.js
+  2. Build the new avatar page per the attribute contract at the top of
+     src/flexicare-avatar.js: [data-avatar] wrapper, the two sibling pill rows,
+     [data-avatar-grid] holding nine [data-avatar-slot="1".."9"] cards each with an
+     [data-avatar-image] inside, [data-avatar-next]/[data-avatar-back] in the nav, and the
+     optional -loading/-empty/-error elements.
+  3. A plain link from the selfie page to it (no attribute needed — Barba handles it and
+     the selfie controller stops the camera on leave).
+  4. data-progress on the new container (the design shows roughly a quarter).
+
 ## 2026-08-19 — Page identity can be overridden per page (nav hidden on the reveal)
 - src/transition.js, ARCHITECTURE.md
 - pageIdentity() now honours data-page-id on the INCOMING Barba container and falls back

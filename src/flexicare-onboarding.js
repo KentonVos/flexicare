@@ -12,20 +12,28 @@
        1. Creates the session   POST /sessions  { language, first_name, gender }
           → stores the id via Flexicare.setSessionId (secret, sessionStorage)
           and the first name via Flexicare.setFirstName (used by later pages).
-       2. Uploads the buffered selfie IF one exists (selfie path):
-          presign → PUT to storage → confirm  (kicks off image generation).
-          Runs in the SAME interaction (presigned URL expires in 10 min).
-          Image-upload failure does NOT block navigation — the images poll
-          later and show a graceful fallback. Only a failed SESSION CREATE
-          blocks.
-       3. Stashes WhatsApp number + consent on the controller
-          (Flexicare.contact) — no backend field yet; wiring the CRM send
-          later is a one-liner.
+       2. Sends whichever "photo" the user chose — the two paths are
+          mutually exclusive and both kick off the same background
+          with/without-cover image generation:
+            • SELFIE  — buffered Blob: presign → PUT to storage → confirm.
+              Runs in the SAME interaction (presigned URL expires in 10 min).
+            • AVATAR  — buffered choice: PATCH …/photo/avatar { avatar_id }.
+              (The avatar page can't send it itself — that endpoint needs a
+              session id and the session is created HERE.)
+          Failure of either does NOT block navigation — the images poll later
+          and show a graceful fallback. Only a failed SESSION CREATE blocks.
+       3. Sends the WhatsApp number: PATCH …/contact/phone { phone_number }.
+          Also non-blocking, and also fine on an IN_PROGRESS session (that
+          endpoint only rejects ABANDONED ones). Number + consent are still
+          mirrored onto Flexicare.contact for any later CRM wiring.
        4. Navigates to /archetype via barba.go() (never a reload — a reload
-          before the upload finishes would drop the in-memory selfie).
+          before the upload finishes would drop the in-memory selfie/avatar).
 
    Both the selfie path and the avatar path funnel through this page, so
-   gender is captured here for BOTH routes.
+   gender is captured here for BOTH routes. If the user came via the avatar
+   picker they already chose a gender there, so the pills are PRE-FILLED from
+   Flexicare.avatarGender — still editable, and this page stays the authority
+   for the session's `gender`.
 
    CONVENTIONS (mirrors flexicare-selfie.js — read that file's notes too)
      • Inits on Barba `afterEnter` (after transition.js's syncRegions()
@@ -331,6 +339,53 @@
       });
   }
 
+  // The avatar path's equivalent: one PATCH, no upload. Same non-blocking
+  // contract as the selfie — a failure here just means the reveal page falls
+  // through to its images fallback.
+  function maybeSelectAvatar() {
+    if (!FC.hasAvatar()) return Promise.resolve();
+    var id = FC.getSessionId();
+    var avatar = FC.getAvatar();
+    return FC.api("/sessions/" + id + "/photo/avatar", {
+      method: "PATCH",
+      body: { avatar_id: avatar.id },
+    })
+      .then(function () {
+        // Keep the choice buffered — it's tiny, and it lets the picker restore
+        // the selection if the user navigates back to it.
+      })
+      .catch(function (err) {
+        if (window.console)
+          console.warn(
+            "[onboarding] avatar select failed (continuing):",
+            (err && err.message) || err
+          );
+      });
+  }
+
+  // Selfie OR avatar — never both (the core keeps them mutually exclusive).
+  function maybeSendPhoto() {
+    return FC.hasPhoto() ? maybeUploadPhoto() : maybeSelectAvatar();
+  }
+
+  // PATCH …/contact/phone with the E.164 number. Non-blocking: the session is
+  // already created and the quiz can proceed without it. The endpoint accepts
+  // IN_PROGRESS sessions (it only rejects ABANDONED ones), so this doesn't have
+  // to wait for the results screen.
+  function maybeSendPhone(f) {
+    if (!f.whatsapp) return Promise.resolve();
+    return FC.api("/sessions/" + FC.getSessionId() + "/contact/phone", {
+      method: "PATCH",
+      body: { phone_number: f.whatsapp },
+    }).catch(function (err) {
+      if (window.console)
+        console.warn(
+          "[onboarding] phone save failed (continuing):",
+          (err && (err.detail || err.message)) || err
+        );
+    });
+  }
+
   /* ------------------------------ navigation ------------------------------ */
 
   function nextUrl() {
@@ -361,7 +416,11 @@
     clearFormError();
     setBusy(true);
     ensureSession(f)
-      .then(maybeUploadPhoto)
+      .then(function () {
+        // Both are optional and non-blocking; run them together so the
+        // interaction isn't two round trips long.
+        return Promise.all([maybeSendPhoto(), maybeSendPhone(f)]);
+      })
       .then(function () {
         FC.contact = {
           whatsapp: f.whatsapp, // E.164, e.g. +27712345678
@@ -497,7 +556,9 @@
     if (state.form === form) return; // already initialised
 
     state.form = form;
-    state.gender = null;
+    // Pre-fill from the avatar picker if the user came that way (they already
+    // told us there). Still fully editable — this page owns the final value.
+    state.gender = FC.avatarGender || null;
     state.consent = false;
     state.busy = false;
 

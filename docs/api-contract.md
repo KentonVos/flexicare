@@ -37,6 +37,9 @@
 | `ProductCode` | `CORE`, `PLUS` |
 | `SessionStatus` | `IN_PROGRESS`, `COMPLETED`, `ABANDONED` |
 | `ImageStatus` | `PENDING`, `GENERATING`, `READY`, `FAILED` |
+| `AvatarRace` | `black`, `white`, `indian`, `asian`, `coloured` |
+| `AvatarGender` | `male`, `female` |
+| `AvatarAgeGroup` | `young_adult`, `middle_aged`, `elder` |
 
 ---
 
@@ -45,7 +48,9 @@
 ```
 1. POST /api/v1/sessions                        -> session id (status IN_PROGRESS)
 2. GET  /api/v1/quiz?lang=en                    -> ALL questions + options (one fetch)
-3. (optional) photo: presign -> PUT to storage -> confirm   (starts background image generation)
+3. (optional) photo — EITHER  presign -> PUT to storage -> confirm      (selfie)
+                      OR      GET /avatars -> PATCH .../photo/avatar    (avatar picker)
+                      (either one starts the same background image generation)
 4. For each ROUTING question (R01..R05, in position order):
        POST /api/v1/sessions/{id}/answers  { answers: [ {question_code, option_code} ] }
 5. POST /api/v1/routing/preview with the routing answers -> archetype (A/B/C)
@@ -53,6 +58,7 @@
        POST /api/v1/sessions/{id}/answers  (same shape, one at a time)
 7. POST /api/v1/sessions/{id}/finish            -> final result (archetype, product, price)
 8. Poll GET /api/v1/sessions/{id}/images until READY -> show with/without-insurance images
+9. (optional) PATCH .../contact/phone and/or .../contact/email  -> where to send the images
 
 Any time: GET /api/v1/sessions/{id}  -> full session state + stored answers (resume / re-fetch results)
 ```
@@ -240,6 +246,72 @@ Use for: **resume** (rebuild answered state, re-run preview to recover the arche
 continue from the first unanswered question) and **results re-fetch** if the finish
 response was lost.
 
+### 3.7 `GET /api/v1/avatars?race=black&gender=male` — avatar catalog
+
+For users who don't want to be photographed: a curated catalog of 9 avatars per
+race/gender combination (3 age groups × 3 variants). **Both query params are required**
+(`AvatarRace` / `AvatarGender`; `422` on anything else).
+
+```json
+{
+  "race": "black",
+  "gender": "male",
+  "avatars": [
+    { "id": "8f3656e1-...", "slug": "black-male-young-adult-1", "age_group": "young_adult", "variant": 1, "status": "READY", "url": "https://...presigned..." },
+    { "id": "71f49eb5-...", "slug": "black-male-elder-3", "age_group": "elder", "variant": 3, "status": "PENDING", "url": null }
+  ]
+}
+```
+
+- Always exactly **9** entries, ordered `young_adult` → `middle_aged` → `elder`, variants
+  1–3 within each — render straight into a 3×3 grid, don't re-sort.
+- `url` exists only when `status` is `READY`. A non-`READY` slot has no approved image yet
+  (admin-curated) — render a placeholder and **don't let the user select it**.
+- `slug` (`{race}-{gender}-{age_group}-{variant}`) is for analytics/debugging; selection
+  uses `id` (§3.8).
+- The urls are presigned and **expire in ~10 minutes** — re-fetch on every filter change
+  and every entry to the picker rather than caching them.
+
+### 3.8 `PATCH /api/v1/sessions/{session_id}/photo/avatar` — select an avatar as the photo
+
+The alternative to §5's presign/upload/confirm. Sets the chosen avatar as the session photo
+and starts the same background with/without-insurance generation.
+
+```json
+{ "avatar_id": "8f3656e1-...the id from §3.7..." }
+```
+
+Returns `SessionOut` (same as photo confirm). `404` unknown session or avatar; `409` if the
+session isn't `IN_PROGRESS`, or the avatar has no image yet (only offer `READY` ones).
+Selecting an avatar after a photo (or another avatar) supersedes it — generation restarts.
+
+> **Open question with the backend:** whether the avatar's outcome pair is
+> pre-generated/stored per avatar or re-rendered per session. See
+> `AVATAR-BACKEND-QUESTIONS.md`. Either way the frontend is identical — the reveal page
+> polls `/images` and doesn't branch on the source.
+
+### 3.9 Contact capture — `PATCH .../contact/phone` and `.../contact/email`
+
+Two separate endpoints; call whichever the user filled in.
+
+```
+PATCH /api/v1/sessions/{session_id}/contact/phone   { "phone_number": "+27 82 123 4567" }
+PATCH /api/v1/sessions/{session_id}/contact/email   { "email": "thandi@example.com" }
+```
+
+Both return the updated `SessionOut` (which carries `phone_number` / `email`).
+
+- **Not results-screen-only:** they accept `IN_PROGRESS` *and* `COMPLETED` sessions; only
+  `ABANDONED` gives `409`. We call `/contact/phone` from `/onboarding`, right after session
+  create. Re-submitting replaces the stored value.
+- **Phone:** spaces, dashes, dots and parentheses are stripped server-side; the result must
+  be 7–15 digits with an optional leading `+`. Stored/returned normalized
+  (`"+27 82 123-4567"` → `"+27821234567"`). Else `422`. (`flexicare-onboarding.js`
+  normalizes to E.164 before sending anyway.)
+- **Email:** RFC-validated, max 254 chars, domain lowercased. Invalid → `422`.
+- On `422` the `detail` is FastAPI's validation list (`[ { "msg": "…" } ]`) — surface `msg`
+  next to the input.
+
 ---
 
 ## 4. Question-by-question tracking & resume
@@ -255,8 +327,9 @@ response was lost.
 
 ## 5. Photo & generated images
 
-The selfie drives a background "with insurance" / "without insurance" image pair, ready
-by the time the quiz finishes.
+A selfie **or** a picked avatar (§3.7/§3.8) drives a background "with insurance" /
+"without insurance" image pair, ready by the time the quiz finishes. The avatar path skips
+the three steps below entirely — one `PATCH` and straight to polling `/images`.
 
 **Step 1 — presign.** `POST /api/v1/sessions/{id}/photo/presign`
 `{ "content_type": "image/jpeg" }` — allowed: `image/jpeg`, `image/png`, `image/webp`
@@ -276,8 +349,27 @@ landed. Confirming (re)starts generation; a new confirm supersedes the previous 
 { "status": "GENERATING", "with_insurance_url": null, "without_insurance_url": null }
 ```
 
-Poll every ~2–3 s (during the final questions or on the results screen) until
-`status: "READY"`, then render both URLs.
+Poll every ~2–3 s (during the final questions or on the reveal screen) until
+`status: "READY"`, then render both urls. A `READY` response also carries admin-editable
+copy for the two cards:
+
+```json
+{
+  "status": "READY",
+  "with_insurance_url": "https://...",
+  "without_insurance_url": "https://...",
+  "heading_with": "You made time. Before you had to.",
+  "heading_without": "Too busy to be sick. Until you weren't.",
+  "subtext_with": "One visit. Under R50 out of pocket.",
+  "subtext_without": "3 days in hospital. R12,000 gone."
+}
+```
+
+The four text fields may be `null`, and are only populated when `status` is `READY`. If
+rendered, render them as **text** (`textContent`), never as HTML. **We currently ignore
+them:** the reveal page's per-archetype copy database (a Webflow embed) is the source of
+truth for those four slots, because it also does the multi-item cycling. Revisit if the
+backend copy needs to be editable without a Webflow publish.
 
 - `PENDING` = no photo was ever confirmed. `FAILED` = generation errored — show a
   graceful fallback, **never block the results screen on images**.
@@ -304,8 +396,8 @@ Poll every ~2–3 s (during the final questions or on the results screen) until
    session).
 7. After the last FLEX answer: `POST /sessions/{id}/finish` -> render results
    (`archetype_label`, `product_label`, price = `recommended_price_cents / 100`).
-8. Photo flow (§5) runs at the start so images are ready by finish; poll `/images` for
-   the results screen.
+8. Photo flow runs at the start so images are ready by finish — selfie (§5) *or* avatar
+   (§3.7/§3.8), never both; poll `/images` on the reveal screen.
 9. On load with a stored id: `GET /sessions/{id}` — `COMPLETED` -> show results;
    `IN_PROGRESS` -> resume from the first unanswered question.
 10. `409` on answers/finish -> fetch `GET /sessions/{id}` and act on its actual `status`.

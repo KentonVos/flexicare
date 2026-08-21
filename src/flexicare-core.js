@@ -18,6 +18,11 @@
      • the buffered selfie Blob  (IN MEMORY — survives Barba swaps,
        intentionally NOT survives a hard reload; downscaled by the
        selfie page before it lands here so size is never a concern)
+     • the buffered avatar choice (IN MEMORY too — the alternative to
+       the selfie, for users who don't want to be photographed).
+       Selfie and avatar are MUTUALLY EXCLUSIVE: setting either one
+       clears the other, so whichever the user did LAST is what
+       /onboarding sends.
      • Flexicare.api()  — a thin fetch wrapper used by later pages
        (data capture onward). Unused on the selfie page.
 
@@ -136,6 +141,7 @@
       width: width || null,
       height: height || null,
     };
+    FC.avatar = null; // a selfie supersedes a picked avatar
     return FC.photo;
   };
   FC.getPhoto = function () {
@@ -150,6 +156,48 @@
   // Fresh object URL for showing the buffered selfie (caller revokes it).
   FC.photoObjectURL = function () {
     return FC.hasPhoto() ? URL.createObjectURL(FC.photo.blob) : null;
+  };
+
+  /* ------------- buffered avatar choice (in-memory, no blob) -------------
+     The avatar path's equivalent of FC.photo. Shape:
+       { id, slug, url, race, gender, ageGroup, variant }  or null.
+
+     Only `id` is durable — the `url` from GET /avatars is presigned and
+     expires in ~10 minutes, so it is for immediate display only; the picker
+     re-fetches the catalog rather than reusing a stored url.
+
+     Buffered (not sent) because PATCH /sessions/{id}/photo/avatar needs a
+     session id, and the session isn't created until /onboarding submits —
+     exactly like the selfie, which is buffered until it can be uploaded.
+
+     FC.avatarGender is kept separately so it survives clearAvatar() and can
+     still pre-fill /onboarding's gender pills. */
+  FC.avatar = FC.avatar || null;
+  FC.avatarGender = FC.avatarGender || null;
+
+  FC.setAvatar = function (choice) {
+    if (!choice || !choice.id) return null;
+    FC.avatar = {
+      id: choice.id,
+      slug: choice.slug || null,
+      url: choice.url || null,
+      race: choice.race || null,
+      gender: choice.gender || null,
+      ageGroup: choice.ageGroup || null,
+      variant: choice.variant || null,
+    };
+    if (choice.gender) FC.avatarGender = choice.gender;
+    FC.clearPhoto(); // an avatar supersedes a captured selfie
+    return FC.avatar;
+  };
+  FC.getAvatar = function () {
+    return FC.avatar;
+  };
+  FC.hasAvatar = function () {
+    return !!(FC.avatar && FC.avatar.id);
+  };
+  FC.clearAvatar = function () {
+    FC.avatar = null;
   };
 
   /* ------------------------- API fetch helper ------------------------- */
@@ -210,6 +258,8 @@
   FC.resetJourney = function () {
     FC.clearSession();
     FC.clearPhoto();
+    FC.clearAvatar();
+    FC.avatarGender = null;
     FC.firstName = null;
     FC.answers = null;
     FC._synced = null;

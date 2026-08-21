@@ -36,6 +36,7 @@ orb-motion.js            needs GSAP; re-scans the new container on Barba afterEn
 flexicare-core.js        first Flexicare script; registers journey-reset afterEnter
 flexicare-onboarding.js  page controller
 flexicare-selfie.js      page controller
+flexicare-avatar.js      page controller (avatar picker; needs glass for the card clones)
 flexicare-quiz.js        page controller (also needs glass for option styling)
 flexicare-reveal.js      page controller (archetype reveal; core only)
 slider.js                dev-only tuner; needs glass.js
@@ -55,14 +56,26 @@ Pages, in order, and where state is created:
 1. **Landing** (`/`) — tagged `data-journey-start`. Entering it calls
    `Flexicare.resetJourney()`, wiping any previous run (session, selfie, answers,
    archetype, result). This is what makes "start over" clean without a hard reload.
-2. **Selfie** (`flexicare-selfie.js`) — camera capture with a 3-2-1 countdown and
-   review/retake. The captured frame is downscaled to a square JPEG **Blob** and buffered
-   in memory at `Flexicare.photo`. Nothing is uploaded here.
+2. **Photo — two mutually exclusive paths.** Whichever the user does LAST wins; the core
+   clears one when the other is set. Neither path sends anything: both need a session id,
+   which doesn't exist yet.
+   - **Selfie** (`flexicare-selfie.js`) — camera capture with a 3-2-1 countdown and
+     review/retake. The captured frame is downscaled to a square JPEG **Blob** and buffered
+     in memory at `Flexicare.photo`.
+   - **Avatar** (`flexicare-avatar.js`) — for users who don't want to be photographed.
+     Reached by a plain link from the selfie page. Gender + race pills drive
+     `GET /avatars?race=…&gender=…` (always 9 avatars: 3 age groups × 3 variants), rendered
+     as a 3×3 grid of clones. The chosen `avatar_id` is buffered at `Flexicare.avatar`, and
+     the gender at `Flexicare.avatarGender` (which pre-fills onboarding). Non-`READY` slots
+     render as unselectable placeholders; the catalog is re-fetched on every entry and
+     filter change because its urls are presigned (~10 min).
 3. **Onboarding** (`/onboarding`, `flexicare-onboarding.js`) — collects name, WhatsApp,
    gender, consent, then on submit: (a) `POST /sessions` → stores the session id via
-   `Flexicare.setSessionId` (sessionStorage, treated as a secret); (b) if a buffered selfie
-   exists, uploads it (presign → PUT → confirm) in the same interaction; (c) navigates to
-   `/archetype`. A failed session-create blocks; a failed image upload does not.
+   `Flexicare.setSessionId` (sessionStorage, treated as a secret); (b) sends whichever
+   photo is buffered — selfie via presign → PUT → confirm, or avatar via
+   `PATCH …/photo/avatar { avatar_id }` — both starting the same background image
+   generation; (c) `PATCH …/contact/phone` with the E.164 WhatsApp number; (d) navigates to
+   `/archetype`. A failed session-create blocks; a failed photo/avatar/phone call does not.
 4. **Quiz — ROUTING stage** (`/archetype`, `flexicare-quiz.js`) — `GET /quiz?lang=en`
    once (cached on `Flexicare.quizData`). Renders the 5 routing questions one at a time.
    Each pick is `POST /sessions/{id}/answers` (upsert). After the 5th,
@@ -83,8 +96,8 @@ Pages, in order, and where state is created:
 
 On a **hard reload** mid-funnel, in-memory state is gone but recoverable: answers are
 rebuilt from `GET /sessions/{id}`, and a missing archetype is recovered with a preview.
-The one thing that cannot be recovered is the buffered selfie (memory only) — hence
-`barba.go()` everywhere.
+The one thing that cannot be recovered is the buffered selfie or avatar choice (memory
+only) — hence `barba.go()` everywhere.
 
 ---
 
@@ -286,6 +299,11 @@ The persistent brain. Holds:
   actually pins the viewport before paint.
 - Session id — `getSessionId()`/`setSessionId()`/`clearSession()`, stored in sessionStorage,
   treated as a secret (never logged).
+- Buffered avatar choice — `setAvatar()/getAvatar()/hasAvatar()/clearAvatar()`, plus
+  `FC.avatarGender` (kept separately so it survives `clearAvatar()` and can still pre-fill
+  onboarding). Shape `{ id, slug, url, race, gender, ageGroup, variant }`; only `id` is
+  durable (the url is presigned, ~10 min). **Mutually exclusive with the selfie** —
+  `setAvatar()` clears the photo and `setPhoto()` clears the avatar.
 - Buffered selfie — `setPhoto()/getPhoto()/hasPhoto()/clearPhoto()/photoObjectURL()`,
   in-memory Blob.
 - `FC.api(path, opts)` — thin `fetch` wrapper; JSON in/out; throws `Error` with `.status`
@@ -303,7 +321,10 @@ toggles `is-checked`/`data-checked-class`, optional `data-checked-target`), `-su
 (URL value → forced destination, else `history.back()`). Values: `-next` (default
 `/archetype`), `-busy-label`, `[data-onboarding-label]` inner text node,
 `[data-onboarding-form-error]`. Glass can't go on an `<input>` — put it on the field
-wrapper and use `data-lg-preset="nav"` (no press/tilt).
+wrapper and use `data-lg-preset="nav"` (no press/tilt). On submit it fires the photo send
+(selfie upload **or** `PATCH …/photo/avatar`) and `PATCH …/contact/phone` in parallel,
+both non-blocking. The gender pills are pre-filled from `Flexicare.avatarGender` when the
+user came via the avatar picker.
 
 ### flexicare-selfie.js
 Selfie controller. States on `<html data-selfie-state>`: `starting|live|counting|review|
@@ -313,6 +334,33 @@ error`. Contract: `[data-selfie-stage]` (circular preview box; JS injects the `<
 `[data-selfie-fallback]` (upload-instead on camera failure), plus embed-provided
 `[data-selfie-countdown]` and `[data-selfie-preview]` (`<img>`). Needs `https`; won't work
 in the Designer preview — test on a real device on the published/preview URL.
+
+### flexicare-avatar.js
+The avatar picker — the alternative to the selfie, and a sibling page, not a step after
+it. Wrapper `[data-avatar]` (may BE the container). Config on the wrapper uses `-url` /
+`-default` suffixes **on purpose**, so the wrapper is never matched by the pill/button
+queries: `data-avatar-next-url` (default `/onboarding`), `-back-url`, `-gender-default`
+(`male`), `-race-default` (`black`), `-debug`. Filters: `[data-avatar-gender="male|female"]`
+and `[data-avatar-race="black|white|indian|asian|coloured"]` — **the value is the API enum,
+not the label**, so the design's "Mixed" pill is `data-avatar-race="coloured"`. The pills
+may be a Tabs component's tab-links, but **nothing may depend on Webflow's Tabs JS**: it
+binds once on `DOMContentLoaded`, so after a Barba swap panes stop switching and
+`w--current` stops moving. Style the selected state on `is-selected` (toggled here) and
+keep the two filter rows as siblings rather than nested Tabs. Grid: `[data-avatar-grid]`, built one of two
+ways — **static** (the normal path): nine authored `[data-avatar-slot="1".."9"]` cards,
+numbered in reading order because the API's 9 always come back young_adult 1-3,
+middle_aged 1-3, elder 1-3; they are filled in place and never removed, so the author's
+layout/classes/glass survive. **Clone**: one `[data-avatar-option-template]`, used only
+when no slot cards exist. Either way each card carries `data-avatar-option`, `-id`,
+`-slug`, `data-age-group`, `data-variant`, and its `[data-avatar-image]` (or the card
+itself, as a background) is painted after decode with `is-loaded`. Selected → `is-selected`/`data-selected-class` + `aria-pressed`; a slot with
+no approved image → `data-avatar-unavailable` + `is-unavailable` + `aria-disabled`, not
+clickable. States: `[data-avatar-loading]`, `-empty`, `-error`, mirrored on the wrapper as
+`data-avatar-state="loading|ready|empty|error"`. Buttons `[data-avatar-next]` (disabled-look
+until a pick, still clickable to surface the message) and `[data-avatar-back]`.
+Filter changes are debounced 180 ms; a run token invalidates in-flight fetches and image
+decodes on teardown. **It never calls the API with the session** — the choice is buffered
+and onboarding sends it.
 
 ### flexicare-quiz.js
 `/archetype` (ROUTING) and later FLEX stages. Config on the `[data-quiz]` wrapper:

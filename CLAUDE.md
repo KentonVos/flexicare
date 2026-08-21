@@ -35,12 +35,15 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
 6. `src/flexicare-core.js` — `window.Flexicare` (aka `FC`). The persistent brain: config, session id, buffered selfie, API helper, journey reset. **First of the Flexicare scripts.**
 7. `src/flexicare-onboarding.js` — `/onboarding` page controller.
 8. `src/flexicare-selfie.js` — selfie-capture page controller.
-9. `src/flexicare-quiz.js` — `/archetype` quiz + later FLEX stage.
-10. `src/flexicare-reveal.js` — `/meet-your-two-selves`, the archetype reveal (the page
+9. `src/flexicare-avatar.js` — avatar-picker page controller (the alternative to the
+   selfie: race/gender filters + a 3×3 grid from `GET /avatars`). Buffers the chosen
+   `avatar_id`; **onboarding** is what sends it.
+10. `src/flexicare-quiz.js` — `/archetype` quiz + later FLEX stage.
+11. `src/flexicare-reveal.js` — `/meet-your-two-selves`, the archetype reveal (the page
     that replaced `/loading`): recovers/confirms the archetype, personalises copy, and
     polls for the generated with/without-cover image pair.
-11. `src/slider.js` — **NOT a content slider.** This is the "Liquid Glass Tuner", a dev-only control panel gated behind `?tune` in the URL. Ignore it for production changes unless the task is about tuning glass presets.
-12. `src/orb-tuner.js` — dev-only orb-motion control panel, gated behind `?orbtune`
+12. `src/slider.js` — **NOT a content slider.** This is the "Liquid Glass Tuner", a dev-only control panel gated behind `?tune` in the URL. Ignore it for production changes unless the task is about tuning glass presets.
+13. `src/orb-tuner.js` — dev-only orb-motion control panel, gated behind `?orbtune`
     (or `?tune`, so it can sit beside the glass tuner). Writes the `data-orb-*` attributes
     live and hands back a paste-ready list. Ignore for production changes.
 
@@ -64,6 +67,13 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
   go-live. This is the single config touchpoint for the backend. The **full backend
   contract** (every endpoint, payload, error code, the photo/image flow) is in
   `docs/api-contract.md` — read it before touching anything that calls `Flexicare.api()`.
+- **The photo step has TWO paths and they are mutually exclusive.** A selfie
+  (`Flexicare.photo`, a Blob) or a picked avatar (`Flexicare.avatar`, just an id).
+  Setting either one clears the other in `flexicare-core.js`, so whichever the user did
+  LAST is what ships. **Neither is sent by the page that captures it** — both need a
+  session id, which only exists after `/onboarding` submits, so onboarding sends whichever
+  is buffered (presign→PUT→confirm, or `PATCH …/photo/avatar`). Downstream nothing
+  branches: the reveal page polls `GET /sessions/{id}/images` either way.
 - **The buffered selfie lives in memory only** (`Flexicare.photo`). It survives Barba
   navigations but NOT a hard page reload. That's why the controllers always navigate
   with `barba.go()`, never `window.location`. Don't "helpfully" change a `barba.go()`
