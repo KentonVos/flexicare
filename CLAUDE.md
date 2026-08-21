@@ -112,9 +112,15 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
   never match elements by class (classes are what differ), and mark anything you inject
   into persistent DOM with `data-js-injected` so the sync skips it. Full notes in
   ARCHITECTURE.md § transition.js.
-- **The shell's STRUCTURE must match across pages** (same nesting, same element order);
-  only classes may differ. Adding a wrapper div on one page only will silently stop that
-  branch from syncing. If you change shell structure in Webflow, do it on every page.
+- **The shell's STRUCTURE must match across pages** (same nesting, same element order,
+  same tag names); only classes may differ. Adding a wrapper div on one page only will
+  silently stop that branch from syncing. If you change shell structure in Webflow, do it
+  on every page. The canonical tree is in ARCHITECTURE.md § transition.js — ONE extra
+  level is enough to break every page after the first, because the ancestor walk goes
+  lockstep and off-by-one, pasting every class one level from where it belongs. Symptoms
+  cascade and look unrelated, so don't chase them individually: load any page with
+  `?fcdebug` and read the CHAIN block. Anything PAGE-SPECIFIC must also live inside
+  `data-barba="container"` or Barba never brings it across (the panel's STRANDED line).
 - **The click model is event delegation.** Controllers attach ONE listener to
   `document` and re-resolve the target by attribute at click time. This is deliberate
   (it survives glass rebuilds and Barba swaps). Don't refactor it to attach listeners

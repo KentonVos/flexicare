@@ -479,6 +479,39 @@ stays collapsed here exactly as it does on the landing page — which means **th
 live inside the container**, not in the synced nav region, or it would be hidden with the
 nav.
 
+**The canonical shell structure.** Every page must ship this tree. Only the CLASS names
+may differ per page (`landing-glass-container` vs `glass-container`, `scroll-wrapper` vs
+`responsive-wrapper` — that's exactly what the class sync is for). The nesting depth,
+element order and TAG NAMES may not:
+
+```
+body
+  page-wrapper
+    main-wrapper                       <main>
+      content-wrapper
+        <glass container>
+          glass-background-container
+            padding-global
+              container-large
+                <scroll wrapper>
+                  top-section-wrapper          (the logo + progress bar)
+                  glass-content-wrapper        data-barba="container"
+        button-navigation-wrapper       data-barba-sync="nav", data-nav-reveal,
+          button-navigation-glass-wrapper      data-show-except="landing"
+      background-gradients
+```
+
+Measured 2026-08-21: the reveal page had ONE EXTRA level (`content-flex-wrapper` between
+`container-large` and `scroll-wrapper`, with `top-section-wrapper` inside it rather than
+beside the container). One extra level is enough to break everything, because
+`syncAncestors()` walks both chains in lockstep and only checks tagName: off by one, every
+class lands one level from where it belongs, and the container came out 684px instead of
+789px on arrival while looking correct after a refresh. Symptoms cascade — it also produced
+a bogus `live is <main>, next has <div>` warning from comparing `<main>` against
+`content-wrapper`. **Anything page-specific must live INSIDE the container**, too: the
+reveal page's `[data-reveal-copy]` embed was parked at body level, so Barba never brought
+it across and the cards silently kept the Designer's placeholder copy.
+
 **Layout debug panel** (dev only, at the bottom of `transition.js`): gated behind
 `?fcdebug` — which **sticks in `localStorage`**, because the bugs it exists for span a
 navigation and `barba.go()` drops the query string; `?fcdebug=off` clears it. Live
