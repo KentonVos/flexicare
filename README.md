@@ -38,6 +38,7 @@ flexicare/
 │                                  (avatar catalog / stored vs generated images)
 ├── docs/
 │   ├── api-contract.md           ← the backend API contract (endpoints, payloads)
+│   ├── avatar-loading-state.md   ← the avatar-grid skeleton/shimmer (paste-ready CSS)
 │   ├── webflow-head-snippet.md   ← the head snippet that lives in Webflow (site head)
 │   └── hosting-and-publishing.md ← hosting + publish + rollback workflow
 └── src/               ← the thirteen scripts (served by Cloudflare from /src/)

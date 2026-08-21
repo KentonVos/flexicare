@@ -158,6 +158,40 @@
      Unavailable card: data-avatar-unavailable + class `is-unavailable` +
      aria-disabled="true" (not clickable).
 
+     LOADING / SKELETON (the shimmer — all optional, all CSS-driven):
+     data-avatar-state="loading"
+                              on the wrapper while the catalog is in flight.
+                              SET IT IN THE DESIGNER TOO (a static attribute on
+                              [data-avatar]): the script only stamps it once it
+                              runs, so on a hard load the authored placeholder
+                              cards would otherwise flash first. JS clears it.
+     data-avatar-card-state="loading|ready|unavailable"
+                              stamped on EVERY card. A card stays "loading"
+                              until ITS OWN image has decoded, so the shimmer
+                              covers the Designer placeholder for exactly as
+                              long as there's nothing real to show, then flips
+                              to "ready" (or "unavailable" for a slot the
+                              catalog hasn't populated).
+     class `is-loading`       added to each card AND to the filter pills and the
+                              Next/Back buttons while loading (plus aria-busy).
+                              Override the name per element with
+                              data-loading-class="YourCombo". Pills stay
+                              clickable while busy — switching filters mid-load
+                              is fine.
+     THE SHIMMER CSS IS BUILT IN — the script injects it into the persistent
+                              head on first entry, because Barba never swaps the
+                              <head>: CSS pasted into a PAGE's Custom Code only
+                              exists on a hard load, so a barba.go() arrival
+                              would have no shimmer at all until you reloaded.
+                              Tune it with CSS variables on [data-avatar]
+                              (--fc-skeleton-bg / -sheen / -speed / -fade), or
+                              override any rule from the SITE head — the injected
+                              selectors are :where()-wrapped, so they carry zero
+                              specificity and yours always wins. Opt out entirely
+                              with data-avatar-skeleton="off" on the wrapper.
+                              Details + the full stylesheet:
+                              docs/avatar-loading-state.md.
+
      States / messages (all optional):
      [data-avatar-loading]    shown while the catalog is being fetched
      [data-avatar-empty]      shown when a race/gender combo has no selectable
@@ -256,12 +290,125 @@
     return list.indexOf(String(v || "").toLowerCase()) !== -1;
   }
 
+  /* --------------------------- loading marks --------------------------- */
+
+  /* The skeleton/shimmer plumbing. Nothing here paints anything — it only
+     stamps attributes + a class, so the whole look is authored in Webflow
+     (a shimmer gradient, a flat grey block, whatever). Three levels:
+
+       wrapper   data-avatar-state="loading"        (already existed)
+       card      data-avatar-card-state="loading|ready|unavailable"
+                 + class is-loading (override per card: data-loading-class)
+                 + aria-busy
+       controls  the same class/aria-busy on the filter pills and the
+                 Next/Back buttons
+
+     A card stays in "loading" until ITS OWN image has decoded, so the
+     shimmer covers the Designer placeholder for exactly as long as there is
+     nothing real to show. Stamped early (see prime() on beforeEnter) so the
+     placeholder cards never flash before the fetch even starts. */
+
+  /* THE SKELETON CSS SHIPS WITH THE SCRIPT, and it has to.
+     Barba only swaps the container — the <head> never changes — so anything
+     pasted into a PAGE's Custom Code exists on a hard load and is missing on
+     every barba.go() arrival. That's why the shimmer "only worked after a
+     reload". Injected here (once, into the persistent head, flagged
+     data-js-injected so transition.js's shell sync leaves it alone).
+
+     Everything is authored to be easy to override from Webflow:
+       • selectors are wrapped in :where() → ZERO specificity, so any rule you
+         write in the site head wins without !important;
+       • the colours/speed are CSS custom properties you can redefine on
+         [data-avatar] (or :root) in the Designer;
+       • set data-avatar-skeleton="off" on the wrapper to skip the inject
+         entirely and style it all yourself. */
+  var SKELETON_CSS =
+    "@keyframes fc-avatar-shimmer{from{background-position:-150% 0}to{background-position:250% 0}}" +
+    ":where([data-avatar]){--fc-skeleton-bg:rgba(255,255,255,.06);--fc-skeleton-sheen:rgba(255,255,255,.18);--fc-skeleton-speed:1.5s;--fc-skeleton-fade:.35s}" +
+    ':where([data-avatar-state="loading"] [data-avatar-slot],[data-avatar-card-state="loading"]){position:relative;overflow:hidden;background-color:var(--fc-skeleton-bg,rgba(255,255,255,.06))}' +
+    ':where([data-avatar-state="loading"] [data-avatar-slot],[data-avatar-card-state="loading"])::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:2;background-image:linear-gradient(100deg,rgba(255,255,255,0) 20%,var(--fc-skeleton-sheen,rgba(255,255,255,.18)) 50%,rgba(255,255,255,0) 80%);background-size:200% 100%;background-repeat:no-repeat;animation:fc-avatar-shimmer var(--fc-skeleton-speed,1.5s) linear infinite}' +
+    ':where([data-avatar-state="loading"] [data-avatar-slot] [data-avatar-image],[data-avatar-card-state="loading"] [data-avatar-image]){opacity:0}' +
+    ":where([data-avatar-image]){transition:opacity var(--fc-skeleton-fade,.35s) ease}" +
+    ':where([data-avatar-card-state="ready"] [data-avatar-image].is-loaded){opacity:1}' +
+    ':where([data-avatar-card-state="unavailable"],[data-avatar-unavailable]){opacity:.35;pointer-events:none}' +
+    ":where([data-avatar-gender].is-loading,[data-avatar-race].is-loading){opacity:.55;transition:opacity .2s ease}" +
+    ":where([data-avatar-next].is-loading,[data-avatar-back].is-loading){opacity:.45;transition:opacity .2s ease}" +
+    '@media (prefers-reduced-motion:reduce){:where([data-avatar-state="loading"] [data-avatar-slot],[data-avatar-card-state="loading"])::after{animation:none}}';
+
+  var cssDone = false;
+  function injectCSS(wrap) {
+    if (cssDone) return;
+    if (wrap && attr(wrap, "data-avatar-skeleton", "") === "off") {
+      cssDone = true; // opt-out: the page styles the skeleton itself
+      return;
+    }
+    if (document.querySelector("style[data-avatar-skeleton-css]")) {
+      cssDone = true;
+      return;
+    }
+    var el = document.createElement("style");
+    el.setAttribute("data-avatar-skeleton-css", "");
+    el.setAttribute("data-js-injected", ""); // shell sync must skip it
+    el.textContent = SKELETON_CSS;
+    document.head.appendChild(el);
+    cssDone = true;
+  }
+
+  function markBusy(el, on) {
+    if (!el) return;
+    var cls = attr(el, "data-loading-class", "is-loading");
+    if (el.classList) el.classList.toggle(cls, !!on);
+    if (on) el.setAttribute("aria-busy", "true");
+    else el.removeAttribute("aria-busy");
+  }
+
+  // Cards to skeleton: the authored slot cards, else the clone template +
+  // whatever clones are currently on screen.
+  function loadingCards(root) {
+    var cards = all("[data-avatar-slot]", root);
+    if (!cards.length)
+      cards = all(
+        "[data-avatar-option-template],[data-avatar-option]",
+        root
+      );
+    return cards;
+  }
+
+  function setCardLoading(card, on) {
+    if (!card) return;
+    markBusy(card, on);
+    if (on) {
+      card.setAttribute("data-avatar-card-state", "loading");
+      var img = one("[data-avatar-image]", card);
+      if (img && img.classList) img.classList.remove("is-loaded");
+    }
+  }
+
+  function setCardsLoading(on, root) {
+    loadingCards(root || state.wrap || document).forEach(function (card) {
+      setCardLoading(card, on);
+    });
+  }
+
+  // The pills live inside the container; Next/Back live in the persistent nav
+  // OUTSIDE it, so they are always looked up from the document.
+  function setControlsLoading(on, root) {
+    var scope = root || state.wrap || document;
+    all("[data-avatar-gender],[data-avatar-race]", scope).forEach(function (el) {
+      markBusy(el, on);
+    });
+    all("[data-avatar-next],[data-avatar-back]").forEach(function (el) {
+      markBusy(el, on);
+    });
+  }
+
   /* --------------------------- state plumbing --------------------------- */
 
   function setPageState(s) {
     if (state.wrap) state.wrap.setAttribute("data-avatar-state", s);
     show(one("[data-avatar-loading]"), s === "loading");
     show(one("[data-avatar-empty]"), s === "empty");
+    if (s !== "loading") setControlsLoading(false);
   }
 
   function showError(msg) {
@@ -314,11 +461,15 @@
 
   // <img> → src; anything else → background-image. Decodes first so the swap
   // never shows a half-painted frame, then flags is-loaded for the CSS fade.
-  function paintImage(el, url, token) {
-    if (!el || !url) return;
+  function paintImage(el, url, token, done) {
+    if (!el || !url) {
+      if (done) done();
+      return;
+    }
     var pre = new Image();
     pre.onload = function () {
       if (!alive(token) || !el.parentNode) return;
+      if (done) done(); // drop the skeleton the instant there's a face to show
       if (el.tagName === "IMG") {
         el.removeAttribute("srcset"); // Webflow adds one; it would win over src
         el.src = url;
@@ -331,6 +482,8 @@
     };
     pre.onerror = function () {
       dbg("avatar image failed to load", url);
+      if (!alive(token)) return;
+      if (done) done(); // never leave a card shimmering forever
     };
     pre.src = url;
   }
@@ -425,12 +578,21 @@
       card.removeAttribute("aria-disabled");
       // Drop is-loaded first so the CSS fade re-runs for the incoming face.
       if (img.classList) img.classList.remove("is-loaded");
-      paintImage(img, av.url, token);
+      // The card keeps its skeleton until this one image has decoded.
+      setCardLoading(card, true);
+      paintImage(img, av.url, token, function () {
+        markBusy(card, false);
+        card.setAttribute("data-avatar-card-state", "ready");
+      });
     } else {
       // Curated catalog: this slot has no approved image yet (§3.7).
       card.setAttribute("data-avatar-unavailable", "");
       card.setAttribute("aria-disabled", "true");
       if (img.classList) img.classList.remove("is-loaded");
+      // Nothing is coming for this slot — stop shimmering and let the
+      // is-unavailable styling (and the Designer placeholder) show.
+      markBusy(card, false);
+      card.setAttribute("data-avatar-card-state", "unavailable");
     }
   }
 
@@ -475,6 +637,7 @@
       return;
     }
     clearGrid();
+    markBusy(tpl, false);
     tpl.style.display = "none";
 
     var chosen = chosenId;
@@ -514,8 +677,21 @@
       }
 
       grid.appendChild(clone);
-      if (ready)
-        paintImage(one("[data-avatar-image]", clone) || clone, av.url, token);
+      if (ready) {
+        setCardLoading(clone, true);
+        paintImage(
+          one("[data-avatar-image]", clone) || clone,
+          av.url,
+          token,
+          function () {
+            markBusy(clone, false);
+            clone.setAttribute("data-avatar-card-state", "ready");
+          }
+        );
+      } else {
+        markBusy(clone, false);
+        clone.setAttribute("data-avatar-card-state", "unavailable");
+      }
     });
 
     // attach glass to freshly-injected clones (if they use it)
@@ -541,6 +717,8 @@
     var token = ++state.token;
     clearError();
     setPageState("loading");
+    setCardsLoading(true);
+    setControlsLoading(true);
     dbg("fetching", state.race, state.gender);
 
     FC.api("/avatars?race=" + state.race + "&gender=" + state.gender)
@@ -572,6 +750,7 @@
             fillCard(card, null, null, token);
           });
         else clearGrid();
+        setCardsLoading(false); // nothing is coming — stop the shimmer
         setPageState("error");
         showError(
           (err && (err.detail || err.message)) ||
@@ -714,6 +893,28 @@
     return scope !== document ? document.querySelector("[data-avatar]") : null;
   }
 
+  /* Stamp the loading state on the INCOMING container before it paints.
+     init() runs on afterEnter (it needs transition.js's synced nav + glass),
+     and the fetch only starts there — which left a beat where the Designer's
+     placeholder cards were fully visible. beforeEnter fires before the enter
+     animation, so the skeleton is already on when the page fades in.
+     Deliberately scope-limited (no document fallback): priming must be a
+     no-op when we're navigating to any other page. */
+  function prime(scope) {
+    if (!scope) return;
+    var wrap =
+      scope.matches && scope.matches("[data-avatar]")
+        ? scope
+        : scope.querySelector && scope.querySelector("[data-avatar]");
+    if (!wrap) return;
+    injectCSS(wrap);
+    wrap.setAttribute("data-avatar-state", "loading");
+    show(one("[data-avatar-loading]", wrap), true);
+    show(one("[data-avatar-empty]", wrap), false);
+    setCardsLoading(true, wrap);
+    setControlsLoading(true, wrap);
+  }
+
   function init(scope) {
     var wrap = resolveWrap(scope);
     if (!wrap) return; // not the avatar page
@@ -721,6 +922,7 @@
     teardown();
 
     state.wrap = wrap;
+    injectCSS(wrap); // no-op if prime() already did it
     // [data-avatar-grid] may appear MORE THAN ONCE — a 3x3 built as three flex
     // rows is three grids. It is only needed as the append target in clone mode;
     // slot cards are collected from the whole wrapper instead (slotCards()).
@@ -759,6 +961,9 @@
 
   function teardown() {
     state.token++; // invalidate in-flight fetches / image decodes
+    // Next/Back live in the PERSISTENT nav — leaving mid-load would otherwise
+    // strand is-loading/aria-busy on them for the next page.
+    setControlsLoading(false);
     if (state.fetchTimer) clearTimeout(state.fetchTimer);
     state.fetchTimer = null;
     state.wrap = null;
@@ -770,6 +975,10 @@
   /* ------------------------------ lifecycle ------------------------------ */
 
   if (window.barba && window.barba.hooks) {
+    // Skeleton first, before the incoming page is visible (see prime()).
+    window.barba.hooks.beforeEnter(function (data) {
+      prime(data && data.next && data.next.container);
+    });
     // afterEnter (not enter): transition.js loads first, so its syncRegions() +
     // LiquidGlass.scan() have already settled the nav buttons and the glass by
     // the time we render clones into the grid. (Same rationale as the other
@@ -795,6 +1004,7 @@
 
   FC.avatarPicker = {
     init: init,
+    prime: prime,
     teardown: teardown,
     refresh: fetchCatalog,
     report: report,

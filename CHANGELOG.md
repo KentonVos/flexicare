@@ -14,6 +14,39 @@ Format:
 
 ---
 
+## 2026-08-21 — Avatar skeleton: ship the CSS with the script (it only worked after a reload)
+- src/flexicare-avatar.js, docs/avatar-loading-state.md, ARCHITECTURE.md
+- The shimmer was dead on the first arrival and alive after a reload, because the
+  CSS was pasted into the PAGE's Custom Code: Barba only swaps the container, never
+  the <head>, so page-level head code exists on a hard load and is missing on every
+  barba.go(). The script now injects the stylesheet itself (`injectCSS()`, once,
+  marked data-js-injected so the shell sync skips it) — same precedent as
+  transition.js's FOUC rule.
+- Selectors are :where()-wrapped (zero specificity) and the look is driven by
+  --fc-skeleton-bg / -sheen / -speed / -fade on [data-avatar], so Webflow overrides
+  win without !important. `data-avatar-skeleton="off"` on the wrapper opts out.
+- WEBFLOW: you can now DELETE the <style> block from the avatar page's Custom Code —
+  it does nothing on a Barba arrival anyway. Keep the static
+  data-avatar-state="loading" attribute on the wrapper. Any custom shimmer styling
+  belongs in the SITE head (Site Settings → Custom Code), not the page's.
+
+## 2026-08-21 — Avatar picker: loading skeleton for the cards and controls
+- src/flexicare-avatar.js, docs/avatar-loading-state.md (new), ARCHITECTURE.md, README.md
+- Navigating to the avatar page briefly showed the Designer's placeholder cards
+  before the catalog landed. The controller now stamps a loading state early and
+  per-card so the gap can be shimmered from CSS: `prime()` on Barba `beforeEnter`
+  puts `data-avatar-state="loading"` on the incoming container before it paints
+  (init runs on afterEnter, too late), each card carries
+  `data-avatar-card-state="loading|ready|unavailable"` + `is-loading` + `aria-busy`
+  until its OWN image decodes, and the filter pills / Next / Back get `is-loading`
+  while the fetch is in flight. Nothing paints in JS — the look is all Webflow CSS.
+- WEBFLOW: (1) add a static `data-avatar-state="loading"` attribute to the
+  `[data-avatar]` wrapper — on a hard load the footer scripts run after first paint,
+  so the attribute has to be there from the Designer; the script clears it.
+  (2) paste the CSS from `docs/avatar-loading-state.md` into the page's head.
+  Optional per-element override: `data-loading-class="YourCombo"`.
+  No script list change — the footer is untouched.
+
 ## 2026-08-21 — Avatar picker: slot cards are found across every grid wrapper
 - src/flexicare-avatar.js
 - A 3x3 built as three flex rows is three [data-avatar-grid] elements, and slot cards were

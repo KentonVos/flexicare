@@ -358,6 +358,26 @@ no approved image → `data-avatar-unavailable` + `is-unavailable` + `aria-disab
 clickable. States: `[data-avatar-loading]`, `-empty`, `-error`, mirrored on the wrapper as
 `data-avatar-state="loading|ready|empty|error"`. Buttons `[data-avatar-next]` (disabled-look
 until a pick, still clickable to surface the message) and `[data-avatar-back]`.
+**Loading skeleton** (all CSS-driven, no new elements — paste-ready CSS in
+`docs/avatar-loading-state.md`): a `beforeEnter` hook calls `prime()` on the *incoming*
+container, so `data-avatar-state="loading"` is on before the page is visible — `init()`
+can't do it, it runs on `afterEnter`. `prime()` is deliberately scope-limited (no
+`document` fallback) so it no-ops when navigating anywhere else. Per card,
+`data-avatar-card-state="loading|ready|unavailable"` + class `is-loading`
+(`data-loading-class` to rename) + `aria-busy`; a card stays `loading` until *its own*
+image has decoded (`paintImage` now takes a done callback, also fired on decode error so
+a card can't shimmer forever), then flips to `ready`. Filter pills and Next/Back get the
+same class while the fetch is in flight; pills stay clickable. The wrapper attribute
+should ALSO be set statically in the Designer — on a hard load the footer scripts run
+after first paint, which is the placeholder flash this whole thing exists to kill.
+**The shimmer stylesheet is injected by the script** (`injectCSS()`, once, flagged
+`data-js-injected`), for the same reason transition.js injects its FOUC rule: Barba never
+swaps the `<head>`, so CSS in a *page's* Custom Code is present on a hard load and gone on
+every `barba.go()` arrival — which is exactly the "animation only works after a reload"
+bug. The injected selectors are `:where()`-wrapped (zero specificity) and the colours/speed
+are custom properties on `[data-avatar]`, so anything authored in the **site** head
+overrides without `!important`; `data-avatar-skeleton="off"` on the wrapper skips the
+inject altogether.
 Filter changes are debounced 180 ms; a run token invalidates in-flight fetches and image
 decodes on teardown. **It never calls the API with the session** — the choice is buffered
 and onboarding sends it.
