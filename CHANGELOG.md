@@ -56,6 +56,23 @@ finished**; the current pass is polishing what exists rather than adding pages.
 
 ---
 
+## 2026-08-21 — transition.js: name the shell-sync failure instead of failing quietly
+
+- `src/transition.js`
+- Chasing "the reveal page's layout is wrong on arrival but right after a
+  refresh" — the exact symptom `syncShellClasses()` exists to prevent. When it
+  can't match a branch (tagName mismatch, or child counts disagree) it
+  deliberately gives up rather than write classes onto the wrong elements, but
+  it did so SILENTLY, so the resulting stale-class layout bug looked like magic.
+- It now `console.warn`s once per session per spot, with the element path and
+  what didn't line up, and says what to fix in Webflow (shell structure must
+  match across pages; only classes may differ).
+- New: `PageTransition.shellSnapshot()`. Run it on the broken page, hard-refresh,
+  run it again — it diffs the two and prints exactly which shell classes the
+  sync failed to bring across. If it reports "IDENTICAL", stale shell classes
+  are ruled out and the cause is the container's own entrance instead.
+- Webflow: no change.
+
 ## 2026-08-21 — Reveal page: actually hide the placeholder image under the shimmer
 
 - `src/flexicare-reveal.js`, `docs/reveal-loading-state.md`

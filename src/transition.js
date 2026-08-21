@@ -448,8 +448,66 @@
     });
   }
 
+  /* A branch that gets abandoned is the bug this whole function exists to
+     prevent: the live shell keeps the FIRST page's classes, so the page is
+     laid out wrong until a hard refresh makes Webflow serve the right shell.
+     It should never happen — it means the shell's STRUCTURE differs between
+     two pages in Webflow (an extra wrapper div, a different element order),
+     which no amount of class-copying can recover from. So say so, loudly and
+     precisely: which element, and what didn't line up. Once per session per
+     spot, so a repeated navigation doesn't spam the console. */
+  var shellWarned = {};
+  function shellPath(el) {
+    var parts = [];
+    while (el && el.nodeType === 1 && parts.length < 8) {
+      var name = el.tagName.toLowerCase();
+      if (el.parentElement) {
+        var sibs = Array.prototype.filter.call(
+          el.parentElement.children,
+          function (n) {
+            return n.tagName === el.tagName;
+          }
+        );
+        if (sibs.length > 1)
+          name += ":nth-of-type(" + (sibs.indexOf(el) + 1) + ")";
+      }
+      var cls = (el.className || "").toString().trim().split(/\s+/)[0];
+      if (cls) name += "." + cls;
+      parts.unshift(name);
+      if (el.hasAttribute && el.hasAttribute("data-barba")) break;
+      el = el.parentElement;
+    }
+    return parts.join(" > ");
+  }
+  function shellWarn(where, detail) {
+    var key = where + "|" + detail;
+    if (shellWarned[key]) return;
+    shellWarned[key] = true;
+    console.warn(
+      "[transition] shell class sync ABANDONED at " +
+        where +
+        " — " +
+        detail +
+        ". The shell's structure differs between these two pages, so this " +
+        "branch keeps the FIRST page's classes and the layout will look wrong " +
+        "until a hard refresh. Fix it in Webflow: outside " +
+        'data-barba="container" every page must have the SAME nesting and ' +
+        "element order — only classes may differ."
+    );
+  }
+
   function copyClass(cur, next) {
-    if (cur.tagName !== next.tagName) return false; // diverged — don't guess
+    if (cur.tagName !== next.tagName) {
+      shellWarn(
+        shellPath(cur),
+        "live is <" +
+          cur.tagName.toLowerCase() +
+          ">, the next page has <" +
+          next.tagName.toLowerCase() +
+          ">"
+      );
+      return false; // diverged — don't guess
+    }
     if (cur.className !== next.className) cur.className = next.className;
     return true;
   }
@@ -463,7 +521,29 @@
     // Counts MUST agree. A mismatch means a node exists on one side only, and
     // matching by position would write classes onto the WRONG elements — far
     // worse than stale, since a wrong class can inject padding or hide content.
-    if (a.length !== b.length) return;
+    if (a.length !== b.length) {
+      shellWarn(
+        shellPath(cur),
+        "live has " +
+          a.length +
+          " children, the next page has " +
+          b.length +
+          " (live: " +
+          a
+            .map(function (n) {
+              return n.tagName.toLowerCase();
+            })
+            .join(",") +
+          " / next: " +
+          b
+            .map(function (n) {
+              return n.tagName.toLowerCase();
+            })
+            .join(",") +
+          ")"
+      );
+      return;
+    }
     for (var i = 0; i < a.length; i++) walkShellClasses(a[i], b[i]);
   }
 
@@ -509,6 +589,67 @@
     if (c && nc && c.parentElement && nc.parentElement)
       walkShellClasses(c.parentElement, nc.parentElement);
   }
+
+  /* The diff tool for "it's wrong on arrival, right after a refresh". Run
+     PageTransition.shellSnapshot() on the broken page, hard-refresh, run it
+     again: it stores the first result and prints what CHANGED. Anything listed
+     is a shell class the sync failed to bring across — the layout bug. */
+  function shellSnapshot() {
+    var wrapper = document.querySelector('[data-barba="wrapper"]');
+    if (!wrapper) return console.warn("[transition] no barba wrapper found");
+    var now = {};
+    (function walk(el) {
+      if (!el || el.nodeType !== 1) return;
+      if (isContainer(el)) return; // Barba owns the container's subtree
+      if (isInjected(el)) return;
+      now[shellPath(el)] = (el.className || "").toString();
+      Array.prototype.forEach.call(el.children, walk);
+    })(wrapper);
+
+    var key = "fcShellSnapshot:" + location.pathname;
+    var prevRaw = null;
+    try {
+      prevRaw = sessionStorage.getItem(key);
+    } catch (e) {}
+    try {
+      sessionStorage.setItem(key, JSON.stringify(now));
+    } catch (e) {}
+
+    if (!prevRaw) {
+      console.log(
+        "[transition] shell snapshot stored (" +
+          Object.keys(now).length +
+          " elements). Now hard-refresh this page and run it again."
+      );
+      return now;
+    }
+    var prev = JSON.parse(prevRaw);
+    var diff = [];
+    Object.keys(prev).forEach(function (k) {
+      if (!(k in now)) diff.push({ where: k, before: prev[k], after: "(GONE)" });
+      else if (prev[k] !== now[k])
+        diff.push({ where: k, before: prev[k], after: now[k] });
+    });
+    Object.keys(now).forEach(function (k) {
+      if (!(k in prev)) diff.push({ where: k, before: "(ABSENT)", after: now[k] });
+    });
+    if (!diff.length)
+      console.log(
+        "[transition] shell is IDENTICAL between the two runs — the layout " +
+          "difference is not stale shell classes. Look at the container's own " +
+          "entrance (data-anim y offsets, the nav collapse) instead."
+      );
+    else {
+      console.warn(
+        "[transition] " + diff.length + " shell class difference(s) — these " +
+          "are what the sync failed to bring across:"
+      );
+      console.table ? console.table(diff) : console.log(diff);
+    }
+    return diff;
+  }
+
+  window.PageTransition.shellSnapshot = shellSnapshot;
 
   /* ---------- page identity, derived from the URL ----------
          Landing = site root ("/" or "/index[.html]"). Everything else
