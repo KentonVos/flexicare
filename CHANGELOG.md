@@ -14,6 +14,21 @@ Format:
 
 ---
 
+## 2026-08-21 — Avatar picker: slot cards are found across every grid wrapper
+- src/flexicare-avatar.js
+- A 3x3 built as three flex rows is three [data-avatar-grid] elements, and slot cards were
+  being collected from only the FIRST one — so slots 4-9 were never filled. They now come
+  from the whole [data-avatar] wrapper, which makes their nesting irrelevant and the
+  attribute itself optional in static mode (clone mode still needs one grid, as the append
+  target). Selection and clone cleanup are wrapper-scoped for the same reason.
+- Telling a broken page from a catalog gap: data-avatar-debug now prints a per-slot table
+  (slot / slug / status / image) after every load, and Flexicare.avatarPicker.report()
+  prints it on demand. Fewer slot cards than avatars returned warns unconditionally.
+- The Designer's own image in each card survives as that slot's placeholder — an
+  unpopulated slot is never overwritten, only marked is-unavailable. So a distinct
+  placeholder per slot shows which faces the backend is still missing.
+- WEBFLOW SIDE: nothing new. (Footer already updated in the entry below.)
+
 ## 2026-08-20 — Avatar picker: the no-selfie path (+ contact/phone wiring)
 - NEW src/flexicare-avatar.js; src/flexicare-core.js, src/flexicare-onboarding.js;
   docs/api-contract.md, docs/hosting-and-publishing.md, CLAUDE.md, ARCHITECTURE.md;
