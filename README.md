@@ -34,11 +34,13 @@ flexicare/
 ├── ARCHITECTURE.md    ← deep reference (read on demand)
 ├── CHANGELOG.md       ← running log of what you pushed
 ├── README.md          ← this file
+├── AVATAR-BACKEND-QUESTIONS.md  ← open questions sent to the backend dev
+│                                  (avatar catalog / stored vs generated images)
 ├── docs/
 │   ├── api-contract.md           ← the backend API contract (endpoints, payloads)
 │   ├── webflow-head-snippet.md   ← the head snippet that lives in Webflow (site head)
 │   └── hosting-and-publishing.md ← hosting + publish + rollback workflow
-└── src/               ← the twelve scripts (served by Cloudflare from /src/)
+└── src/               ← the thirteen scripts (served by Cloudflare from /src/)
     ├── glass.js
     ├── transition.js
     ├── text-reveal.js
@@ -47,6 +49,7 @@ flexicare/
     ├── flexicare-core.js
     ├── flexicare-onboarding.js
     ├── flexicare-selfie.js
+    ├── flexicare-avatar.js
     ├── flexicare-quiz.js
     ├── flexicare-reveal.js
     ├── slider.js       ← liquid-glass tuner (dev-only, ?tune)
