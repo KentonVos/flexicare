@@ -59,6 +59,13 @@
                                   data-quiz-progress-end="1"    } questions across a
                                      sub-range of the global progress bar (fractions)
                                   data-quiz-progress-format="Question {n} of {total}"
+                                  data-quiz-next-text="Next"   label for the next
+                                     button on every question but the last. Defaults
+                                     to whatever text is in [data-quiz-next-label]
+                                     when the quiz initialises.
+                                  data-quiz-next-text-last="See your 2 selves"
+                                     label for the next button on the FINAL question.
+                                     Falls back to data-quiz-next-text if unset.
 
      [data-quiz-prompt]         REQUIRED. Element that receives the question text.
      [data-quiz-helper]         Optional. Receives question.helper (hidden if none).
@@ -77,6 +84,11 @@
                                 shown, the rest hidden, as questions change.
      [data-quiz-next]           REQUIRED. The "Next" button (nav bar). Disabled
                                 (class is-disabled) until an option is picked.
+     [data-quiz-next-label]     Optional. The TEXT element inside the next button.
+                                If present its text is swapped per question, so the
+                                final question can read something else (see
+                                data-quiz-next-text-last on the wrapper). Without
+                                this attribute the button text is left alone.
      [data-quiz-back]           Optional. The "Back" button. Goes to the previous
                                 question in place; on question 1 it navigates to
                                 data-quiz-back (a URL value) or data-quiz-onboarding.
@@ -163,6 +175,8 @@
     progStart: 0,
     progEnd: 1,
     progFmt: "Question {n} of {total}",
+    nextText: null, // label for the next button (non-final questions)
+    nextTextLast: null, // label for the next button on the final question
     questions: [],
     index: 0,
     pending: null, // in-flight answer POST
@@ -432,6 +446,14 @@
     el.textContent = state.progFmt.replace("{n}", n).replace("{total}", total);
   }
 
+  function setNextLabel(isLast) {
+    var el = one("[data-quiz-next-label]");
+    if (!el) return; // no text slot marked up — leave the button alone
+    var text = isLast ? state.nextTextLast : state.nextText;
+    if (text == null || text === "") return;
+    el.textContent = text;
+  }
+
   function setPrompt(q) {
     var el = one("[data-quiz-prompt]");
     if (!el) return;
@@ -554,6 +576,7 @@
         ((index + 1) / total) * (state.progEnd - state.progStart)
     );
     setProgressLabel(index + 1, total);
+    setNextLabel(index === total - 1);
     setNextEnabled(!!FC.answers[q.code]);
   }
 
@@ -822,6 +845,19 @@
       wrap,
       "data-quiz-progress-format",
       "Question {n} of {total}"
+    );
+    // The default label falls back to whatever is already in the button, so a
+    // wrapper that only sets ...-text-last still behaves.
+    var nextLabelEl = one("[data-quiz-next-label]");
+    state.nextText = attr(
+      wrap,
+      "data-quiz-next-text",
+      nextLabelEl ? nextLabelEl.textContent.trim() : null
+    );
+    state.nextTextLast = attr(
+      wrap,
+      "data-quiz-next-text-last",
+      state.nextText
     );
     state.index = 0;
     state.busy = false;

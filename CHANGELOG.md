@@ -56,6 +56,17 @@ finished**; the current pass is polishing what exists rather than adding pages.
 
 ---
 
+## 2026-08-21 — Quiz: per-question label on the Next button
+
+- `src/flexicare-quiz.js`
+- The nav's Next button can now read something else on the FINAL question, so the
+  routing quiz ends on "See your 2 selves" instead of "Next". The label is swapped
+  in `applyState()`, so it's correct on first paint, on every advance, and on Back.
+- Webflow: put `data-quiz-next-label` on the TEXT element inside the next button,
+  and on `[data-quiz]` add `data-quiz-next-text-last="See your 2 selves"`
+  (optionally `data-quiz-next-text="Next"` — it defaults to whatever text the
+  button already contains). Without `data-quiz-next-label` nothing changes.
+
 ## 2026-08-21 — Docs: state of play + avatar coverage measurement
 - README.md, AVATAR-BACKEND-QUESTIONS.md, CHANGELOG.md
 - Recorded the measured staging coverage (19/90 selectable, every avatar `status: READY`
