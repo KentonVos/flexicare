@@ -570,10 +570,47 @@
     "[data-progress-bar]",
   ];
 
+  /* The container's ancestor chain, live vs the incoming page, captured BEFORE
+     any class is copied. This is the one comparison that tells you whether the
+     two pages' shells are the same SHAPE: syncAncestors() walks both chains in
+     lockstep and only checks tagName, so if one page has an extra wrapper level
+     the chains are off by one and every class lands one level up from where it
+     belongs — which silently changes flex gap, justify-content and padding all
+     the way up. Nothing can detect that from classes alone; you have to compare
+     the chains. Read it in the debug panel's CHAIN block. */
+  var chainReport = null;
+  function captureChain(nextDoc) {
+    function chain(el, stopAttr) {
+      var out = [];
+      el = el && el.parentElement;
+      while (el && out.length < 12) {
+        out.push((el.className || "").toString().trim().split(/\s+/)[0] ||
+          "<" + el.tagName.toLowerCase() + ">");
+        if (el.hasAttribute && el.getAttribute("data-barba") === "wrapper") break;
+        el = el.parentElement;
+      }
+      return out;
+    }
+    var live = chain(document.querySelector('[data-barba="container"]'));
+    var next = chain(nextDoc.querySelector('[data-barba="container"]'));
+    var rows = [];
+    var n = Math.max(live.length, next.length);
+    for (var i = 0; i < n; i++) {
+      rows.push({
+        depth: i + 1,
+        live: live[i] || "(none)",
+        next: next[i] || "(none)",
+        ok: live[i] === next[i],
+      });
+    }
+    chainReport = { rows: rows, aligned: live.length === next.length };
+  }
+
   function syncShellClasses(nextDoc) {
     var wrapper = document.querySelector('[data-barba="wrapper"]');
     var nextWrapper = nextDoc.querySelector('[data-barba="wrapper"]');
     if (!wrapper || !nextWrapper) return;
+    captureChain(nextDoc); // BEFORE anything is renamed
 
     SHELL_ANCHORS.forEach(function (sel) {
       var live = document.querySelector(sel);
@@ -1122,6 +1159,62 @@
     function esc(v) {
       return String(v == null ? "" : v).replace(/</g, "&lt;");
     }
+
+    /* The container's ancestor chain, live vs the page we navigated in from.
+       A red row means the two pages disagree about the shell's SHAPE at that
+       depth — and everything ABOVE a mismatch is being class-synced one level
+       out of place, which is what moves the layout. Only populated after a
+       navigation (a hard load has nothing to compare against). */
+    /* Page-specific content that lives OUTSIDE data-barba="container" is
+       stranded: Barba only swaps the container, so on a barba.go() arrival the
+       incoming page's copy of it is never inserted and the FIRST page's version
+       (or nothing at all) is what the controllers find. The copy database is the
+       one that bites — [data-reveal-copy] parked at body level exists on a hard
+       load and is simply absent on arrival, so the reveal page falls back to
+       the Designer's placeholder copy. Only shown when there's something to
+       report. */
+    var STRANDABLE = ["[data-reveal-copy]", "[data-quiz-option-template]"];
+    function strandedBlock() {
+      var container = document.querySelector('[data-barba="container"]');
+      if (!container) return "";
+      var out = [];
+      STRANDABLE.forEach(function (sel) {
+        document.querySelectorAll(sel).forEach(function (el) {
+          if (!container.contains(el))
+            out.push(
+              '<span class="bad">' +
+                esc(sel) +
+                " is OUTSIDE the barba container — it will not arrive on a " +
+                "barba.go() navigation. Move it inside.</span>"
+            );
+        });
+      });
+      return out.length ? "STRANDED  " + out.join("\n          ") + "\n" : "";
+    }
+
+    function chainBlock() {
+      if (!chainReport) return "(navigate here to compare)";
+      var bad = chainReport.rows.filter(function (r) {
+        return !r.ok;
+      }).length;
+      var head = bad
+        ? '<span class="bad">' + bad + " level(s) DIFFER</span>"
+        : '<span class="ok">same shape</span>';
+      return (
+        head +
+        "\n          " +
+        chainReport.rows
+          .map(function (r) {
+            var line =
+              ("  " + r.depth).slice(-2) +
+              " " +
+              (esc(r.live) + "                    ").slice(0, 22) +
+              esc(r.next);
+            return r.ok ? line : '<span class="bad">' + line + "</span>";
+          })
+          .join("\n          ")
+      );
+    }
     function paint() {
       var navEl = document.querySelector("[data-nav-reveal]");
       var container = document.querySelector('[data-barba="container"]');
@@ -1199,6 +1292,10 @@
         "SIBLINGS  " +
         siblingReport(container) +
         "\n" +
+        "CHAIN     " +
+        chainBlock() +
+        "\n" +
+        strandedBlock() +
         "SHELL     " +
         (shellIssues.length
           ? '<span class="bad">' +

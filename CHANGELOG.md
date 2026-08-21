@@ -56,6 +56,28 @@ finished**; the current pass is polishing what exists rather than adding pages.
 
 ---
 
+## 2026-08-21 — Debug panel: ancestor-chain compare + a "stranded outside the container" check
+
+- `src/transition.js`, `src/flexicare-reveal.js`
+- The reveal page's Navigator showed the Barba container is `glass-content-wrapper`
+  INSIDE `scroll-wrapper` — so `scroll-wrapper` is its parent, not a sibling, and
+  the abandoned-branch message could only mean the two pages' shells are a
+  different SHAPE (a wrapper level one page has and the other doesn't). Classes
+  can't reveal that: `syncAncestors()` walks both chains in lockstep checking only
+  tagName, so an off-by-one chain lands every class one level from where it
+  belongs, quietly changing flex gap / justify-content / padding all the way up.
+- New CHAIN block in the panel: the container's ancestor chain, live vs the
+  incoming page, captured BEFORE any class is copied, with mismatched levels in
+  red. This is the readout that names the structural difference.
+- New STRANDED line: flags page-specific content parked outside
+  `data-barba="container"`. `[data-reveal-copy]` at body level exists on a hard
+  load and is simply ABSENT on a barba.go() arrival, so the reveal page keeps the
+  Designer's placeholder copy — which reads as real copy, so it goes unnoticed,
+  and a refresh hides it entirely.
+- `paintDatabaseCopy()` now `console.warn`s (was `dbg()`) when it finds no
+  database, and says what to check. Silent-by-default was the wrong call here.
+- Webflow: move the `copy-database-embed` INSIDE the reveal page's Barba container.
+
 ## 2026-08-21 — Debug panel: list every abandoned branch + the container's siblings
 
 - `src/transition.js`

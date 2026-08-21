@@ -568,7 +568,17 @@
     var copy = collectCopy(code);
     var slots = Object.keys(copy);
     if (!slots.length) {
-      dbg("no [data-reveal-copy] database found — leaving the Webflow copy as is");
+      // Loud, not dbg(): on a barba.go() arrival this is almost always the
+      // embed being parked OUTSIDE data-barba="container". Barba only swaps the
+      // container, so the incoming page's embed is never inserted and the page
+      // silently keeps the Designer's placeholder copy — which looks like real
+      // copy, so nobody notices. A hard reload hides the bug completely.
+      console.warn(
+        "[reveal] no [data-reveal-copy] database in the DOM — the cards keep " +
+          "the Designer's placeholder copy. If this page is fine after a hard " +
+          "refresh but not on arrival, the embed is outside " +
+          'data-barba="container": move it INSIDE the container.'
+      );
       return;
     }
 
