@@ -18,6 +18,9 @@
             • SELFIE  — buffered Blob: presign → PUT to storage → confirm.
               Runs in the SAME interaction (presigned URL expires in 10 min).
             • AVATAR  — buffered choice: PATCH …/photo/avatar { avatar_id }.
+              Generates nothing: the avatar's approved with/without-cover
+              pair is pre-stored and is just copied onto the session, so
+              /images is READY on the reveal page's first poll (§3.8).
               (The avatar page can't send it itself — that endpoint needs a
               session id and the session is created HERE.)
           Failure of either does NOT block navigation — the images poll later

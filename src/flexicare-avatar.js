@@ -22,11 +22,17 @@
           yet, because PATCH …/photo/avatar needs a session id and the
           session isn't created until /onboarding submits.
        3. /onboarding does the send: after POST /sessions it calls
-          PATCH /sessions/{id}/photo/avatar { avatar_id }, which kicks
-          off the same background with/without-cover image generation the
-          selfie path triggers. Nothing else changes downstream — the
-          reveal page polls GET /sessions/{id}/images either way and
-          doesn't know or care which path produced the pair.
+          PATCH /sessions/{id}/photo/avatar { avatar_id }. NOTHING IS
+          GENERATED on this path (api-contract §3.8): every catalog
+          avatar already has an admin-approved with/without-cover pair
+          stored against it, and selecting the avatar copies that pair
+          onto the session. So GET /sessions/{id}/images comes back
+          READY on the FIRST call — an avatar user never sees the
+          reveal page's "developing…" state, and there is no FAILED to
+          design for. Downstream code is unchanged: the reveal page
+          polls the same endpoint either way and doesn't know or care
+          which path produced the pair (the shared polling code just
+          resolves immediately).
        4. The gender chosen here is remembered (Flexicare.avatarGender)
           and pre-fills the gender pills on /onboarding, so the user
           isn't asked the same thing twice. It stays editable there, and
@@ -45,9 +51,15 @@
 
    NOT EVERY SLOT HAS AN IMAGE
      The catalog is curated by admins, so a slot can come back with
-     status PENDING/GENERATING/FAILED and `url: null`. Those clones get
-     data-avatar-unavailable + the is-unavailable class and are NOT
-     selectable — style them as a placeholder.
+     `url: null`. Those cards get data-avatar-unavailable + the
+     is-unavailable class and are NOT selectable — style them as a
+     placeholder.
+     THE GATE IS `url`, NOT `status` (api-contract §3.7: "selectable <=>
+     url present"). A url is only issued once the avatar image AND its two
+     approved scenario images are all ready, so it is the stricter signal;
+     `status` describes the avatar image alone and can say READY for a slot
+     that still has no url. We show `status` in the debug table and gate on
+     `url`.
 
    CONVENTIONS (mirror flexicare-quiz.js / flexicare-onboarding.js)
      • Inits on Barba `afterEnter` (after transition.js's syncRegions() +
@@ -554,7 +566,11 @@
   // handler and the selection code need is stamped on here, so from that point
   // on a slot card and a clone are indistinguishable.
   function fillCard(card, av, chosen, token) {
-    var ready = !!(av && av.status === "READY" && av.url);
+    // SELECTABLE <=> `url` PRESENT (api-contract §3.7). Not `status` — a url is
+    // only issued when the avatar AND its two approved scenario images are all
+    // ready, so it is the stricter, authoritative signal. `status` describes the
+    // avatar image alone and is kept for the debug table only.
+    var ready = !!(av && av.url);
     var selCls = attr(card, "data-selected-class", "is-selected");
     var img = one("[data-avatar-image]", card) || card;
 
@@ -606,7 +622,7 @@
       cards.forEach(function (card, i) {
         var av = (avatars || [])[i] || null;
         fillCard(card, av, chosenId, token);
-        if (av && av.status === "READY" && av.url) filled++;
+        if (av && av.url) filled++; // url present = selectable (§3.7)
       });
       if (cards.length < (avatars || []).length && window.console)
         console.warn(
@@ -644,7 +660,7 @@
     var selectable = 0;
 
     (avatars || []).forEach(function (av) {
-      var ready = av && av.status === "READY" && !!av.url;
+      var ready = av && !!av.url; // url present = selectable (§3.7)
       if (ready) selectable++;
 
       var clone = tpl.cloneNode(true);

@@ -50,7 +50,8 @@
 2. GET  /api/v1/quiz?lang=en                    -> ALL questions + options (one fetch)
 3. (optional) photo — EITHER  presign -> PUT to storage -> confirm      (selfie)
                       OR      GET /avatars -> PATCH .../photo/avatar    (avatar picker)
-                      (either one starts the same background image generation)
+                      (selfie generates in the background; the avatar's pair is
+                       pre-approved and stored, so /images is READY at once)
 4. For each ROUTING question (R01..R05, in position order):
        POST /api/v1/sessions/{id}/answers  { answers: [ {question_code, option_code} ] }
 5. POST /api/v1/routing/preview with the routing answers -> archetype (A/B/C)
@@ -265,8 +266,12 @@ race/gender combination (3 age groups × 3 variants). **Both query params are re
 
 - Always exactly **9** entries, ordered `young_adult` → `middle_aged` → `elder`, variants
   1–3 within each — render straight into a 3×3 grid, don't re-sort.
-- `url` exists only when `status` is `READY`. A non-`READY` slot has no approved image yet
-  (admin-curated) — render a placeholder and **don't let the user select it**.
+- **`url` is the gate: selectable ⟺ `url` present** — whatever `status` says. A url is
+  only issued when the avatar image **and its two approved with/without-insurance
+  scenario images** are all ready (the whole catalog, pairs included, is admin-curated),
+  so it is the stricter signal; `status` describes the avatar image alone. A slot without
+  a url → render a placeholder and **don't let the user select it**.
+  `flexicare-avatar.js` gates on `url` and shows `status` in its debug table only.
 - `slug` (`{race}-{gender}-{age_group}-{variant}`) is for analytics/debugging; selection
   uses `id` (§3.8).
 - The urls are presigned and **expire in ~10 minutes** — re-fetch on every filter change
@@ -274,23 +279,63 @@ race/gender combination (3 age groups × 3 variants). **Both query params are re
 
 ### 3.8 `PATCH /api/v1/sessions/{session_id}/photo/avatar` — select an avatar as the photo
 
-The alternative to §5's presign/upload/confirm. Sets the chosen avatar as the session photo
-and starts the same background with/without-insurance generation.
+The alternative to §5's presign/upload/confirm. Sets the chosen avatar as the session photo.
+
+**NOTHING IS GENERATED ON THIS PATH.** Every catalog avatar already has an
+admin-approved with/without-insurance image pair stored against it; selecting the avatar
+copies that pair onto the session. Consequences for us:
+
+- `GET /sessions/{id}/images` (§5) is **`READY` on the very first call**, with both urls
+  and the four copy fields. No `GENERATING` phase, no `FAILED` state on this path — the
+  reveal page's "developing…" element is a selfie-path state only. Polling anyway is
+  harmless (the shared code just resolves on call one), which is why nothing downstream
+  branches on the source.
+- Everyone who picks the same avatar sees the same approved pair — no AI variance in the
+  emotional payoff of the funnel.
 
 ```json
 { "avatar_id": "8f3656e1-...the id from §3.7..." }
 ```
 
-Returns `SessionOut` (same as photo confirm). `404` unknown session or avatar; `409` if the
-session isn't `IN_PROGRESS`, or the avatar has no image yet (only offer `READY` ones).
-Selecting an avatar after a photo (or another avatar) supersedes it — generation restarts.
+Returns `SessionOut` (same as photo confirm). `404` unknown session or avatar; `409` if
+the session isn't `IN_PROGRESS`, or the avatar isn't fully baked — which can't happen if
+you only offer avatars with a `url` (§3.7). Selecting an avatar after a photo (or another
+avatar) simply supersedes the previous images.
 
-> **Open question with the backend:** whether the avatar's outcome pair is
-> pre-generated/stored per avatar or re-rendered per session. See
-> `AVATAR-BACKEND-QUESTIONS.md`. Either way the frontend is identical — the reveal page
-> polls `/images` and doesn't branch on the source.
+### 3.9 `GET /api/v1/avatars/web` — transparent-background avatars (marketing site)
 
-### 3.9 Contact capture — `PATCH .../contact/phone` and `.../contact/email`
+**Not part of the funnel — we don't call this yet.** A separate image set from §3.7: the
+same 90 catalog slots rendered as **transparent-background webp**, for the Webflow
+marketing pages. No session, no auth, no selection — a read-only image catalog.
+
+All query params are optional filters: `race`, `gender`, `age_group` (same enums as §1).
+With none, all 90 slots come back.
+
+```
+GET /api/v1/avatars/web?race=indian&gender=female
+```
+
+```json
+{
+  "total": 9,
+  "avatars": [
+    { "id": "8f3656e1-...", "slug": "indian-female-young_adult-1", "race": "indian", "gender": "female", "age_group": "young_adult", "variant": 1, "url": "https://...presigned..." }
+  ]
+}
+```
+
+- Ordered race → gender → `young_adult` → `middle_aged` → `elder`, variants 1–3.
+- **No `status` field** and no generation lifecycle: `url` is simply `null` for a slot
+  whose web image hasn't been uploaded yet — skip those.
+- Same presigned-url rule as §3.7: **~10 minute expiry**, so these can't be pasted into
+  Webflow as static assets — a page using them has to call the API on load and re-fetch.
+  That's why it would need a small script of its own if we ever use it on the marketing
+  pages; nothing in the funnel reads it today.
+- Note the slug here spells the age group with an underscore (`...-young_adult-1`) while
+  §3.7's example uses hyphens (`...-young-adult-1`). Cosmetic (we key off `id`), but
+  worth confirming with the backend if we ever match slugs across the two endpoints.
+
+### 3.10 Contact capture — `PATCH .../contact/phone` and `.../contact/email`
 
 Two separate endpoints; call whichever the user filled in.
 
@@ -327,9 +372,11 @@ Both return the updated `SessionOut` (which carries `phone_number` / `email`).
 
 ## 5. Photo & generated images
 
-A selfie **or** a picked avatar (§3.7/§3.8) drives a background "with insurance" /
-"without insurance" image pair, ready by the time the quiz finishes. The avatar path skips
-the three steps below entirely — one `PATCH` and straight to polling `/images`.
+A selfie **or** a picked avatar (§3.7/§3.8) puts a "with insurance" / "without insurance"
+image pair on the session. **Only the selfie path generates:** it runs in the background
+and is ready by the time the quiz finishes (poll `/images`). The avatar path skips the
+three steps below entirely — one `PATCH`, and the pre-approved pair is already there, so
+the first `/images` call returns `READY` (§3.8).
 
 **Step 1 — presign.** `POST /api/v1/sessions/{id}/photo/presign`
 `{ "content_type": "image/jpeg" }` — allowed: `image/jpeg`, `image/png`, `image/webp`
@@ -371,12 +418,16 @@ them:** the reveal page's per-archetype copy database (a Webflow embed) is the s
 truth for those four slots, because it also does the multi-item cycling. Revisit if the
 backend copy needs to be editable without a Webflow publish.
 
-- `PENDING` = no photo was ever confirmed. `FAILED` = generation errored — show a
-  graceful fallback, **never block the results screen on images**.
+- `PENDING` = no photo was ever confirmed. `FAILED` = generation errored — **selfie path
+  only**; neither should occur on the avatar path unless the `PATCH` itself failed (it is
+  fire-and-forget from onboarding, so this is possible). Show a graceful fallback,
+  **never block the results screen on images**.
 - The URLs are presigned and **expire in 10 minutes** — re-fetch from this endpoint when
   (re)rendering rather than storing old ones.
 - `GET /api/v1/sessions/{id}/photo` -> `{ "url": "..." }` — fresh presigned URL for the
-  original selfie (`404` if none).
+  session's photo: the original selfie **or the chosen avatar image** on the avatar path
+  (`404` only if the session has neither). Use this to re-display the user's face later in
+  the funnel rather than re-fetching the whole 9-item catalog for one expired url.
 
 ---
 

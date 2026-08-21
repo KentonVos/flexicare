@@ -66,15 +66,21 @@ Pages, in order, and where state is created:
      Reached by a plain link from the selfie page. Gender + race pills drive
      `GET /avatars?race=…&gender=…` (always 9 avatars: 3 age groups × 3 variants), rendered
      as a 3×3 grid of clones. The chosen `avatar_id` is buffered at `Flexicare.avatar`, and
-     the gender at `Flexicare.avatarGender` (which pre-fills onboarding). Non-`READY` slots
-     render as unselectable placeholders; the catalog is re-fetched on every entry and
-     filter change because its urls are presigned (~10 min).
+     the gender at `Flexicare.avatarGender` (which pre-fills onboarding). A slot is
+     selectable **iff its `url` is present** (api-contract §3.7 — the url is only issued
+     once the avatar *and* its two approved scenario images are ready, so `status` is the
+     weaker signal and we only log it); the rest render as unselectable placeholders. The
+     catalog is re-fetched on every entry and filter change because its urls are presigned
+     (~10 min).
 3. **Onboarding** (`/onboarding`, `flexicare-onboarding.js`) — collects name, WhatsApp,
    gender, consent, then on submit: (a) `POST /sessions` → stores the session id via
    `Flexicare.setSessionId` (sessionStorage, treated as a secret); (b) sends whichever
    photo is buffered — selfie via presign → PUT → confirm, or avatar via
-   `PATCH …/photo/avatar { avatar_id }` — both starting the same background image
-   generation; (c) `PATCH …/contact/phone` with the E.164 WhatsApp number; (d) navigates to
+   `PATCH …/photo/avatar { avatar_id }`. **Only the selfie generates**: the avatar's
+   with/without-cover pair is admin-approved and pre-stored, so the `PATCH` just copies it
+   onto the session and `/images` is `READY` on the reveal page's first poll (§3.8) —
+   `GENERATING`/`FAILED` are selfie-path states. (c) `PATCH …/contact/phone` with the
+   E.164 WhatsApp number; (d) navigates to
    `/archetype`. A failed session-create blocks; a failed photo/avatar/phone call does not.
 4. **Quiz — ROUTING stage** (`/archetype`, `flexicare-quiz.js`) — `GET /quiz?lang=en`
    once (cached on `Flexicare.quizData`). Renders the 5 routing questions one at a time.
@@ -355,7 +361,8 @@ when no slot cards exist. Either way each card carries `data-avatar-option`, `-i
 `-slug`, `data-age-group`, `data-variant`, and its `[data-avatar-image]` (or the card
 itself, as a background) is painted after decode with `is-loaded`. Selected → `is-selected`/`data-selected-class` + `aria-pressed`; a slot with
 no approved image → `data-avatar-unavailable` + `is-unavailable` + `aria-disabled`, not
-clickable. States: `[data-avatar-loading]`, `-empty`, `-error`, mirrored on the wrapper as
+clickable (the gate is `url`, not `status` — see §3.7). States: `[data-avatar-loading]`,
+`-empty`, `-error`, mirrored on the wrapper as
 `data-avatar-state="loading|ready|empty|error"`. Buttons `[data-avatar-next]` (disabled-look
 until a pick, still clickable to surface the message) and `[data-avatar-back]`.
 **Loading skeleton** (all CSS-driven, no new elements — paste-ready CSS in

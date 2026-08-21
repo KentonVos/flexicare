@@ -73,7 +73,12 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
   LAST is what ships. **Neither is sent by the page that captures it** — both need a
   session id, which only exists after `/onboarding` submits, so onboarding sends whichever
   is buffered (presign→PUT→confirm, or `PATCH …/photo/avatar`). Downstream nothing
-  branches: the reveal page polls `GET /sessions/{id}/images` either way.
+  branches: the reveal page polls `GET /sessions/{id}/images` either way. **Only the
+  selfie generates.** An avatar's with/without-cover pair is admin-approved and stored
+  against the avatar, so the avatar `PATCH` just copies it onto the session and `/images`
+  is `READY` on the first poll — "developing…" and `FAILED` are selfie-path states. Also:
+  a catalog avatar is **selectable ⟺ its `url` is present**, not when `status` says
+  `READY` (the url is only issued once the scenario pair is approved too).
 - **The buffered selfie lives in memory only** (`Flexicare.photo`). It survives Barba
   navigations but NOT a hard page reload. That's why the controllers always navigate
   with `barba.go()`, never `window.location`. Don't "helpfully" change a `barba.go()`

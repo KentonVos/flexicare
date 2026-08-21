@@ -14,6 +14,25 @@ Format:
 
 ---
 
+## 2026-08-21 — Backend handover update: the avatar path generates nothing
+- src/flexicare-avatar.js, src/flexicare-onboarding.js, src/flexicare-reveal.js,
+  docs/api-contract.md, AVATAR-BACKEND-QUESTIONS.md, ARCHITECTURE.md, CLAUDE.md
+- The dev's updated handover answers our open avatar questions (Q1–Q4, Q9), and one
+  answer changes behaviour: **a catalog avatar is selectable iff its `url` is present**,
+  not when `status` says READY — the url is only issued once the avatar AND its two
+  approved scenario images are ready, so it's the stricter signal. flexicare-avatar.js
+  now gates on `url` (three places) and keeps `status` for the debug table only. This
+  makes MORE avatars selectable, not fewer, if a slot ever reports a lagging status.
+- The rest is documentation of settled facts: PATCH …/photo/avatar generates nothing (the
+  approved with/without-cover pair is pre-stored and copied onto the session), so
+  /images is READY on the reveal page's FIRST poll — "developing…" and FAILED are
+  selfie-path states. GET /sessions/{id}/photo now also covers the avatar path.
+- New endpoint documented but NOT used: GET /avatars/web (§3.9) — the same 90 slots as
+  transparent-background webp for the marketing site, read-only, no session. Its urls
+  are presigned (~10 min) so a page using them must call the API on load; that needs a
+  small script of its own if we ever want it.
+- No Webflow change. No script list change.
+
 ## 2026-08-21 — Quiz page: loading skeleton for the options, prompt and nav
 - src/flexicare-quiz.js, docs/quiz-loading-state.md (new), docs/avatar-loading-state.md,
   ARCHITECTURE.md, README.md

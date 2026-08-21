@@ -3,6 +3,14 @@
 **From:** Kenton (frontend / Webflow)
 **Re:** `FRONTEND_HANDOVER.md` §3.7 / §3.8 (avatar catalog + avatar selection) and §3.9 (contact capture)
 **Date:** 2026-08-20
+**Status (2026-08-21):** the updated handover answers **Q1, Q2, Q3, Q4 and Q9** — all
+five the way we hoped. Q5–Q8 are still open (staging catalog coverage, enum stability,
+rate limiting, whether the avatar PATCH writes `gender`); none of them block us. The
+answers are recorded per question below and folded into `docs/api-contract.md`.
+
+The handover also added a NEW endpoint we didn't ask about: `GET /avatars/web`
+(§3.9) — the same 90 slots as transparent-background webp, for the marketing site.
+Read-only, no session. We don't call it; see the api-contract note.
 
 Thanks for the handover — it's clear enough to build against. Before I wire up the
 avatar picker I need to settle the questions below. Q1 is the important one; the rest
@@ -23,6 +31,11 @@ onboarding → quiz), and onboarding is where `POST /sessions` happens. So the p
 ---
 
 ## 1. Are the avatars' outcome images pre-generated and stored, or re-rendered per session?
+
+> **ANSWERED — pre-generated and stored, exactly as we asked.** §3.8: "Nothing is
+> generated on this path — every avatar has an admin-approved with/without-insurance image
+> pair pre-generated and stored against it, and selecting the avatar copies that pair onto
+> the session." So: no wait, no AI variance, no `FAILED` to design for.
 
 **This is the one that matters most to us.**
 
@@ -47,6 +60,11 @@ stored ones?
 
 ## 2. If they're pre-stored, does `/images` return `READY` immediately?
 
+> **ANSWERED — yes, `READY` on the first call**, with both urls and the four copy
+> fields. "No `GENERATING` phase, no `FAILED` state to design for. (Polling anyway is
+> harmless; it just returns `READY`.)" Our shared polling code is unchanged — an avatar user
+> simply never sees the "developing…" state.
+
 i.e. for an avatar session, can `GET /sessions/{id}/images` skip `GENERATING` altogether and
 come back `READY` with both URLs on the first call? We'll still poll (the code is shared with
 the selfie path), we just want to know whether the "developing…" state will ever be seen by
@@ -54,11 +72,19 @@ an avatar user.
 
 ## 3. Are the four copy fields populated for avatar sessions too?
 
+> **ANSWERED — yes**, the first `/images` call returns both urls *and* the four copy
+> fields. (We still render our own Webflow copy database for those slots — that decision is
+> unchanged and documented in api-contract §5.)
+
 `heading_with`, `heading_without`, `subtext_with`, `subtext_without` — same behaviour on the
 avatar path as on the selfie path? (We have static Webflow copy as a fallback either way, so
 `null` is survivable; just want to know which to expect.)
 
 ## 4. Does `GET /sessions/{id}/photo` work for an avatar session?
+
+> **ANSWERED — yes.** §5: it returns a fresh presigned url for "the original selfie, **or
+> the chosen avatar image** on the avatar path", `404` only if the session has neither. So
+> the nice-to-have `GET /avatars/{id}` below is moot.
 
 §5 describes it as a fresh presigned URL for "the original selfie", `404` if none. For a
 session whose photo came from `PATCH /photo/avatar`, does it return a fresh URL for the
@@ -100,6 +126,10 @@ independently, in case the two could ever diverge server-side.
 
 ## 9. Confirming: `PATCH /contact/phone` on an `IN_PROGRESS` session is fine?
 
+> **ANSWERED — yes.** §3.10: the contact endpoints accept `IN_PROGRESS` *and*
+> `COMPLETED`; only `ABANDONED` returns `409`. Our onboarding call right after session
+> create is supported.
+
 §3.9 frames contact capture as a results-screen thing, and says only `ABANDONED` returns
 `409`. We already collect a WhatsApp number on our onboarding screen (before the quiz), so
 we'd like to `PATCH /contact/phone` right after session create — while the session is
@@ -109,5 +139,12 @@ we'd like to `PATCH /contact/phone` right after session create — while the ses
 
 ### Nice-to-have, not blocking
 
-- **A single-avatar endpoint** (`GET /avatars/{id}` returning a fresh presigned URL) would
-  make Q4 moot — worth considering if `/sessions/{id}/photo` doesn't cover the avatar case.
+- ~~**A single-avatar endpoint** (`GET /avatars/{id}` returning a fresh presigned URL)~~ —
+  no longer needed: `GET /sessions/{id}/photo` covers the avatar case (Q4).
+
+### One inconsistency worth a reply
+
+The `slug` format differs between the two avatar endpoints in the handover: §3.7 shows
+`black-male-young-adult-1` (hyphenated age group) and §3.9 shows
+`indian-female-young_adult-1` (underscored). Harmless for us — we key off `id` everywhere —
+but it would bite anyone matching slugs across the two endpoints.

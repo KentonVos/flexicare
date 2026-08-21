@@ -31,9 +31,14 @@
        4. Polls GET /sessions/{id}/images every ~2.5s until READY, then
           drops the generated pair into the two cards. The page NEVER
           blocks on this — the copy renders immediately and the images
-          fade in when they arrive. PENDING (no selfie was taken),
-          FAILED, or a timeout all fall through to the same graceful
-          fallback state; the CTA stays live throughout.
+          fade in when they arrive. PENDING (no photo was ever
+          confirmed), FAILED, or a timeout all fall through to the same
+          graceful fallback state; the CTA stays live throughout.
+          ONLY THE SELFIE PATH EVER GENERATES. If the user picked an
+          avatar, its with/without-cover pair is pre-approved and stored,
+          so the very first poll returns READY (api-contract §3.8) —
+          "developing…" and FAILED are selfie-path states. Same code
+          either way; it just resolves on call one.
        5. The CTA goes on to the FLEX quiz page (data-reveal-next).
 
    The session id (from /onboarding, sessionStorage) is required — if it's
@@ -151,10 +156,14 @@
                                 any other element (we set background-image).
                                 Gets class `is-loaded` once the file has actually
                                 decoded, so you can fade it in from CSS.
-     [data-reveal-images-loading]   shown while status is GENERATING (hidden once
-                                    READY / failed). Your "developing…" shimmer.
-     [data-reveal-images-fallback]  shown when there are no images (PENDING —
-                                    no selfie was taken — or FAILED, or timeout).
+     [data-reveal-images-loading]   shown while status is GENERATING — the SELFIE
+                                    path only; an avatar session is READY on the
+                                    first poll, so this never appears for it.
+                                    Hidden once READY / failed. Your
+                                    "developing…" shimmer.
+     [data-reveal-images-fallback]  shown when there are no images (PENDING — no
+                                    photo was ever confirmed — or FAILED, or
+                                    timeout).
                                     Put your stock/illustrated pair in here.
      [data-reveal-error]        Optional. Element that API errors surface into.
 
@@ -646,7 +655,8 @@
           }, state.pollMs);
           return;
         }
-        // PENDING (no selfie was ever confirmed) or FAILED — graceful fallback.
+        // PENDING (no photo was ever confirmed — selfie skipped, or the avatar
+        // PATCH failed) or FAILED (selfie generation only) — graceful fallback.
         setImagesState("fallback");
       })
       .catch(function (err) {
