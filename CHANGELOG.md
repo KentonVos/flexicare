@@ -56,6 +56,19 @@ finished**; the current pass is polishing what exists rather than adding pages.
 
 ---
 
+## 2026-08-21 — Debug panel: list every abandoned branch + the container's siblings
+
+- `src/transition.js`
+- The panel found the reveal-page bug on its first outing but only printed the
+  LAST abandoned shell branch of two. It now lists them all, numbered.
+- New SIBLINGS line: every persistent sibling of the Barba container with its
+  height and child count. That's the smoking gun for "the container is shorter
+  on arrival than on refresh" — a sibling only the FIRST page shipped stays in
+  the DOM for the whole journey (it's outside `data-barba="container"`, so
+  nothing removes it) and steals its height from every later page. Non-zero
+  heights are flagged red.
+- Panel now scrolls (max-height 70vh) since it can get long.
+
 ## 2026-08-21 — transition.js: a visual layout debug panel (?fcdebug)
 
 - `src/transition.js`

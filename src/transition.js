@@ -1070,7 +1070,8 @@
       "#fc-debug{position:fixed;left:12px;bottom:12px;z-index:2147483647;" +
       "font:11px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;" +
       "background:rgba(6,8,20,.92);color:#dfe6ff;border:1px solid rgba(160,200,255,.35);" +
-      "border-radius:10px;padding:9px 11px;max-width:340px;white-space:pre-wrap;" +
+      "border-radius:10px;padding:9px 11px;max-width:420px;white-space:pre-wrap;" +
+      "max-height:70vh;overflow:auto;" +
       "box-shadow:0 8px 28px rgba(0,0,0,.5);pointer-events:auto;backdrop-filter:blur(6px)}" +
       "#fc-debug b{color:#b7ff5a;font-weight:600}" +
       "#fc-debug .bad{color:#ff7a7a}" +
@@ -1085,6 +1086,39 @@
     document.body.appendChild(box);
 
     var peak = 0; // worst overflow seen — the transient spike is the story
+
+    /* The container's PERSISTENT siblings, with their heights. This is the
+       smoking gun for "the container is shorter on arrival than on refresh":
+       a sibling that only the FIRST page shipped stays in the DOM for the rest
+       of the journey (it's outside data-barba="container", so nothing removes
+       it) and keeps stealing its height from every later page. Anything listed
+       here with a non-zero height that ISN'T on this page in Webflow is the
+       node to move inside the container. */
+    function siblingReport(container) {
+      if (!container || !container.parentElement) return "n/a";
+      var out = [];
+      Array.prototype.forEach.call(container.parentElement.children, function (n) {
+        if (n === container) return;
+        if (isContainer(n)) return; // the outgoing one, mid-transition
+        if (n.hasAttribute("data-barba-placeholder") || isInjected(n)) return;
+        var h = Math.round(n.getBoundingClientRect().height);
+        var cls = (n.className || "").toString().trim().split(/\s+/)[0];
+        var kids = n.children.length;
+        out.push(
+          '<span class="' +
+            (h > 0 ? "bad" : "ok") +
+            '">' +
+            esc(n.tagName.toLowerCase() + (cls ? "." + cls : "")) +
+            " h=" +
+            h +
+            "px (" +
+            kids +
+            " kids)</span>"
+        );
+      });
+      return out.length ? out.join("\n          ") : "none";
+    }
+
     function esc(v) {
       return String(v == null ? "" : v).replace(/</g, "&lt;");
     }
@@ -1162,12 +1196,19 @@
           ? Math.round(container.getBoundingClientRect().height) + "px"
           : "not found") +
         "\n" +
+        "SIBLINGS  " +
+        siblingReport(container) +
+        "\n" +
         "SHELL     " +
         (shellIssues.length
           ? '<span class="bad">' +
             shellIssues.length +
-            " abandoned branch(es)</span>\n          " +
-            esc(shellIssues[shellIssues.length - 1])
+            " abandoned branch(es)</span>\n" +
+            shellIssues
+              .map(function (t, i) {
+                return "  " + (i + 1) + ") " + esc(t);
+              })
+              .join("\n")
           : '<span class="ok">in sync</span>');
     }
     box.addEventListener("click", function (e) {
