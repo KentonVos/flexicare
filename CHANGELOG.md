@@ -14,6 +14,23 @@ Format:
 
 ---
 
+## 2026-08-21 — Quiz page: loading skeleton for the options, prompt and nav
+- src/flexicare-quiz.js, docs/quiz-loading-state.md (new), docs/avatar-loading-state.md,
+  ARCHITECTURE.md, README.md
+- Same problem the avatar grid had: /archetype can't paint until GET /quiz lands, so
+  the authored [data-quiz-option-template] card was visible for a beat. A prime() on
+  Barba beforeEnter now hides the template before the page is visible, stamps
+  data-quiz-state="loading" and appends N inert shimmer clones
+  ([data-quiz-skeleton-option] — no data-quiz-option, aria-hidden, labels blanked, so
+  they can't be clicked or read). Prompt/helper shimmer as bars, Next/Back dim.
+  buildOptions() + teardown() clear the skeleton; showLoading() covers the hard-load path.
+- The stylesheet ships with the script (injectCSS(), :where()-wrapped, tunable via
+  --fc-quiz-skeleton-bg/-sheen/-speed on [data-quiz]) for the same Barba-head reason
+  as the avatar one. Opt out with data-quiz-skeleton="off".
+- WEBFLOW: on [data-quiz] add data-quiz-skeleton-count="4" (however many options a
+  question in this stage usually has) and a static data-quiz-state="loading".
+  Nothing to paste; script list unchanged, so the footer is untouched.
+
 ## 2026-08-21 — Avatar skeleton: ship the CSS with the script (it only worked after a reload)
 - src/flexicare-avatar.js, docs/avatar-loading-state.md, ARCHITECTURE.md
 - The shimmer was dead on the first arrival and alive after a reload, because the

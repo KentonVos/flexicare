@@ -82,6 +82,40 @@
                                 data-quiz-back (a URL value) or data-quiz-onboarding.
      [data-quiz-loading]        Optional. Shown while the quiz is fetching; hidden
                                 once the first question renders.
+
+     LOADING SKELETON (the shimmer over the fetch — no new elements needed):
+                                The quiz can't paint until GET /quiz lands, so
+                                until then the wrapper carries
+                                data-quiz-state="loading" and the options
+                                container holds N INERT clones of the option
+                                template, marked [data-quiz-skeleton-option]
+                                (no data-quiz-option, so they're unclickable,
+                                aria-hidden, labels blanked). The template
+                                itself is hidden immediately — it was the
+                                placeholder card you could see. On a Barba
+                                arrival this happens on beforeEnter, i.e.
+                                BEFORE the page is visible.
+                                  data-quiz-skeleton-count="4"  how many
+                                     shimmer cards (default 4 — set it to the
+                                     usual option count for this stage)
+                                  data-quiz-skeleton="off"  don't inject the
+                                     CSS; you style the states yourself
+                                THE CSS SHIPS WITH THE SCRIPT (Barba never
+                                swaps the <head>, so a page-level <style> is
+                                there on a hard load and gone on a barba.go()
+                                arrival). Tune it with CSS variables on
+                                [data-quiz]: --fc-quiz-skeleton-bg / -sheen /
+                                -speed. Overriding needs no !important — the
+                                injected selectors are :where()-wrapped, so
+                                they carry zero specificity; put your rules in
+                                the SITE head, never a page's.
+                                While loading, [data-quiz-prompt] and
+                                [data-quiz-helper] shimmer as bars (their text
+                                goes transparent, so the authored placeholder
+                                copy can't be read), and Next/Back dim.
+     ALSO SET data-quiz-state="loading" AS A STATIC ATTRIBUTE on [data-quiz] in
+                                the Designer: on a hard load the footer scripts
+                                run after first paint. The script clears it.
      [data-quiz-error]          Optional. Element to surface API errors into.
 
    Selected option gets class `is-selected` (override per template with
@@ -251,11 +285,123 @@
     });
   }
 
+  /* ------------------------ loading skeleton ------------------------ */
+
+  /* The gap this fills: the quiz fetches /quiz (+ the answers) on entry, and
+     until that lands the only thing on screen is the Designer's authored
+     content — including the ONE visible [data-quiz-option-template] card.
+     So we hide the template, drop in N inert shimmer clones, and stamp
+     data-quiz-state="loading" on the wrapper.
+
+     THE CSS SHIPS WITH THE SCRIPT, and it has to: Barba never swaps the
+     <head>, so a <style> in a PAGE's Custom Code is present on a hard load
+     and missing on every barba.go() arrival. Injected once into the
+     persistent head, flagged data-js-injected so transition.js's shell sync
+     leaves it alone. Selectors are :where()-wrapped (zero specificity) and
+     the look is driven by custom properties, so anything you author in the
+     SITE head wins without !important. Opt out with
+     data-quiz-skeleton="off" on [data-quiz]. */
+  var SKELETON_CSS =
+    "@keyframes fc-quiz-shimmer{from{background-position:-150% 0}to{background-position:250% 0}}" +
+    ":where([data-quiz]){--fc-quiz-skeleton-bg:rgba(255,255,255,.06);--fc-quiz-skeleton-sheen:rgba(255,255,255,.18);--fc-quiz-skeleton-speed:1.5s}" +
+    ':where([data-quiz-skeleton-option],[data-quiz-state="loading"] [data-quiz-prompt],[data-quiz-state="loading"] [data-quiz-helper]){position:relative;overflow:hidden;color:transparent!important;background-color:var(--fc-quiz-skeleton-bg,rgba(255,255,255,.06))}' +
+    ':where([data-quiz-skeleton-option],[data-quiz-state="loading"] [data-quiz-prompt],[data-quiz-state="loading"] [data-quiz-helper])::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:2;background-image:linear-gradient(100deg,rgba(255,255,255,0) 20%,var(--fc-quiz-skeleton-sheen,rgba(255,255,255,.18)) 50%,rgba(255,255,255,0) 80%);background-size:200% 100%;background-repeat:no-repeat;animation:fc-quiz-shimmer var(--fc-quiz-skeleton-speed,1.5s) linear infinite}' +
+    // Anything inside a skeleton card (a checkbox dot, an icon) goes quiet too.
+    ":where([data-quiz-skeleton-option] *){visibility:hidden}" +
+    ':where([data-quiz-state="loading"] [data-quiz-next],[data-quiz-state="loading"] [data-quiz-back]){opacity:.45;transition:opacity .2s ease}' +
+    '@media (prefers-reduced-motion:reduce){:where([data-quiz-skeleton-option],[data-quiz-state="loading"] [data-quiz-prompt],[data-quiz-state="loading"] [data-quiz-helper])::after{animation:none}}';
+
+  var cssDone = false;
+  function injectCSS(wrap) {
+    if (cssDone) return;
+    if (wrap && attr(wrap, "data-quiz-skeleton", "") === "off") {
+      cssDone = true; // opt-out: the page styles the skeleton itself
+      return;
+    }
+    if (document.querySelector("style[data-quiz-skeleton-css]")) {
+      cssDone = true;
+      return;
+    }
+    var el = document.createElement("style");
+    el.setAttribute("data-quiz-skeleton-css", "");
+    el.setAttribute("data-js-injected", ""); // shell sync must skip it
+    el.textContent = SKELETON_CSS;
+    document.head.appendChild(el);
+    cssDone = true;
+  }
+
+  // Inert clones of the option template — no data-quiz-option (so the click
+  // handler can't see them), aria-hidden, labels blanked.
+  function showSkeleton(wrap) {
+    var box = one("[data-quiz-options]", wrap) || one("[data-quiz-options]");
+    var tpl = box && one("[data-quiz-option-template]", box);
+    if (!box || !tpl) return;
+    if (one("[data-quiz-skeleton-option]", box)) return; // already up
+
+    tpl.style.display = "none"; // the placeholder card the user could see
+    var n = parseInt(attr(wrap, "data-quiz-skeleton-count", "4"), 10);
+    if (!(n > 0)) n = 4;
+
+    for (var i = 0; i < n; i++) {
+      var clone = tpl.cloneNode(true);
+      clone.removeAttribute("data-quiz-option-template");
+      clone.removeAttribute("data-quiz-option"); // never clickable
+      clone.setAttribute("data-quiz-skeleton-option", "");
+      clone.setAttribute("aria-hidden", "true");
+      // Same reason as buildOptions(): the FOUC rule would leave a clone
+      // carrying entrance attributes stuck at opacity 0.
+      clone.removeAttribute("data-anim");
+      clone.removeAttribute("data-anim-fade");
+      clone.removeAttribute("data-text-reveal");
+      clone.style.display = "";
+      var labelEl = clone.querySelector("[data-quiz-option-label]");
+      if (labelEl) labelEl.textContent = "";
+      box.appendChild(clone);
+    }
+  }
+
+  function clearSkeleton() {
+    all("[data-quiz-skeleton-option]").forEach(function (node) {
+      if (window.LiquidGlass && typeof window.LiquidGlass.kill === "function") {
+        try {
+          window.LiquidGlass.kill(node);
+        } catch (e) {}
+      }
+      if (node.parentNode) node.parentNode.removeChild(node);
+    });
+  }
+
+  /* Stamp the loading state on the INCOMING container before it paints.
+     init() runs on afterEnter — by then the page is already visible, which is
+     the beat where the template card showed. Scope-limited on purpose (no
+     document fallback) so it no-ops when navigating to any other page. */
+  function prime(scope) {
+    if (!scope) return;
+    var wrap =
+      scope.matches && scope.matches("[data-quiz]")
+        ? scope
+        : scope.querySelector && scope.querySelector("[data-quiz]");
+    if (!wrap) return;
+    injectCSS(wrap);
+    wrap.setAttribute("data-quiz-state", "loading");
+    showSkeleton(wrap);
+  }
+
   /* --------------------------- rendering --------------------------- */
 
   function showLoading(on) {
     var el = one("[data-quiz-loading]");
     if (el) el.style.display = on ? "" : "none";
+    if (state.wrap) {
+      injectCSS(state.wrap);
+      if (on) {
+        state.wrap.setAttribute("data-quiz-state", "loading");
+        showSkeleton(state.wrap);
+      } else {
+        state.wrap.setAttribute("data-quiz-state", "ready");
+        clearSkeleton();
+      }
+    }
   }
   function showError(err) {
     var msg = (err && (err.detail || err.message)) || "Something went wrong.";
@@ -327,6 +473,7 @@
     var tpl = one("[data-quiz-option-template]", box || document);
     if (!box || !tpl) return;
 
+    clearSkeleton(); // the shimmer cards, if the skeleton is still up
     // remove previous clones (and tidy up their glass)
     all("[data-quiz-option]", box).forEach(function (node) {
       if (window.LiquidGlass && typeof window.LiquidGlass.kill === "function") {
@@ -699,8 +846,9 @@
       return;
     }
 
+    injectCSS(wrap); // no-op if prime() already did it
     setNextEnabled(false);
-    showLoading(true);
+    showLoading(true); // + the skeleton, if prime() hasn't already put it up
 
     loadQuiz()
       .then(function (qd) {
@@ -741,6 +889,8 @@
   }
 
   function teardown() {
+    clearSkeleton();
+    if (state.wrap) state.wrap.removeAttribute("data-quiz-state");
     if (state.wrap && state.wrap.classList)
       state.wrap.classList.remove("quiz-ready");
     state.wrap = null;
@@ -754,6 +904,11 @@
   function bindBarba() {
     var h = window.barba && window.barba.hooks;
     if (!h) return false;
+    // Skeleton first, before the incoming page is visible (see prime()).
+    if (h.beforeEnter)
+      h.beforeEnter(function (data) {
+        prime(data && data.next && data.next.container);
+      });
     // afterEnter fires on every navigation (not first load — boot() covers that).
     if (h.afterEnter)
       h.afterEnter(function (data) {
@@ -788,5 +943,5 @@
     document.addEventListener("DOMContentLoaded", boot);
   else boot();
 
-  FC.quiz = { init: init, teardown: teardown };
+  FC.quiz = { init: init, teardown: teardown, prime: prime };
 })();

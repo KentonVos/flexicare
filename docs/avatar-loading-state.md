@@ -45,6 +45,15 @@ Nothing to paste. Two ways to change the look:
 - **Opt out completely:** `data-avatar-skeleton="off"` on the `[data-avatar]`
   wrapper. The script then stamps the states but injects no CSS at all.
 
+One nuance: the injected CSS can only arrive when the footer script runs, so on
+a **hard load** there's a single paint where the states are stamped but
+unstyled. If that bothers you, paste the stylesheet below into the **site** head
+too — site-head CSS *does* survive Barba (the head is never swapped; only
+page-level head code is missed), and the duplicate is harmless (identical rules,
+zero specificity).
+
+The quiz page has the same skeleton: `docs/quiz-loading-state.md`.
+
 ## Webflow steps
 
 1. On the `[data-avatar]` wrapper, add a **static** attribute

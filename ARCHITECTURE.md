@@ -392,6 +392,19 @@ answer; tag its text `[data-quiz-option-label]`; may carry `data-liquid-glass`),
 `-images`/`[data-quiz-image-for="R01"]`, `-next` (disabled until a pick), `-back`,
 `-loading`, `-error`. Selected option gets `is-selected` (or `data-selected-class`). This
 controller drives the `[data-progress-bar]` width directly as questions advance.
+**Loading skeleton** (`docs/quiz-loading-state.md`): nothing can paint until `GET /quiz`
+lands, and the authored `[data-quiz-option-template]` card was visible in that gap. A
+`beforeEnter` hook calls `prime()` on the incoming container — before it is visible — which
+hides the template, stamps `data-quiz-state="loading"` and appends N (`data-quiz-skeleton-count`,
+default 4) **inert** clones marked `[data-quiz-skeleton-option]`: no `data-quiz-option` (the
+delegated handler can't see them), `aria-hidden`, labels blanked, entrance attributes
+stripped, children `visibility:hidden`. `showLoading()` mirrors all of it for the hard-load
+path, `buildOptions()` and `teardown()` clear it. The prompt/helper shimmer as bars (text
+transparent) and Next/Back dim. Like the avatar picker, **the stylesheet is injected by the
+script** (`injectCSS()`, `data-js-injected`) because Barba never swaps the `<head>` —
+page-level head CSS is the "only works after a reload" trap. `:where()`-wrapped selectors +
+`--fc-quiz-skeleton-*` custom properties on `[data-quiz]` make site-head overrides win
+without `!important`; `data-quiz-skeleton="off"` skips the inject.
 
 ### flexicare-reveal.js
 `/meet-your-two-selves` — the archetype reveal between ROUTING and FLEX. Config on the
