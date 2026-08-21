@@ -77,7 +77,11 @@
                                    which pills start selected (defaults
                                    "male" / "black"). On re-entry the user's
                                    previous choice wins over these.
-                                data-avatar-debug   console logging
+                                data-avatar-debug   console logging, including a
+                                   per-slot table of what the API returned
+                                   (slot / slug / status / image) after every
+                                   load. Flexicare.avatarPicker.report() prints
+                                   the same table on demand, any time.
 
      Filters (plain Webflow divs, or the tab-links of a Tabs component — one
      element per option. NOTE: don't rely on Webflow's own Tabs JS here. It
@@ -102,8 +106,13 @@
                               element with data-selected-class="YourCombo".
 
      The grid — TWO ways to build it. Authored cards win if both are present.
-     [data-avatar-grid]       REQUIRED. The container the 9 cards live in
-                              (CSS grid / flex, 3 across).
+     [data-avatar-grid]       The container the cards live in. MAY APPEAR MORE
+                              THAN ONCE — if your layout builds the 3x3 as three
+                              flex rows, put it on each row. Slot cards are
+                              collected from the whole [data-avatar] wrapper, so
+                              their nesting doesn't matter (in static mode the
+                              attribute is optional; clone mode needs one, as
+                              the place to append to).
 
      (A) STATIC / AUTHORED CARDS — the normal path:
      [data-avatar-slot="1"…"9"]
@@ -121,6 +130,13 @@
                               Because the race/gender filters say which SET is
                               loaded, the card needs no race/gender in its
                               attribute — one attribute name covers all 10 sets.
+                              WHATEVER IMAGE YOU SET IN THE DESIGNER STAYS as
+                              that slot's placeholder: a slot the backend hasn't
+                              populated yet is never overwritten, it only gets
+                              is-unavailable. So a distinct placeholder per slot
+                              shows at a glance which faces are still missing
+                              from the catalog. Fewer than 9 cards logs a
+                              console warning naming the count.
      (B) TEMPLATE / CLONE — use when you'd rather author one card:
      [data-avatar-option-template]
                               ONE card INSIDE the grid, cloned 9x. Clones inherit
@@ -322,8 +338,8 @@
   // Only ever removes CLONES. Authored slot cards (static mode) are the user's
   // Webflow markup — they get reset in place, never deleted.
   function clearGrid() {
-    if (!state.grid || state.mode !== "clone") return;
-    all("[data-avatar-option]", state.grid).forEach(function (node) {
+    if (!state.wrap || state.mode !== "clone") return;
+    all("[data-avatar-option]", state.wrap).forEach(function (node) {
       if (node.hasAttribute("data-avatar-slot")) return; // authored, not ours
       if (window.LiquidGlass && typeof window.LiquidGlass.kill === "function") {
         try {
@@ -334,16 +350,51 @@
     });
   }
 
-  // The nine authored cards, in slot order. Numeric sort, so slot 10+ (if you
-  // ever grow the grid) doesn't land between 1 and 2.
+  // The authored cards, in slot order. Collected from the WHOLE page wrapper,
+  // not from one container — the layout may well split the 3x3 into three flex
+  // rows, each with its own [data-avatar-grid]. Numeric sort, so slot 10+ (if
+  // you ever grow the grid) doesn't land between 1 and 2.
   function slotCards() {
-    var cards = all("[data-avatar-slot]", state.grid || document);
+    var cards = all("[data-avatar-slot]", state.wrap || document);
     return cards.sort(function (a, b) {
       return (
         (parseFloat(attr(a, "data-avatar-slot", 0)) || 0) -
         (parseFloat(attr(b, "data-avatar-slot", 0)) || 0)
       );
     });
+  }
+
+  // Console breakdown of what the backend actually returned, slot by slot — the
+  // quick way to tell "the page is broken" from "that avatar isn't in the
+  // catalog yet". Call Flexicare.avatarPicker.report() from the console.
+  function report() {
+    if (!window.console) return;
+    var rows = slotCards().map(function (card, i) {
+      var av = state.avatars[i] || null;
+      return {
+        slot: attr(card, "data-avatar-slot", i + 1),
+        slug: (av && av.slug) || "—",
+        status: (av && av.status) || "no data",
+        image: av && av.url ? "yes" : "NO",
+      };
+    });
+    console.log(
+      "[avatar] " +
+        state.race +
+        " / " +
+        state.gender +
+        " — " +
+        rows.length +
+        " slot cards, " +
+        state.avatars.length +
+        " avatars returned"
+    );
+    if (console.table) console.table(rows);
+    else
+      rows.forEach(function (r) {
+        console.log(r);
+      });
+    return rows;
   }
 
   // Write one avatar (or nothing) into one authored card. Everything the click
@@ -384,8 +435,6 @@
   }
 
   function renderGrid(avatars, token) {
-    var grid = state.grid;
-    if (!grid) return;
     var chosenId = selectedId();
 
     /* ---- static mode: fill the authored slot cards (the normal path) ---- */
@@ -397,22 +446,29 @@
         fillCard(card, av, chosenId, token);
         if (av && av.status === "READY" && av.url) filled++;
       });
-      if (cards.length < (avatars || []).length)
-        dbg(
-          "only",
-          cards.length,
-          "slot cards for",
-          (avatars || []).length,
-          "avatars — the extras aren't shown"
+      if (cards.length < (avatars || []).length && window.console)
+        console.warn(
+          "[avatar] only " +
+            cards.length +
+            " [data-avatar-slot] cards found for " +
+            (avatars || []).length +
+            " avatars — the rest can't be shown. Check every card carries the" +
+            " attribute (they may be split across several row wrappers)."
         );
       setPageState(filled ? "ready" : "empty");
-      dbg("filled", cards.length, "slots,", filled, "selectable");
+      dbg("filled", cards.length, "slots,", filled, "with an image");
+      if (
+        window.FLEXICARE_DEBUG ||
+        (state.wrap && state.wrap.hasAttribute("data-avatar-debug"))
+      )
+        report();
       return;
     }
 
     /* ---- clone mode: build the cards from one template ---- */
-    var tpl = one("[data-avatar-option-template]", grid);
-    if (!tpl) {
+    var tpl = one("[data-avatar-option-template]", state.wrap);
+    var grid = (tpl && tpl.parentNode) || state.grid;
+    if (!tpl || !grid) {
       showError(
         "The avatar grid has no cards ([data-avatar-slot]) and no template."
       );
@@ -559,7 +615,7 @@
       variant: found.variant || null,
     }); // setAvatar also stores FC.avatarGender, which pre-fills /onboarding
 
-    all("[data-avatar-option]", state.grid).forEach(function (node) {
+    all("[data-avatar-option]", state.wrap).forEach(function (node) {
       var cls = attr(node, "data-selected-class", "is-selected");
       var on = node === card;
       if (node.classList) node.classList.toggle(cls, on);
@@ -665,15 +721,17 @@
     teardown();
 
     state.wrap = wrap;
+    // [data-avatar-grid] may appear MORE THAN ONCE — a 3x3 built as three flex
+    // rows is three grids. It is only needed as the append target in clone mode;
+    // slot cards are collected from the whole wrapper instead (slotCards()).
     state.grid = one("[data-avatar-grid]", wrap) || one("[data-avatar-grid]");
 
     // Two ways to build the grid; authored cards win if both are present.
     //   slot  — nine [data-avatar-slot="1".."9"] cards you placed and styled
-    //           individually in the Designer. They are filled in place and
-    //           NEVER removed.
+    //           individually in the Designer, in any arrangement of wrappers.
+    //           They are filled in place and NEVER removed.
     //   clone — one [data-avatar-option-template] card, cloned per avatar.
-    state.mode =
-      state.grid && one("[data-avatar-slot]", state.grid) ? "slot" : "clone";
+    state.mode = one("[data-avatar-slot]", wrap) ? "slot" : "clone";
 
     // Previous choice wins over the Designer defaults, so coming back to the
     // page lands on the same set with the same card lit.
@@ -690,10 +748,11 @@
     clearError();
     reflectPills();
     setNextEnabled(!!selectedId());
-    if (!state.grid) {
+    if (state.mode === "clone" && !state.grid) {
       showError("The avatar grid is missing ([data-avatar-grid]).");
       return;
     }
+    dbg("mode:", state.mode, "— slot cards found:", slotCards().length);
     // Always a fresh fetch — the presigned urls in the catalog expire in ~10 min.
     fetchCatalog();
   }
@@ -738,6 +797,7 @@
     init: init,
     teardown: teardown,
     refresh: fetchCatalog,
+    report: report,
     races: RACES,
     genders: GENDERS,
   };
