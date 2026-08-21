@@ -118,6 +118,14 @@
                                 the image is pending. Without it the image's own
                                 parent is used, which is usually right — add the
                                 attribute when the parent is the whole card.
+                                While pending, the image itself is held at
+                                opacity 0 (marked data-reveal-image-pending), so
+                                Webflow's placeholder asset can't show through
+                                the shimmer. It keeps its box, so nothing
+                                reflows; it's revealed the moment the real file
+                                has decoded. If the pair never arrives the
+                                placeholder comes back, so a page with no
+                                [data-reveal-images-fallback] is never blank.
 
      Copy slots (all optional — each is filled only if present):
      [data-reveal-name]         gets the first name ("Lerato"). If the name is
@@ -671,7 +679,9 @@
     // is hidden until setImage() flags it is-loaded.
     ":where([data-reveal-skeleton-frame]){position:relative;overflow:hidden;background-color:var(--fc-reveal-skeleton-bg,rgba(255,255,255,.06))}" +
     ':where([data-reveal-skeleton-frame])::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:2;background-image:linear-gradient(100deg,rgba(255,255,255,0) 20%,var(--fc-reveal-skeleton-sheen,rgba(255,255,255,.18)) 50%,rgba(255,255,255,0) 80%);background-size:200% 100%;background-repeat:no-repeat;animation:fc-reveal-shimmer var(--fc-reveal-skeleton-speed,1.5s) linear infinite}' +
-    ':where([data-reveal-state="loading"] [data-reveal-image]:not(.is-loaded)){opacity:0}' +
+    // Marked on the image ITSELF, so it doesn't depend on the wrapper's state
+    // attribute having been stamped yet (markSkeleton can run before init).
+    ":where([data-reveal-image-pending]){opacity:0!important}" +
     // The CTA is live the whole time, but it shouldn't look clickable yet.
     ':where([data-reveal-copy-state="loading"] [data-reveal-next]){opacity:.45;transition:opacity .2s ease}' +
     "@media (prefers-reduced-motion:reduce){:where([data-reveal-skeleton],[data-reveal-skeleton-frame])::after{animation:none}}";
@@ -765,10 +775,24 @@
       skeletonOn(el, "data-reveal-skeleton");
     });
 
+    // Stamped here as well as in setImagesState(): this can run on beforeEnter,
+    // where state.wrap isn't set yet, and the placeholder must already be gone.
+    if (!wrap.getAttribute("data-reveal-state"))
+      wrap.setAttribute("data-reveal-state", "loading");
+
+    var frames = 0;
     all("[data-reveal-image]").forEach(function (img) {
+      if (img.classList && img.classList.contains("is-loaded")) return;
       skeletonOn(imageFrame(img), "data-reveal-skeleton-frame");
+      frames++;
+      if (img.hasAttribute && img.hasAttribute("data-reveal-no-skeleton")) return;
+      // Webflow ships these with a placeholder asset, and a semi-transparent
+      // shimmer sheen on top of it still reads as "a grey square photo".
+      // Inline opacity so no Webflow rule or interaction can outrank it.
+      img.setAttribute("data-reveal-image-pending", "");
+      img.style.opacity = "0";
     });
-    dbg("skeleton on:", targets.length, "text slots");
+    dbg("skeleton on:", targets.length, "text slots,", frames, "image frames");
   }
 
   function clearCopySkeleton() {
@@ -778,10 +802,19 @@
     });
   }
 
+  function unhideImage(el) {
+    if (!el) return;
+    el.removeAttribute("data-reveal-image-pending");
+    if (el.style && el.style.opacity === "0") el.style.opacity = "";
+  }
+
   function clearImageSkeleton() {
     all("[data-reveal-skeleton-frame]").forEach(function (el) {
       el.removeAttribute("data-reveal-skeleton-frame");
     });
+    // Anything that never arrived goes back to whatever Webflow shipped — a
+    // page with no [data-reveal-images-fallback] must not end up blank.
+    all("[data-reveal-image-pending]").forEach(unhideImage);
   }
 
   /* ------------------------- generated images ------------------------- */
@@ -800,6 +833,7 @@
         el.style.backgroundImage = 'url("' + url + '")';
       }
       if (el.classList) el.classList.add("is-loaded");
+      unhideImage(el); // drop the skeleton's inline opacity:0 first
       if (!reduceMotion && window.gsap)
         window.gsap.fromTo(el, { opacity: 0 }, { opacity: 1, duration: 0.5 });
     };

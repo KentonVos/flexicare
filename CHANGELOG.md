@@ -56,6 +56,22 @@ finished**; the current pass is polishing what exists rather than adding pages.
 
 ---
 
+## 2026-08-21 — Reveal page: actually hide the placeholder image under the shimmer
+
+- `src/flexicare-reveal.js`, `docs/reveal-loading-state.md`
+- The image skeleton shimmered but you could still see Webflow's placeholder
+  asset through it — the sheen is semi-transparent, so over a grey placeholder
+  photo it still reads as a photo. The rule meant to hide it was keyed to the
+  WRAPPER's `data-reveal-state`, which `markSkeleton()` (running on beforeEnter)
+  hadn't stamped yet, and was `:where()`-wrapped, so anything could outrank it.
+- Now each pending image is marked `data-reveal-image-pending` and given an
+  INLINE `opacity: 0` — nothing can outrank that. It keeps its box (no reflow),
+  is revealed the moment the real file decodes, and if the pair never arrives the
+  placeholder comes back, so a page with no `[data-reveal-images-fallback]` is
+  never left blank. `markSkeleton()` also stamps `data-reveal-state="loading"`
+  itself now, rather than waiting for init.
+- Webflow: no change needed.
+
 ## 2026-08-21 — Reveal page: loading skeleton for the copy and the images
 
 - `src/flexicare-reveal.js`

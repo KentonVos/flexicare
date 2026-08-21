@@ -29,7 +29,17 @@ showing a placeholder) for a while. (On the avatar path the first poll is alread
 | `[data-reveal-copy]` embed | hidden immediately | same |
 | `[data-reveal-next]` | dimmed (still clickable) | same |
 | each image's frame | `data-reveal-skeleton-frame` → shimmer | until `data-reveal-state` leaves `loading` |
-| `[data-reveal-image]:not(.is-loaded)` | `opacity: 0` | same |
+| `[data-reveal-image]` | `data-reveal-image-pending` + inline `opacity: 0` | until its real file has decoded |
+
+**The placeholder image has to be hidden, not just covered.** Webflow ships
+`[data-reveal-image]` with a placeholder asset, and the shimmer sheen is
+semi-transparent — laid over a grey placeholder photo it still reads as a photo.
+So each pending image gets `data-reveal-image-pending` and an **inline**
+`opacity: 0` (inline, so no Webflow class or interaction can outrank it). It
+keeps its box, so nothing reflows; `setImage()` reveals it the instant the real
+file has decoded. If the pair never arrives, `clearImageSkeleton()` puts the
+placeholder back — a page with no `[data-reveal-images-fallback]` must not end
+up blank.
 
 Two independent clocks, on purpose: the copy skeleton clears when the archetype
 resolves, the image skeleton when the pair is `READY` (or the fallback shows).
@@ -112,6 +122,9 @@ harmless — identical rules, zero specificity. Copy them out of `SKELETON_CSS` 
   dumps what the database resolves to.
 - Copy shimmer stuck on? The archetype never resolved — check `[data-reveal-error]`
   and the console, or add `data-reveal-debug`.
+- Placeholder image still showing? It should carry `data-reveal-image-pending`
+  while it waits — if it doesn't, it's not inside `[data-reveal]`, or it already
+  has `is-loaded` on it, or it carries `data-reveal-no-skeleton`.
 - Image shimmer stuck on? The poll never left `GENERATING`; it gives up at
   `data-reveal-timeout` (default 90s) and falls through to the fallback, which
   clears it.
