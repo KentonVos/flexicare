@@ -56,6 +56,27 @@ finished**; the current pass is polishing what exists rather than adding pages.
 
 ---
 
+## 2026-08-21 — Reveal page: loading skeleton for the copy and the images
+
+- `src/flexicare-reveal.js`
+- The reveal page painted the Designer's PLACEHOLDER copy until the archetype
+  resolved — instant coming from the quiz, but seconds of fake-looking text on a
+  hard reload or deep link (GET /sessions/{id} → maybe GET /quiz → POST
+  /routing/preview). Now every slot the copy database writes into, plus
+  [data-reveal-name] / -archetype-label / -echo, shimmers until the real copy is
+  in; the image cards shimmer until the pair is READY or the fallback shows.
+- Marked on `beforeEnter` (before the page is visible), cleared AFTER the paints,
+  so the text is revealed already correct instead of flashing the placeholder.
+  Cleared on the error branch and on teardown too — it can never get stuck on.
+- Same pattern as the quiz skeleton: CSS injected into the persistent head
+  (Barba never swaps it), flagged `data-js-injected`, `:where()`-wrapped so page
+  CSS wins without `!important`. Vars on `[data-reveal]`:
+  `--fc-reveal-skeleton-bg / -sheen / -speed / -radius`.
+- Webflow: nothing is REQUIRED — it auto-marks from the existing attributes.
+  Optional: `data-reveal-image-frame` on an image's wrapper, `data-reveal-no-skeleton`
+  to exclude an element, `data-reveal-skeleton-target` to add one,
+  `data-reveal-skeleton="off"` on `[data-reveal]` to turn it all off.
+
 ## 2026-08-21 — Quiz: per-question label on the Next button
 
 - `src/flexicare-quiz.js`

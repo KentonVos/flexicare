@@ -454,6 +454,26 @@ image URLs expire after 10 minutes, so they're read fresh from the poll and neve
 Async work is guarded by a run token that teardown bumps, so a fast navigation can't write
 into the next page's DOM.
 
+**Loading skeleton** (`docs/reveal-loading-state.md`): the page paints the Designer's
+placeholder copy immediately and the real copy only lands once the archetype is known —
+a microtask coming from the quiz, but `GET /sessions/{id}` → `GET /quiz` →
+`POST /routing/preview` on a hard reload. A `beforeEnter` hook calls `markSkeleton()` on
+the incoming container — before it is visible — which hides the `[data-reveal-copy]`
+embed, stamps `data-reveal-copy-state="loading"` and puts `data-reveal-skeleton` on every
+slot the database will write into (derived from the database, not hard-coded:
+`allSlotNames()` reads every `data-copy` for *all* archetypes, since the archetype isn't
+known yet) plus `[data-reveal-name]` / `-archetype-label` / `-echo`. Each image's frame
+(`[data-reveal-image-frame]`, else `parentNode`) gets `data-reveal-skeleton-frame`, keyed
+to the separate `data-reveal-state` clock — copy and images clear independently. The copy
+skeleton clears **after** the paints, never before, so the transparent text is revealed
+already correct rather than flashing the placeholder; the failure branch and `teardown()`
+clear it too, so it can't get stuck. Per-element escapes: `data-reveal-no-skeleton`,
+`data-reveal-skeleton-target`. Like the quiz and avatar pages, **the stylesheet is
+injected by the script** (`injectCSS()`, `data-js-injected`) because Barba never swaps the
+`<head>`; `:where()`-wrapped selectors + `--fc-reveal-skeleton-*` properties on
+`[data-reveal]` make site-head overrides win without `!important`;
+`data-reveal-skeleton="off"` skips the inject.
+
 The page's container also carries `data-page-id="landing"` (see transition.js) so the nav
 stays collapsed here exactly as it does on the landing page — which means **the CTA must
 live inside the container**, not in the synced nav region, or it would be hidden with the

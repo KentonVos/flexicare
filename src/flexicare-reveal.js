@@ -77,6 +77,47 @@
                                   data-reveal-timeout="90000"     ms before we give
                                      up waiting for images and show the fallback
                                   data-reveal-debug               console logging
+                                  data-reveal-skeleton="off"      don't inject the
+                                     shimmer CSS / don't shimmer anything; you
+                                     style the loading states yourself
+
+     LOADING SKELETON (the shimmer over the copy + images — no new elements):
+                                Until the archetype resolves, the only copy on
+                                screen is the Designer's placeholder text. So on
+                                entry the wrapper gets
+                                data-reveal-copy-state="loading" and every slot
+                                the copy database is going to write into — plus
+                                [data-reveal-name], [data-reveal-archetype-label]
+                                and [data-reveal-echo] — gets
+                                data-reveal-skeleton, which turns its text
+                                transparent and shimmers the box. The attribute
+                                is removed (and the state flips to "ready") once
+                                the real copy is in, so the text is revealed
+                                already correct rather than flashing the
+                                placeholder. On a Barba arrival this happens on
+                                beforeEnter, i.e. BEFORE the page is visible.
+                                  The image cards shimmer the same way, keyed to
+                                data-reveal-state, and stop when the pair is
+                                READY or the fallback shows.
+                                THE CSS SHIPS WITH THE SCRIPT (Barba never swaps
+                                the <head>, so a page-level <style> is there on a
+                                hard load and gone on a barba.go() arrival). Tune
+                                it with CSS variables on [data-reveal]:
+                                --fc-reveal-skeleton-bg / -sheen / -speed /
+                                -radius. Overriding needs no !important — the
+                                injected selectors are :where()-wrapped, so they
+                                carry zero specificity.
+     [data-reveal-no-skeleton]  On any element that would otherwise shimmer, to
+                                leave it alone (e.g. an inline ", Lerato" span
+                                you'd rather stayed blank than flickered).
+     [data-reveal-skeleton-target] On any EXTRA element you want shimmered while
+                                the copy loads — anything the auto-marking above
+                                doesn't already cover.
+     [data-reveal-image-frame]  Optional, on the wrapper around a
+                                [data-reveal-image]: this is what shimmers while
+                                the image is pending. Without it the image's own
+                                parent is used, which is usually right — add the
+                                attribute when the parent is the whole card.
 
      Copy slots (all optional — each is filled only if present):
      [data-reveal-name]         gets the first name ("Lerato"). If the name is
@@ -175,7 +216,8 @@
      [data-reveal-back]         Optional. URL value → that page; empty → history.
 
    The wrapper also carries data-reveal-state="loading|ready|fallback" for the
-   images, so you can drive card states purely from CSS if you prefer.
+   images and data-reveal-copy-state="loading|ready" for the copy, so you can
+   drive card states purely from CSS if you prefer.
 
    PROGRESS BAR (owned by transition.js): set data-progress="0.6" on this
    page's Barba container.
@@ -289,6 +331,9 @@
     if (state.wrap) state.wrap.setAttribute("data-reveal-state", name);
     show(one("[data-reveal-images-loading]"), name === "loading");
     show(one("[data-reveal-images-fallback]"), name === "fallback");
+    // Anything that isn't "loading" is a settled state (READY, or the
+    // fallback pair is now on screen) — stop shimmering the image frames.
+    if (name !== "loading") clearImageSkeleton();
   }
 
   /* --------------------------- archetype --------------------------- */
@@ -594,6 +639,151 @@
     dbg("archetype", code);
   }
 
+  /* ------------------------ loading skeleton ------------------------ */
+
+  /* The gap this fills: this page paints the Designer's PLACEHOLDER copy the
+     moment it appears, and the real copy only lands once the archetype is
+     known. Arriving by barba.go() from the quiz that's a microtask (the quiz
+     already ran the preview) — but on a HARD RELOAD or a deep link it's
+     GET /sessions/{id} (+ maybe /quiz + POST /routing/preview), i.e. seconds
+     of lorem-ipsum-looking template text. So we shimmer every slot the copy
+     database is going to write into, plus the name/label/echo, until the real
+     text arrives.
+
+     THE CSS SHIPS WITH THE SCRIPT, and it has to: Barba never swaps the
+     <head>, so a <style> in a PAGE's Custom Code is present on a hard load
+     and missing on every barba.go() arrival. Injected once into the
+     persistent head, flagged data-js-injected so transition.js's shell sync
+     leaves it alone. Selectors are :where()-wrapped (zero specificity) and
+     the look is driven by custom properties, so anything you author in the
+     SITE head wins without !important. Opt out entirely with
+     data-reveal-skeleton="off" on [data-reveal]; exclude one element with
+     data-reveal-no-skeleton on it. */
+  var SKELETON_CSS =
+    "@keyframes fc-reveal-shimmer{from{background-position:-150% 0}to{background-position:250% 0}}" +
+    ":where([data-reveal]){--fc-reveal-skeleton-bg:rgba(255,255,255,.06);--fc-reveal-skeleton-sheen:rgba(255,255,255,.18);--fc-reveal-skeleton-speed:1.5s;--fc-reveal-skeleton-radius:.35em}" +
+    // Text slots: the words go transparent, the box becomes the shimmer bar.
+    ":where([data-reveal-skeleton]){position:relative;overflow:hidden;color:transparent!important;border-radius:var(--fc-reveal-skeleton-radius,.35em);background-color:var(--fc-reveal-skeleton-bg,rgba(255,255,255,.06))}" +
+    ':where([data-reveal-skeleton])::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:2;background-image:linear-gradient(100deg,rgba(255,255,255,0) 20%,var(--fc-reveal-skeleton-sheen,rgba(255,255,255,.18)) 50%,rgba(255,255,255,0) 80%);background-size:200% 100%;background-repeat:no-repeat;animation:fc-reveal-shimmer var(--fc-reveal-skeleton-speed,1.5s) linear infinite}' +
+    // Anything nested inside a shimmering slot (an icon, a nested span) goes quiet.
+    ":where([data-reveal-skeleton] *){visibility:hidden}" +
+    // Image frames shimmer the same way, and the placeholder <img> inside them
+    // is hidden until setImage() flags it is-loaded.
+    ":where([data-reveal-skeleton-frame]){position:relative;overflow:hidden;background-color:var(--fc-reveal-skeleton-bg,rgba(255,255,255,.06))}" +
+    ':where([data-reveal-skeleton-frame])::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:2;background-image:linear-gradient(100deg,rgba(255,255,255,0) 20%,var(--fc-reveal-skeleton-sheen,rgba(255,255,255,.18)) 50%,rgba(255,255,255,0) 80%);background-size:200% 100%;background-repeat:no-repeat;animation:fc-reveal-shimmer var(--fc-reveal-skeleton-speed,1.5s) linear infinite}' +
+    ':where([data-reveal-state="loading"] [data-reveal-image]:not(.is-loaded)){opacity:0}' +
+    // The CTA is live the whole time, but it shouldn't look clickable yet.
+    ':where([data-reveal-copy-state="loading"] [data-reveal-next]){opacity:.45;transition:opacity .2s ease}' +
+    "@media (prefers-reduced-motion:reduce){:where([data-reveal-skeleton],[data-reveal-skeleton-frame])::after{animation:none}}";
+
+  var cssDone = false;
+  function injectCSS(wrap) {
+    if (cssDone) return;
+    if (wrap && attr(wrap, "data-reveal-skeleton", "") === "off") {
+      cssDone = true; // opt-out: the page styles the skeleton itself
+      return;
+    }
+    if (document.querySelector("style[data-reveal-skeleton-css]")) {
+      cssDone = true;
+      return;
+    }
+    var el = document.createElement("style");
+    el.setAttribute("data-reveal-skeleton-css", "");
+    // transition.js's shell sync must not treat this as page-owned markup.
+    el.setAttribute("data-js-injected", "");
+    el.textContent = SKELETON_CSS;
+    (document.head || document.documentElement).appendChild(el);
+    cssDone = true;
+  }
+
+  // Every slot name the copy database mentions, for ANY archetype — we need
+  // these before the archetype is known, which is exactly why it can't reuse
+  // collectCopy(code).
+  function allSlotNames() {
+    var seen = {};
+    all("[data-reveal-copy]").forEach(function (src) {
+      if (src.tagName === "SCRIPT") {
+        var data;
+        try {
+          data = JSON.parse(src.textContent || "{}");
+        } catch (e) {
+          return; // paintDatabaseCopy warns about this; don't warn twice
+        }
+        Object.keys(data || {}).forEach(function (key) {
+          Object.keys(data[key] || {}).forEach(function (slot) {
+            seen[slot] = true;
+          });
+        });
+        return;
+      }
+      all("[data-copy]", src).forEach(function (el) {
+        var slot = el.getAttribute("data-copy");
+        if (slot) seen[slot] = true;
+      });
+    });
+    return Object.keys(seen);
+  }
+
+  // The frame that shimmers for an image: an explicit [data-reveal-image-frame]
+  // ancestor if there is one, otherwise the image's own parent.
+  function imageFrame(el) {
+    if (!el) return null;
+    var explicit = el.closest && el.closest("[data-reveal-image-frame]");
+    return explicit || el.parentNode || null;
+  }
+
+  function skeletonOn(el, marker) {
+    if (!el || !el.setAttribute) return;
+    if (el.hasAttribute && el.hasAttribute("data-reveal-no-skeleton")) return;
+    el.setAttribute(marker, "");
+  }
+
+  // Called on beforeEnter too, so the shimmer is already in place BEFORE the
+  // page is visible. Idempotent — re-marking an element is a no-op.
+  function markSkeleton(scope) {
+    var wrap = resolveWrap(scope);
+    if (!wrap) return;
+    injectCSS(wrap);
+    if (attr(wrap, "data-reveal-skeleton", "") === "off") return;
+
+    // The database is data, not layout — hide it now rather than waiting for
+    // paintDatabaseCopy(), or the raw copy blocks flash on a hard load.
+    all("[data-reveal-copy]").forEach(function (el) {
+      if (el.tagName !== "SCRIPT") el.style.display = "none";
+    });
+
+    wrap.setAttribute("data-reveal-copy-state", "loading");
+
+    var targets = all(
+      "[data-reveal-name],[data-reveal-archetype-label],[data-reveal-echo]," +
+        "[data-reveal-skeleton-target]"
+    );
+    allSlotNames().forEach(function (name) {
+      targets = targets.concat(copyTargets(name));
+    });
+    targets.forEach(function (el) {
+      skeletonOn(el, "data-reveal-skeleton");
+    });
+
+    all("[data-reveal-image]").forEach(function (img) {
+      skeletonOn(imageFrame(img), "data-reveal-skeleton-frame");
+    });
+    dbg("skeleton on:", targets.length, "text slots");
+  }
+
+  function clearCopySkeleton() {
+    if (state.wrap) state.wrap.setAttribute("data-reveal-copy-state", "ready");
+    all("[data-reveal-skeleton]").forEach(function (el) {
+      el.removeAttribute("data-reveal-skeleton");
+    });
+  }
+
+  function clearImageSkeleton() {
+    all("[data-reveal-skeleton-frame]").forEach(function (el) {
+      el.removeAttribute("data-reveal-skeleton-frame");
+    });
+  }
+
   /* ------------------------- generated images ------------------------- */
 
   // <img> → src; anything else → background-image. Decodes first so the swap
@@ -742,6 +932,9 @@
     state.deadline = Date.now() + state.timeoutMs;
 
     clearError();
+    // Shimmer first, THEN paint: paintCopy() only knows the name so far, so
+    // without this the placeholder card copy sits there looking real.
+    markSkeleton(wrap);
     paintCopy(); // whatever we already know, on screen immediately
     setImagesState("loading");
 
@@ -763,11 +956,18 @@
         paintArchetype(code);
         paintDatabaseCopy(code); // the embed → the four ID'd slots
         paintCopy(); // name/label may have arrived with the session fetch
+        // AFTER the paints, never before: the slots are still colour-transparent
+        // while they're written, so the real text is revealed already correct
+        // instead of flashing the Designer's placeholder for a frame.
+        clearCopySkeleton();
         setBusy(false);
         dbg("ready", { archetype: code, name: FC.firstName });
       })
       .catch(function (err) {
         if (!alive(token)) return;
+        // The archetype is unrecoverable (or we're bouncing to routing) —
+        // either way, never leave the page shimmering forever.
+        clearCopySkeleton();
         setBusy(false);
         showError(err);
       });
@@ -776,6 +976,7 @@
   function teardown() {
     stopPolling();
     stopCycle();
+    clearImageSkeleton();
     state.token++; // invalidate anything still in flight
     state.wrap = null;
     state.archetype = null;
@@ -788,6 +989,11 @@
     // syncRegions() + LiquidGlass.scan(), so the nav buttons and glass are final.
     window.barba.hooks.afterEnter(function (data) {
       init((data && data.next && data.next.container) || document);
+    });
+    // Before the page is VISIBLE: mark the skeleton only (DOM-only, no fetch),
+    // so the arrival never flashes the Designer's placeholder copy.
+    window.barba.hooks.beforeEnter(function (data) {
+      markSkeleton((data && data.next && data.next.container) || document);
     });
     window.barba.hooks.beforeLeave(function () {
       if (state.wrap) teardown();
@@ -807,5 +1013,6 @@
     teardown: teardown,
     poll: pollImages,
     copy: collectCopy, // Flexicare.reveal.copy("A") — inspect the database
+    skeleton: markSkeleton, // Flexicare.reveal.skeleton() — re-shimmer, to look at it
   };
 })();
