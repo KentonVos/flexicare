@@ -304,9 +304,10 @@ avatar) simply supersedes the previous images.
 
 ### 3.9 `GET /api/v1/avatars/web` — transparent-background avatars (marketing site)
 
-**Not part of the funnel — we don't call this yet.** A separate image set from §3.7: the
-same 90 catalog slots rendered as **transparent-background webp**, for the Webflow
-marketing pages. No session, no auth, no selection — a read-only image catalog.
+**The avatar picker calls this** alongside §3.7 and joins the two on `id` — see below.
+A separate image set from §3.7: the same 90 catalog slots rendered as
+**transparent-background webp**. No session, no auth, no selection — a read-only image
+catalog.
 
 All query params are optional filters: `race`, `gender`, `age_group` (same enums as §1).
 With none, all 90 slots come back.
@@ -329,8 +330,32 @@ GET /api/v1/avatars/web?race=indian&gender=female
   whose web image hasn't been uploaded yet — skip those.
 - Same presigned-url rule as §3.7: **~10 minute expiry**, so these can't be pasted into
   Webflow as static assets — a page using them has to call the API on load and re-fetch.
-  That's why it would need a small script of its own if we ever use it on the marketing
-  pages; nothing in the funnel reads it today.
+  `flexicare-avatar.js` already re-fetches on every entry and filter change, so nothing
+  extra is needed there; any *marketing* page that wants these needs its own small script.
+
+**How the picker uses it (verified on staging 2026-08-21).** Both endpoints return the
+same 9 slots for a race/gender, with the **same `id`s in the same order**, so:
+
+| | `GET /avatars` (§3.7) | `GET /avatars/web` (§3.9) |
+|---|---|---|
+| owns the `id` we `PATCH` with | **yes** | (same ids) |
+| says "pickable" | **`url` present** | no signal |
+| image | jpg, white background | **transparent webp** |
+| coverage on staging | black/male + black/female only (+1 slot) | **all 90** |
+
+So the picker **displays the transparent render and gates selection on the catalog
+`url`**. A slot whose scenario pair isn't approved yet therefore shows its face, dimmed
+and unclickable, instead of an empty placeholder. The `/web` call is best-effort: if it
+fails, every card falls back to the catalog jpg (and `data-avatar-transparent="off"` on
+the wrapper disables it outright).
+
+**Why we can't just select from `/web`:** `PATCH …/photo/avatar` returns `409` for an
+avatar that isn't fully baked (§3.8), so offering an unbaked face as pickable would fail
+at onboarding and dump that user on the reveal page's fallback images. Displaying it is
+safe; selecting it is not. **The fix that removes the second call entirely** is for the
+backend to either (a) add the transparent render's url to the §3.7 response, or (b) return
+the avatar's own image url always plus a separate `selectable`/`baked` flag — then one call
+gives us face + pickability. Worth asking for; not blocking.
 - Note the slug here spells the age group with an underscore (`...-young_adult-1`) while
   §3.7's example uses hyphens (`...-young-adult-1`). Cosmetic (we key off `id`), but
   worth confirming with the backend if we ever match slugs across the two endpoints.

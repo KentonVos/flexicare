@@ -78,7 +78,11 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
   against the avatar, so the avatar `PATCH` just copies it onto the session and `/images`
   is `READY` on the first poll — "developing…" and `FAILED` are selfie-path states. Also:
   a catalog avatar is **selectable ⟺ its `url` is present**, not when `status` says
-  `READY` (the url is only issued once the scenario pair is approved too).
+  `READY` (the url is only issued once the scenario pair is approved too). The picker
+  **displays** a different image set from the one it **selects** from: transparent webp
+  renders from `GET /avatars/web`, joined to `GET /avatars` on `id`. So an unbaked slot
+  shows a dimmed face rather than an empty card, and "unavailable" means *not pickable*,
+  never *no image*.
 - **The buffered selfie lives in memory only** (`Flexicare.photo`). It survives Barba
   navigations but NOT a hard page reload. That's why the controllers always navigate
   with `barba.go()`, never `window.location`. Don't "helpfully" change a `barba.go()`

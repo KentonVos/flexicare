@@ -14,6 +14,25 @@ Format:
 
 ---
 
+## 2026-08-21 — Avatar picker: show the transparent-background faces
+- src/flexicare-avatar.js, docs/api-contract.md, ARCHITECTURE.md, CLAUDE.md
+- The picker now DISPLAYS the transparent-background webp renders from
+  GET /avatars/web (§3.9) while still GATING SELECTION on GET /avatars (§3.7).
+  Verified on staging: both endpoints return the same 9 ids in the same order for a
+  race/gender, so they join cleanly on `id` (mergeWeb()).
+- Why it matters beyond the cut-out look: §3.7 withholds a url until that avatar's two
+  scenario images are approved, and on staging only black/male + black/female (+1 slot)
+  are baked — every other combo was an empty 3x3 grid. /avatars/web has all 90, so those
+  slots now show their FACE, dimmed and unclickable, instead of nothing. Selection stays
+  gated because PATCH …/photo/avatar 409s for an unbaked avatar.
+- The /web call is best-effort (failure → catalog jpgs, picker unchanged). Opt out with
+  data-avatar-transparent="off" on [data-avatar]. report() gained selectable/showing
+  columns so you can see which image each slot is using.
+- WEBFLOW: style [data-avatar-unavailable] / .is-unavailable as a DIMMED FACE, not an
+  empty placeholder — it now usually has an image. If your cards had a solid background
+  behind the jpg, that background is now what shows through the cut-out. No script list
+  change.
+
 ## 2026-08-21 — Backend handover update: the avatar path generates nothing
 - src/flexicare-avatar.js, src/flexicare-onboarding.js, src/flexicare-reveal.js,
   docs/api-contract.md, AVATAR-BACKEND-QUESTIONS.md, ARCHITECTURE.md, CLAUDE.md

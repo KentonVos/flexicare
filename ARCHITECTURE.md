@@ -66,12 +66,17 @@ Pages, in order, and where state is created:
      Reached by a plain link from the selfie page. Gender + race pills drive
      `GET /avatars?race=…&gender=…` (always 9 avatars: 3 age groups × 3 variants), rendered
      as a 3×3 grid of clones. The chosen `avatar_id` is buffered at `Flexicare.avatar`, and
-     the gender at `Flexicare.avatarGender` (which pre-fills onboarding). A slot is
-     selectable **iff its `url` is present** (api-contract §3.7 — the url is only issued
+     the gender at `Flexicare.avatarGender` (which pre-fills onboarding). **Two endpoints,
+     joined on `id`:** the grid *displays* the transparent-background webp renders from
+     `GET /avatars/web` (§3.9 — same 90 slots, same ids, same order, a url for every one)
+     and *gates selection* on `GET /avatars` (§3.7). A slot is selectable **iff its §3.7
+     `url` is present** (api-contract §3.7 — the url is only issued
      once the avatar *and* its two approved scenario images are ready, so `status` is the
-     weaker signal and we only log it); the rest render as unselectable placeholders. The
-     catalog is re-fetched on every entry and filter change because its urls are presigned
-     (~10 min).
+     weaker signal and we only log it) — and because `PATCH …/photo/avatar` 409s for an
+     unbaked avatar, an unselectable slot still shows its **face** (dimmed) rather than an
+     empty placeholder. The `/web` call is best-effort (failure → catalog jpgs;
+     `data-avatar-transparent="off"` disables it). Both are re-fetched on every entry and
+     filter change because the urls are presigned (~10 min).
 3. **Onboarding** (`/onboarding`, `flexicare-onboarding.js`) — collects name, WhatsApp,
    gender, consent, then on submit: (a) `POST /sessions` → stores the session id via
    `Flexicare.setSessionId` (sessionStorage, treated as a secret); (b) sends whichever
@@ -361,7 +366,9 @@ when no slot cards exist. Either way each card carries `data-avatar-option`, `-i
 `-slug`, `data-age-group`, `data-variant`, and its `[data-avatar-image]` (or the card
 itself, as a background) is painted after decode with `is-loaded`. Selected → `is-selected`/`data-selected-class` + `aria-pressed`; a slot with
 no approved image → `data-avatar-unavailable` + `is-unavailable` + `aria-disabled`, not
-clickable (the gate is `url`, not `status` — see §3.7). States: `[data-avatar-loading]`,
+clickable — but it does show its face, from the transparent `/avatars/web` render the grid
+displays (`display_url`); the gate is the §3.7 `url`, not `status`, and not what's on
+screen. `data-avatar-transparent="off"` falls back to catalog jpgs. States: `[data-avatar-loading]`,
 `-empty`, `-error`, mirrored on the wrapper as
 `data-avatar-state="loading|ready|empty|error"`. Buttons `[data-avatar-next]` (disabled-look
 until a pick, still clickable to surface the message) and `[data-avatar-back]`.

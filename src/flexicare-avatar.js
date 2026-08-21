@@ -168,7 +168,9 @@
      corner is yours — put it in the card and show it from
      `.is-selected [data-avatar-check]`, or style however you like.
      Unavailable card: data-avatar-unavailable + class `is-unavailable` +
-     aria-disabled="true" (not clickable).
+     aria-disabled="true" (not clickable). NOTE it usually still shows the
+     avatar's FACE (the transparent render) — "unavailable" means "can't be
+     picked yet", not "no image". Dim it; don't hide it.
 
      LOADING / SKELETON (the shimmer — all optional, all CSS-driven):
      data-avatar-state="loading"
@@ -540,7 +542,16 @@
         slot: attr(card, "data-avatar-slot", i + 1),
         slug: (av && av.slug) || "—",
         status: (av && av.status) || "no data",
-        image: av && av.url ? "yes" : "NO",
+        // selectable: the funnel catalog url (scenario pair approved)
+        selectable: av && av.url ? "yes" : "NO",
+        // what's actually on screen: the transparent render, or the jpg
+        showing: av
+          ? av.web_url
+            ? "transparent"
+            : av.url
+              ? "catalog jpg"
+              : "NOTHING"
+          : "NOTHING",
       };
     });
     console.log(
@@ -566,11 +577,17 @@
   // handler and the selection code need is stamped on here, so from that point
   // on a slot card and a clone are indistinguishable.
   function fillCard(card, av, chosen, token) {
-    // SELECTABLE <=> `url` PRESENT (api-contract §3.7). Not `status` — a url is
-    // only issued when the avatar AND its two approved scenario images are all
-    // ready, so it is the stricter, authoritative signal. `status` describes the
-    // avatar image alone and is kept for the debug table only.
+    // TWO SEPARATE QUESTIONS (see webUrl() / mergeWeb()):
+    //   ready   — may the user PICK this one? `url` present (api-contract §3.7).
+    //             Not `status`: the catalog url is only issued once the avatar AND
+    //             its two approved scenario images are baked, and PATCH
+    //             …/photo/avatar 409s for anything less. `status` describes the
+    //             avatar image alone and is for the debug table only.
+    //   showUrl — what image do we DISPLAY? The transparent /avatars/web render
+    //             when we have one, else the catalog jpg. An unbaked slot still
+    //             shows its face, just dimmed and unselectable.
     var ready = !!(av && av.url);
+    var showUrl = (av && (av.display_url || av.url)) || null;
     var selCls = attr(card, "data-selected-class", "is-selected");
     var img = one("[data-avatar-image]", card) || card;
 
@@ -592,21 +609,28 @@
     if (ready) {
       card.removeAttribute("data-avatar-unavailable");
       card.removeAttribute("aria-disabled");
+    } else {
+      // Not baked: the scenario pair isn't approved, so PATCH …/photo/avatar
+      // would 409. Still shows its face (see showUrl) — dimmed, not clickable.
+      card.setAttribute("data-avatar-unavailable", "");
+      card.setAttribute("aria-disabled", "true");
+    }
+    if (showUrl) {
       // Drop is-loaded first so the CSS fade re-runs for the incoming face.
       if (img.classList) img.classList.remove("is-loaded");
       // The card keeps its skeleton until this one image has decoded.
       setCardLoading(card, true);
-      paintImage(img, av.url, token, function () {
+      paintImage(img, showUrl, token, function () {
         markBusy(card, false);
-        card.setAttribute("data-avatar-card-state", "ready");
+        card.setAttribute(
+          "data-avatar-card-state",
+          ready ? "ready" : "unavailable"
+        );
       });
     } else {
-      // Curated catalog: this slot has no approved image yet (§3.7).
-      card.setAttribute("data-avatar-unavailable", "");
-      card.setAttribute("aria-disabled", "true");
-      if (img.classList) img.classList.remove("is-loaded");
-      // Nothing is coming for this slot — stop shimmering and let the
+      // No image at all for this slot — stop shimmering and let the
       // is-unavailable styling (and the Designer placeholder) show.
+      if (img.classList) img.classList.remove("is-loaded");
       markBusy(card, false);
       card.setAttribute("data-avatar-card-state", "unavailable");
     }
@@ -661,6 +685,7 @@
 
     (avatars || []).forEach(function (av) {
       var ready = av && !!av.url; // url present = selectable (§3.7)
+      var showUrl = (av && (av.display_url || av.url)) || null;
       if (ready) selectable++;
 
       var clone = tpl.cloneNode(true);
@@ -693,17 +718,22 @@
       }
 
       grid.appendChild(clone);
-      if (ready) {
+      if (showUrl) {
         setCardLoading(clone, true);
-        paintImage(
-          one("[data-avatar-image]", clone) || clone,
-          av.url,
-          token,
-          function () {
-            markBusy(clone, false);
-            clone.setAttribute("data-avatar-card-state", "ready");
-          }
-        );
+        (function (node, isReady) {
+          paintImage(
+            one("[data-avatar-image]", node) || node,
+            showUrl,
+            token,
+            function () {
+              markBusy(node, false);
+              node.setAttribute(
+                "data-avatar-card-state",
+                isReady ? "ready" : "unavailable"
+              );
+            }
+          );
+        })(clone, ready);
       } else {
         markBusy(clone, false);
         clone.setAttribute("data-avatar-card-state", "unavailable");
@@ -723,6 +753,49 @@
 
   /* ------------------------------ the fetch ------------------------------ */
 
+  /* TWO CALLS, JOINED ON `id`.
+
+     GET /avatars (§3.7) is the funnel catalog: it owns the ids we PATCH with,
+     and its `url` is what says "this one is pickable". Its images are jpgs on a
+     white background.
+     GET /avatars/web (§3.9) is the SAME 90 slots rendered as transparent-
+     background webp — same ids, same order, and every slot has a url even when
+     the funnel pair isn't baked yet.
+
+     So we display the transparent render and keep selection gated on the
+     catalog url. Two upshots: the design gets cut-out faces on whatever
+     backdrop it likes, and a slot whose scenario pair isn't approved yet shows
+     its FACE (dimmed, unclickable) instead of an empty placeholder.
+
+     The web call is best-effort — if it fails or is switched off with
+     data-avatar-transparent="off", every card falls back to the catalog jpg
+     and the picker behaves exactly as it did before. */
+  function mergeWeb(avatars, web) {
+    var byId = {};
+    (web || []).forEach(function (a) {
+      if (a && a.id && a.url) byId[a.id] = a.url;
+    });
+    (avatars || []).forEach(function (av) {
+      if (!av) return;
+      av.display_url = (av.id && byId[av.id]) || av.url || null;
+      av.web_url = (av.id && byId[av.id]) || null;
+    });
+    return avatars;
+  }
+
+  function fetchWeb() {
+    // Opt out → resolve with nothing, so the catalog jpgs are used.
+    if (attr(state.wrap, "data-avatar-transparent", "") === "off")
+      return Promise.resolve(null);
+    return FC.api(
+      "/avatars/web?race=" + state.race + "&gender=" + state.gender
+    ).catch(function (err) {
+      // Non-fatal: the picker still works off the catalog urls.
+      dbg("web avatars unavailable", (err && err.message) || err);
+      return null;
+    });
+  }
+
   function fetchCatalog() {
     if (!state.wrap) return;
     if (!inList(RACES, state.race) || !inList(GENDERS, state.gender)) {
@@ -737,10 +810,18 @@
     setControlsLoading(true);
     dbg("fetching", state.race, state.gender);
 
-    FC.api("/avatars?race=" + state.race + "&gender=" + state.gender)
-      .then(function (res) {
+    Promise.all([
+      FC.api("/avatars?race=" + state.race + "&gender=" + state.gender),
+      fetchWeb(),
+    ])
+      .then(function (both) {
         if (!alive(token)) return;
-        state.avatars = (res && res.avatars) || [];
+        var res = both[0];
+        var web = both[1];
+        state.avatars = mergeWeb(
+          (res && res.avatars) || [],
+          (web && web.avatars) || []
+        );
         // The buffered choice may not be in this set (the user switched filters)
         // — drop it BEFORE rendering, so Next can never send an avatar that
         // isn't on screen.
