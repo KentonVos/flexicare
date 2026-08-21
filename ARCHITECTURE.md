@@ -479,6 +479,19 @@ stays collapsed here exactly as it does on the landing page — which means **th
 live inside the container**, not in the synced nav region, or it would be hidden with the
 nav.
 
+**Layout debug panel** (dev only, at the bottom of `transition.js`): gated behind
+`?fcdebug` — which **sticks in `localStorage`**, because the bugs it exists for span a
+navigation and `barba.go()` drops the query string; `?fcdebug=off` clears it. Live
+readout of the four numbers that separate the otherwise-identical "wrong on arrival,
+right after a refresh" causes: what `pageIdentity()` resolved **and from where**
+(URL vs a `data-page-id` override — a missing override is why a nav would be shown on a
+page that means to hide it), the nav's should-hide vs actually-hidden plus its live
+height (and it outlines the nav wrapper), document overflow beyond the viewport **with a
+peak**, so a transient spike mid-transition is still visible after it's gone, and any
+branch the shell class sync abandoned. Click the panel to reset the peak before a
+navigation. `PageTransition.shellSnapshot()` is the console-side equivalent for shell
+classes alone.
+
 ### slider.js → the Liquid Glass Tuner (dev only)
 Despite the name, this is a floating control panel for tuning glass parameters live. Gated:
 only appears when the URL contains `?tune` (or `localStorage.lgTunerAlways = "1"`). Use it

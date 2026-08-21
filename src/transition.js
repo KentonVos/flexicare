@@ -457,6 +457,7 @@
      precisely: which element, and what didn't line up. Once per session per
      spot, so a repeated navigation doesn't spam the console. */
   var shellWarned = {};
+  var shellIssues = []; // same list, for the visual debug panel
   function shellPath(el) {
     var parts = [];
     while (el && el.nodeType === 1 && parts.length < 8) {
@@ -483,6 +484,7 @@
     var key = where + "|" + detail;
     if (shellWarned[key]) return;
     shellWarned[key] = true;
+    shellIssues.push(where + " — " + detail);
     console.warn(
       "[transition] shell class sync ABANDONED at " +
         where +
@@ -1018,4 +1020,174 @@
   barba.hooks.after(function () {
     endOverlap();
   });
+
+  /* ---------- the layout debug panel (dev only) ----------
+         Gated behind ?fcdebug in the URL (or localStorage.fcDebug = "1"),
+         exactly like the glass and orb tuners. Nothing renders without it.
+
+         What it's for: "the layout is wrong on arrival but right after a
+         refresh" has several possible causes that all look identical on
+         screen, and reading them off the console mid-transition is
+         unpleasant. This shows the four numbers that separate them, live:
+
+           PAGE ID   what pageIdentity() resolved, and from WHERE. If the
+                     reveal page doesn't say "landing (data-page-id)", the
+                     attribute is missing from its container in Webflow and
+                     the nav is being SHOWN here — which is the thing that
+                     pushes the content down and off the screen.
+           NAV       should-hide vs actually-hidden, plus the wrapper's live
+                     height. Watch it during a navigation: the height ticking
+                     UP from 0 is the nav revealing, and whatever moves with
+                     it is being pushed by it.
+           OVERFLOW  how far the page exceeds the viewport. Non-zero here is
+                     literally the bug, and it tells you WHEN it starts.
+           SHELL     any branch the class sync had to abandon.
+
+         The nav wrapper is also outlined, so there's no doubt which element
+         it is. Marked data-js-injected so the shell class sync skips it. */
+  /* ?fcdebug sticks (localStorage), because the thing being debugged spans a
+     NAVIGATION and barba.go() doesn't carry the query string to the next page.
+     Turn it off with ?fcdebug=off. */
+  var DEBUG_ON = (function () {
+    var m = /[?&]fcdebug(?:=([^&]*))?/.exec(location.search);
+    var stored = false;
+    try {
+      stored = localStorage.getItem("fcDebug") === "1";
+    } catch (e) {}
+    if (!m) return stored;
+    var off = m[1] === "off" || m[1] === "0" || m[1] === "false";
+    try {
+      if (off) localStorage.removeItem("fcDebug");
+      else localStorage.setItem("fcDebug", "1");
+    } catch (e) {}
+    return !off;
+  })();
+
+  function buildDebugPanel() {
+    var css = document.createElement("style");
+    css.setAttribute("data-js-injected", "");
+    css.textContent =
+      "#fc-debug{position:fixed;left:12px;bottom:12px;z-index:2147483647;" +
+      "font:11px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;" +
+      "background:rgba(6,8,20,.92);color:#dfe6ff;border:1px solid rgba(160,200,255,.35);" +
+      "border-radius:10px;padding:9px 11px;max-width:340px;white-space:pre-wrap;" +
+      "box-shadow:0 8px 28px rgba(0,0,0,.5);pointer-events:auto;backdrop-filter:blur(6px)}" +
+      "#fc-debug b{color:#b7ff5a;font-weight:600}" +
+      "#fc-debug .bad{color:#ff7a7a}" +
+      "#fc-debug .ok{color:#7affa8}" +
+      "#fc-debug .x{float:right;cursor:pointer;opacity:.6;margin-left:10px}" +
+      "[data-fc-outline]{outline:2px dashed rgba(255,120,120,.9)!important;outline-offset:-2px}";
+    (document.head || document.documentElement).appendChild(css);
+
+    var box = document.createElement("div");
+    box.id = "fc-debug";
+    box.setAttribute("data-js-injected", "");
+    document.body.appendChild(box);
+
+    var peak = 0; // worst overflow seen — the transient spike is the story
+    function esc(v) {
+      return String(v == null ? "" : v).replace(/</g, "&lt;");
+    }
+    function paint() {
+      var navEl = document.querySelector("[data-nav-reveal]");
+      var container = document.querySelector('[data-barba="container"]');
+      var overrideEl = document.querySelector(
+        '[data-barba="container"][data-page-id]'
+      );
+      var ns = pageIdentity();
+      var from = overrideEl ? "data-page-id" : "URL";
+
+      var navBits = "not found";
+      if (navEl) {
+        var hideOn = (navEl.getAttribute("data-show-except") || "")
+          .split(",")
+          .map(function (t) {
+            return t.trim();
+          });
+        var shouldHide = hideOn.indexOf(ns) !== -1;
+        var h = Math.round(navEl.getBoundingClientRect().height);
+        var isHidden = navEl.__navHidden;
+        var agree = !!isHidden === shouldHide;
+        navBits =
+          '<span class="' +
+          (agree ? "ok" : "bad") +
+          '">should ' +
+          (shouldHide ? "HIDE" : "SHOW") +
+          " / is " +
+          (isHidden ? "hidden" : "shown") +
+          "</span>  h=" +
+          h +
+          "px\n            show-except=" +
+          esc(navEl.getAttribute("data-show-except"));
+        navEl.setAttribute("data-fc-outline", "");
+      }
+
+      var over = Math.max(
+        0,
+        document.documentElement.scrollHeight - window.innerHeight
+      );
+      if (over > peak) peak = over;
+
+      box.innerHTML =
+        '<span class="x" title="hide">✕</span><b>FC LAYOUT DEBUG</b>\n' +
+        "PAGE ID   " +
+        '<span class="' +
+        (overrideEl || ns === "landing" || ns === "page" ? "" : "bad") +
+        '">' +
+        esc(ns) +
+        "</span> (from " +
+        from +
+        ")\n" +
+        "NAV       " +
+        navBits +
+        "\n" +
+        "OVERFLOW  " +
+        '<span class="' +
+        (over ? "bad" : "ok") +
+        '">' +
+        over +
+        "px</span>   peak " +
+        '<span class="' +
+        (peak ? "bad" : "ok") +
+        '">' +
+        peak +
+        "px</span>\n" +
+        "VIEWPORT  " +
+        window.innerHeight +
+        "px   doc " +
+        document.documentElement.scrollHeight +
+        "px\n" +
+        "CONTAINER " +
+        (container
+          ? Math.round(container.getBoundingClientRect().height) + "px"
+          : "not found") +
+        "\n" +
+        "SHELL     " +
+        (shellIssues.length
+          ? '<span class="bad">' +
+            shellIssues.length +
+            " abandoned branch(es)</span>\n          " +
+            esc(shellIssues[shellIssues.length - 1])
+          : '<span class="ok">in sync</span>');
+    }
+    box.addEventListener("click", function (e) {
+      if (e.target && e.target.className === "x") {
+        box.style.display = "none";
+        document.querySelectorAll("[data-fc-outline]").forEach(function (n) {
+          n.removeAttribute("data-fc-outline");
+        });
+      } else {
+        peak = 0; // click the panel to reset the peak before a navigation
+      }
+    });
+    (function tick() {
+      paint();
+      requestAnimationFrame(tick);
+    })();
+  }
+
+  if (DEBUG_ON) {
+    if (document.body) buildDebugPanel();
+    else document.addEventListener("DOMContentLoaded", buildDebugPanel);
+  }
 })();

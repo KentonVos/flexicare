@@ -56,6 +56,22 @@ finished**; the current pass is polishing what exists rather than adding pages.
 
 ---
 
+## 2026-08-21 — transition.js: a visual layout debug panel (?fcdebug)
+
+- `src/transition.js`
+- Chasing the reveal page's "content pushed off screen on arrival, fine on refresh".
+  Several causes look identical on screen and reading them off the console
+  mid-transition is impractical, so this puts the discriminating numbers on the
+  page, live: what `pageIdentity()` resolved AND FROM WHERE (URL vs a
+  `data-page-id` override), the nav's should-hide vs actually-hidden plus its live
+  height, document overflow beyond the viewport WITH A PEAK (so a transient spike
+  mid-transition is still readable afterwards), the container height, and any
+  shell-sync branch that was abandoned. The nav wrapper gets outlined too.
+- `?fcdebug` STICKS in localStorage — the bug spans a navigation and `barba.go()`
+  drops the query string. `?fcdebug=off` clears it. Nothing renders otherwise.
+- Webflow: no change. The file list is unchanged (it lives in transition.js, not
+  a new file), so the footer stays as it is.
+
 ## 2026-08-21 — transition.js: name the shell-sync failure instead of failing quietly
 
 - `src/transition.js`
