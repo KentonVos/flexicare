@@ -14,6 +14,81 @@ Format:
 
 ---
 
+## Where things stand — 2026-08-24 (end of the reveal-page debugging pass)
+
+A snapshot for the next session, so nothing below has to be re-derived. Details are in
+the dated entries under it.
+
+**Journey as it stands:** landing → selfie **or** avatar picker → onboarding → `/archetype`
+(ROUTING quiz) → `/meet-your-two-selves` (reveal) → FLEX stage. The journey is **not
+finished**; this pass was debugging/polishing what exists rather than adding pages.
+
+**This pass fixed four reveal-page bugs that all presented as "it only works after a
+refresh". They had ONE root cause between them:** during a Barba swap BOTH containers are
+in the DOM and the pages are structurally identical, so any document-wide lookup is a coin
+toss between the incoming and the outgoing page.
+- The per-archetype copy was written into the **outgoing** container
+  (`document.getElementById`), so the visible cards kept the Designer's placeholder while
+  the copy cycler updated orphaned nodes for the rest of the visit. `copyTargets()` now
+  resolves inside `state.wrap` → its container → the document, keeps only **attached**
+  nodes, and writes every match. The cycler prunes detached nodes each tick.
+- Every controller's `resolveWrap()` had a document-wide fallback, so the **quiz**
+  controller initialised on the reveal page (its `afterEnter` hook runs everywhere),
+  concluded the stage was already complete on a resumed session, and fired a **second**
+  `barba.go()`. The destination then ran its entrance animation, `init()`, skeleton pass
+  and copy paint **twice**. The fallback is now hard-load-only, and `go()` refuses to
+  navigate to the path it is already on. Fixed in quiz, reveal and avatar (identical
+  resolvers). This was also why two reveal containers coexisted in the first bug.
+- The first name never came back on a `barba.go()` arrival (so `[data-reveal-name-wrap]`
+  stayed hidden): recovery was a side effect of `ensureArchetype()`'s session fetch, which
+  is skipped when the quiz has already set the archetype. `init()` now recovers it
+  independently, sharing one cached `fetchSession()`.
+- The placeholder copy flashed before the shimmer: `markSkeleton()` now runs at
+  script-execution time, and slots can ship hidden behind a Webflow combo class
+  (`data-reveal-hide-class`, default `is-0`) — CSS in the head is the only thing that
+  applies at first paint.
+
+**Diagnostics added — use them before theorising.** `?fcdebug` (sticks in localStorage;
+`?fcdebug=off` clears it) now also shows an **ENTERS** row (one line per page entry, red
+when the same path is entered twice) and the **reveal copy tracer** (PAINT lines: where the
+database was read from, which element each slot was written into, whether it is attached,
+what makes it hidden; then one AUDIT line per slot 1.5s later saying whether that is still
+the element on screen). The duplicate-entry `console.warn` is NOT gated — it prints for
+anyone with a console open. Both are described in ARCHITECTURE.md § transition.js.
+
+**Waiting on the backend (no frontend work pending):**
+- The dev is generating the missing **with/without-cover image pairs**. Only 19 of 90
+  avatar slots were selectable on 2026-08-21 (black/male 9/9, black/female 9/9,
+  coloured/female 1/9); a slot becomes selectable the moment its pair is approved, with
+  no republish needed. Re-measure with the loop in `AVATAR-BACKEND-QUESTIONS.md`.
+- Still unanswered there: Q6 (is `AvatarRace` final?), Q7 (rate limits on `/avatars`),
+  Q8 (does the avatar `PATCH` write the session's `gender`?). None blocking.
+- Asked for, not blocking: a `selectable`/`baked` flag (or the transparent url) on the
+  `/avatars` response — that would let the picker drop its second request.
+
+**Known pre-go-live tasks:**
+- The API base in `flexicare-core.js` is still **staging**
+  (`api-staging-discovery.injozitech.com`).
+- Remove `data-reveal-debug` from `[data-reveal]` — presence alone turns on console logging.
+
+**Open Webflow-side items on the reveal page** (the code is done; these are Designer edits):
+1. `data-reveal-copy-state` is currently `Loading...` — it must be exactly `loading`, or the
+   pre-JS CSS matches nothing.
+2. `data-reveal-timeout` is `9000` (9 seconds). The default is `90000`; 9s makes the selfie
+   path fall back to the placeholder image pair before generation finishes.
+3. Add the `is-0` combo class (`opacity: 0`) to the four copy slots, and
+   `data-reveal-skeleton-target` on their WRAPPERS — `opacity: 0` also hides the element's
+   own shimmer bar, so the shimmer has to live on the wrapper. `is-0` and `data-anim` must
+   not share an element: GSAP writes inline opacity during the entrance and inline beats a
+   class.
+
+**Attribute added to the contract this pass:** `data-reveal-hide-class` on `[data-reveal]`
+(default `is-0`, empty disables). Everything else was already documented.
+
+**Next up:** the FLEX stage / next phase of the journey (fresh session).
+
+---
+
 ## 2026-08-24 — FIXED: the reveal page was entered TWICE (double entrance animation)
 - `src/flexicare-quiz.js`, `src/flexicare-reveal.js`, `src/flexicare-avatar.js`, `CLAUDE.md`
 - The "data-anim runs twice, then everything re-animates when the shimmer resolves"
@@ -133,65 +208,6 @@ Format:
   `copy-database-embed` INSIDE `data-barba="container"` (`glass-content-wrapper`) to
   clear the warning and keep the page-specific data with the page.
 
-## Where things stand — 2026-08-24
-
-A snapshot for the next session, so nothing below has to be re-derived. Details are in
-the dated entries under it.
-
-**Journey as it stands:** landing → selfie **or** avatar picker → onboarding → `/archetype`
-(ROUTING quiz) → `/meet-your-two-selves` (reveal) → FLEX stage. The journey is **not
-finished**; the current pass is polishing what exists rather than adding pages.
-
-**Recently done (all live on `main`):**
-- Loading skeletons now on all three pages that fetch before they can paint — the avatar
-  grid, the quiz options, and (new this pass) the reveal page's copy + image cards. All
-  stamp state on Barba `beforeEnter` (before the incoming page is visible) and **inject
-  their own CSS**, because Barba never swaps the `<head>` and page-level head CSS is
-  missing on every `barba.go()` arrival. See `docs/avatar-loading-state.md`,
-  `docs/quiz-loading-state.md`, `docs/reveal-loading-state.md`.
-- The routing quiz's Next button reads **"See your 2 selves"** on the final question.
-- The avatar picker displays the **transparent-background** renders from
-  `GET /avatars/web` and gates selection on `GET /avatars` — two endpoints joined on `id`.
-  "Unavailable" now means *not pickable*, never *no image*.
-- **The reveal page's shell was one level too deep**, which mis-pasted every shell class
-  by one level on arrival (correct after a refresh — the classic tell). Fixed in Webflow;
-  the canonical tree every page must ship is now written down in ARCHITECTURE.md
-  § transition.js. Its `copy-database-embed` was also outside the Barba container, so the
-  cards silently kept the Designer's placeholder copy on arrival. Both confirmed fixed.
-
-**New diagnostic — use it before theorising about layout.** Load any page with
-`?fcdebug` (it sticks in localStorage; `?fcdebug=off` clears it) for a live on-page panel:
-resolved page identity and where it came from, nav should-hide vs is-hidden with its live
-height, document overflow with a peak, the container's persistent siblings and their
-heights, the container's ancestor chain live vs incoming, and anything stranded outside
-the container. It found the bug above on its first outing. `PageTransition.shellSnapshot()`
-is the console-side equivalent for shell classes alone.
-
-**Waiting on the backend (no frontend work pending):**
-- The dev is generating the missing **with/without-cover image pairs**. Only 19 of 90
-  avatar slots were selectable on 2026-08-21 (black/male 9/9, black/female 9/9,
-  coloured/female 1/9); a slot becomes selectable the moment its pair is approved, with
-  no republish needed. Re-measure with the loop in `AVATAR-BACKEND-QUESTIONS.md`.
-- Still unanswered there: Q6 (is `AvatarRace` final?), Q7 (rate limits on `/avatars`),
-  Q8 (does the avatar `PATCH` write the session's `gender`?). None blocking.
-- Asked for, not blocking: a `selectable`/`baked` flag (or the transparent url) on the
-  `/avatars` response — that would let the picker drop its second request.
-
-**Known pre-go-live task:** the API base in `flexicare-core.js` is still **staging**
-(`api-staging-discovery.injozitech.com`).
-
-**Webflow attributes added this pass** (set them in the Designer, they aren't in code):
-`data-quiz-next-label` on the text element inside the quiz's next button, plus
-`data-quiz-next-text-last="See your 2 selves"` on `[data-quiz]`. The reveal skeleton needs
-nothing, but optionally `data-reveal-copy-state="loading"` / `data-reveal-state="loading"`
-as static attributes on `[data-reveal]`, `data-reveal-image-frame`,
-`data-reveal-no-skeleton`, `data-reveal-skeleton-target`, `data-reveal-skeleton="off"`.
-From the previous pass: `data-avatar-state="loading"`, `data-quiz-state="loading"`,
-`data-quiz-skeleton-count`.
-
-**Next up:** the FLEX stage / next phase of the journey (fresh session).
-
----
 
 ## 2026-08-24 — Docs: the canonical shell structure, and the reveal page's shell fixed
 

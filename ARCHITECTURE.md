@@ -584,6 +584,21 @@ branch the shell class sync abandoned. Click the panel to reset the peak before 
 navigation. `PageTransition.shellSnapshot()` is the console-side equivalent for shell
 classes alone.
 
+The panel also carries an **ENTERS** row: one line per page entry (`once`/`enter`, path,
+timestamp), red and flagged when the same path is entered twice in a row. A double entry
+re-runs the entrance animation, the controller's `init()`, the skeleton pass and the copy
+paint, so it presents as several unrelated glitches — that row is how the 2026-08-24
+double-entrance bug was found. The duplicate-entry `console.warn` is **not** gated behind
+`?fcdebug`: whoever is staring at the glitches should see the cause in the same console.
+
+**Reveal copy tracer** (`flexicare-reveal.js`, same `?fcdebug` flag): on every copy paint it
+logs where the database was read from (live DOM vs incoming HTML), how many containers are
+in the DOM, and per slot how many `#id`/`[data-reveal-slot]` matches exist, which element
+was written, whether it is attached, what makes it `display:none`, and the resulting text.
+1.5s later one AUDIT line per slot says whether the element written is still the element on
+screen — the question that separates "the copy never arrived" from "the copy went into a
+container that was then removed".
+
 ### slider.js → the Liquid Glass Tuner (dev only)
 Despite the name, this is a floating control panel for tuning glass parameters live. Gated:
 only appears when the URL contains `?tune` (or `localStorage.lgTunerAlways = "1"`). Use it
