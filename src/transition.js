@@ -1076,6 +1076,24 @@
       dup: !!(prev && prev.url === url),
     });
     if (entries.length > 8) entries.shift();
+    // Loud, and NOT gated behind ?fcdebug: a second entry re-runs the entrance
+    // animation, every controller's init, the skeleton pass and the copy paint,
+    // so it surfaces as a handful of unrelated-looking glitches. Whoever sees
+    // them should see this line too.
+    if (prev && prev.url === url) {
+      console.warn(
+        "[transition] " +
+          url +
+          " was ENTERED TWICE (" +
+          prev.kind +
+          " then " +
+          kind +
+          ", " +
+          (entries[entries.length - 1].t - prev.t) +
+          "ms apart). The entrance animation, the page controller's init and " +
+          "the loading skeleton all just ran a second time."
+      );
+    }
   }
   barba.hooks.afterOnce(function () {
     logEntry("once");
