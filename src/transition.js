@@ -1058,6 +1058,32 @@
     endOverlap();
   });
 
+  /* ---------- entry log (read in the debug panel) ----------
+         "the entrance animation ran twice", "the copy appears, then the
+         shimmer starts, then the copy appears again" and "two containers were
+         in the DOM at afterEnter" are all one symptom: a page ENTERED TWICE.
+         Every entrance animation, every controller init and every skeleton
+         pass runs again on a second entry, so it reads as several unrelated
+         glitches. Ten lines to make it a fact instead of a theory. */
+  var entries = [];
+  function logEntry(kind) {
+    var url = location.pathname;
+    var prev = entries.length ? entries[entries.length - 1] : null;
+    entries.push({
+      kind: kind,
+      url: url,
+      t: Math.round(performance.now()),
+      dup: !!(prev && prev.url === url),
+    });
+    if (entries.length > 8) entries.shift();
+  }
+  barba.hooks.afterOnce(function () {
+    logEntry("once");
+  });
+  barba.hooks.afterEnter(function () {
+    logEntry("enter");
+  });
+
   /* ---------- the layout debug panel (dev only) ----------
          Gated behind ?fcdebug in the URL (or localStorage.fcDebug = "1"),
          exactly like the glass and orb tuners. Nothing renders without it.
@@ -1158,6 +1184,31 @@
 
     function esc(v) {
       return String(v == null ? "" : v).replace(/</g, "&lt;");
+    }
+
+    /* One line per page entry, newest last. A red line is the same URL entered
+       twice in a row — every entrance animation and controller init ran again,
+       which is what "data-anim runs twice" and "the copy loads, then the
+       shimmer starts" look like from the outside. */
+    function entryReport() {
+      if (!entries.length) return "none yet";
+      return entries
+        .map(function (e) {
+          return (
+            '<span class="' +
+            (e.dup ? "bad" : "ok") +
+            '">' +
+            e.kind +
+            " " +
+            esc(e.url) +
+            " @" +
+            (e.t / 1000).toFixed(1) +
+            "s" +
+            (e.dup ? "  ← ENTERED TWICE" : "") +
+            "</span>"
+          );
+        })
+        .join("\n          ");
     }
 
     /* The container's ancestor chain, live vs the page we navigated in from.
@@ -1284,6 +1335,9 @@
         "px   doc " +
         document.documentElement.scrollHeight +
         "px\n" +
+        "ENTERS    " +
+        entryReport() +
+        "\n" +
         "CONTAINER " +
         (container
           ? Math.round(container.getBoundingClientRect().height) + "px"

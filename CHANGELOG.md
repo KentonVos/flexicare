@@ -14,6 +14,16 @@ Format:
 
 ---
 
+## 2026-08-24 — Debug panel: ENTERS row (is the page entered twice?)
+- `src/transition.js`
+- "`data-anim` runs twice", "the copy loads, THEN the shimmer starts", and the original
+  "two containers in the DOM at afterEnter" are all one symptom if the page is being
+  ENTERED TWICE — every entrance animation, controller init and skeleton pass runs again.
+- `?fcdebug` now shows an ENTERS row: one line per page entry (`once`/`enter`, path,
+  timestamp), red and flagged `← ENTERED TWICE` when the same path is entered twice in a
+  row. Hooks are registered always (a capped 8-entry array); only the panel is gated.
+- Webflow: nothing. Dev-only.
+
 ## 2026-08-24 — Reveal: the name (and its wrapper) on arrival, not only after a refresh
 - `src/flexicare-reveal.js`, `ARCHITECTURE.md`
 - `[data-reveal-name-wrap]` stayed hidden on a `barba.go()` arrival: it is hidden when
