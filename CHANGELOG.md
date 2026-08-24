@@ -14,6 +14,21 @@ Format:
 
 ---
 
+## 2026-08-24 — Reveal: the name (and its wrapper) on arrival, not only after a refresh
+- `src/flexicare-reveal.js`, `ARCHITECTURE.md`
+- `[data-reveal-name-wrap]` stayed hidden on a `barba.go()` arrival: it is hidden when
+  there is no name, and `FC.firstName` is memory-only, so a hard reload earlier in the
+  funnel loses it while the session id survives. The recovery was a side effect of
+  `ensureArchetype()`'s `GET /sessions/{id}`, and that whole function short-circuits when
+  the quiz has already set the archetype — so the fetch never happened. A refresh is the
+  one path that always takes the recovery route, hence "only works on refresh".
+- Split the session read out into `applySession()` + a cached `fetchSession()`, and `init()`
+  now recovers the name on its own account when `FC.firstName` is empty, repainting when it
+  lands (and calling `recoverEcho()`, which has the same memory-only dependency). Both
+  paths share the one in-flight request, so no extra API call. Failure is never fatal —
+  no name just means the greeting stays hidden.
+- Webflow: nothing.
+
 ## 2026-08-24 — Reveal: data-reveal-hide-class (the `is-0` combo class)
 - `src/flexicare-reveal.js`, `ARCHITECTURE.md`, `docs/reveal-loading-state.md`
 - Closes the pre-JS gap properly, from the Webflow side instead of a head snippet: the

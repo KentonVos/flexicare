@@ -449,6 +449,14 @@ change in step, with a `data-reveal-cycle-fade` crossfade (GSAP; hard cut under 
 motion or with GSAP absent). Invalid JSON warns and leaves the Webflow copy untouched.
 `Flexicare.reveal.copy("A")` dumps what the database resolves to.
 
+**The name resolves independently of the archetype.** `FC.firstName` is memory-only, so a
+hard reload anywhere earlier in the funnel loses it while the session id survives. The
+recovery used to be a side effect of `ensureArchetype()`'s `GET /sessions/{id}` — which is
+skipped entirely when the quiz has just set the archetype, so on a `barba.go()` arrival the
+greeting stayed hidden (`[data-reveal-name-wrap]` is hidden when there is no name) and came
+back only after a refresh. `init()` now fires its own recovery when `FC.firstName` is
+empty; both paths share one cached `fetchSession()` so there is never a second request.
+
 **Shipping the slots hidden (`is-0`).** No script can beat the first paint, so the page
 may paint the Designer's placeholder before a footer script runs. The fix lives in
 Webflow: give each copy slot a combo class (`is-0`, `opacity: 0`) — Webflow's stylesheet

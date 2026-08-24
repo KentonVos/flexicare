@@ -138,7 +138,10 @@
                                 [data-reveal-images-fallback] is never blank.
 
      Copy slots (all optional — each is filled only if present):
-     [data-reveal-name]         gets the first name ("Lerato"). If the name is
+     [data-reveal-name]         gets the first name ("Lerato"), recovered from
+                                GET /sessions/{id} when it isn't in memory —
+                                independently of the archetype, which may not
+                                need that fetch. If the name is
                                 unknown the element is emptied and, if it carries
                                 data-reveal-name-wrap, that wrapper is hidden —
                                 use it on the ", Lerato" span so the headline
@@ -272,6 +275,7 @@
     cycleMs: 4000,
     cycleFade: 0.4,
     cycleIndex: 0,
+    sessionReq: null, // in-flight GET /sessions/{id}, shared by the recoveries
     nextHtml: null, // the incoming page's HTML, for the copy-database fallback
     nextDoc: null, // ...parsed, lazily, once per arrival
   };
@@ -364,23 +368,35 @@
 
   // Normally free: the quiz page ran the preview before navigating here.
   // Everything below is the hard-reload / deep-link recovery path.
+  function applySession(s) {
+    // Name is in the session too — the surest way to recover it on reload.
+    if (s && s.first_name && !FC.firstName) FC.setFirstName(s.first_name);
+
+    // Rebuild the local answer map (the quiz page's format) while we're here.
+    FC.answers = FC.answers || {};
+    FC._synced = FC._synced || {};
+    ((s && s.answers) || []).forEach(function (a) {
+      FC.answers[a.question_code] = a.option_code;
+      FC._synced[a.question_code] = a.option_code;
+    });
+    return s;
+  }
+
+  // GET /sessions/{id}, once per arrival: the archetype recovery and the name
+  // recovery both want it and neither should cause a second request.
+  function fetchSession() {
+    var id = FC.getSessionId();
+    if (!id) return Promise.reject(new Error("no session id"));
+    if (!state.sessionReq)
+      state.sessionReq = FC.api("/sessions/" + id).then(applySession);
+    return state.sessionReq;
+  }
+
   function ensureArchetype() {
     if (FC.archetype) return Promise.resolve(FC.archetype);
-    var id = FC.getSessionId();
     dbg("archetype unknown — recovering from the session");
 
-    return FC.api("/sessions/" + id).then(function (s) {
-      // Name is in the session too — the surest way to recover it on reload.
-      if (s && s.first_name && !FC.firstName) FC.setFirstName(s.first_name);
-
-      // Rebuild the local answer map (the quiz page's format) while we're here.
-      FC.answers = FC.answers || {};
-      FC._synced = FC._synced || {};
-      (s.answers || []).forEach(function (a) {
-        FC.answers[a.question_code] = a.option_code;
-        FC._synced[a.question_code] = a.option_code;
-      });
-
+    return fetchSession().then(function (s) {
       // A completed session already carries the resolved archetype.
       if (s && s.archetype) {
         FC.archetype = s.archetype;
@@ -1239,6 +1255,7 @@
     stopPolling();
     stopCycle();
     var token = ++state.token;
+    state.sessionReq = null; // a new arrival re-reads the session
     state.wrap = wrap;
     state.archetype = null;
     state.lang = attr(wrap, "data-reveal-lang", FC.config.language || "en");
@@ -1264,6 +1281,28 @@
 
     // Images and archetype resolve INDEPENDENTLY — neither waits on the other.
     pollImages(token);
+
+    /* The NAME resolves independently too, and it has to.
+       FC.firstName is memory-only, so any hard reload earlier in the funnel
+       loses it while the session id survives. It used to be recovered only as a
+       side effect of ensureArchetype()'s session fetch — which is skipped
+       entirely when the quiz has just set the archetype. So on a barba.go()
+       arrival the greeting stayed hidden ([data-reveal-name-wrap] is hidden
+       when there is no name) and only came back after a refresh, which is the
+       one path that takes the recovery route. */
+    if (!FC.firstName) {
+      dbg("no name in memory — recovering it from the session");
+      fetchSession()
+        .then(function () {
+          if (!alive(token)) return;
+          recoverEcho(); // memory-only too; no-op unless the quiz data is cached
+          paintCopy();
+        })
+        .catch(function (err) {
+          // Never fatal: no name just means the greeting stays hidden.
+          dbg("name recovery failed", err && err.message);
+        });
+    }
 
     setBusy(true);
     ensureArchetype()
@@ -1295,6 +1334,7 @@
     stopCycle();
     clearImageSkeleton();
     stopTrace();
+    state.sessionReq = null;
     state.nextHtml = null; // don't hold a whole page's HTML after we leave
     state.nextDoc = null;
     state.token++; // invalidate anything still in flight
