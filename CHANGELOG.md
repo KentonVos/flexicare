@@ -14,6 +14,37 @@ Format:
 
 ---
 
+## 2026-08-24 — Product page: the authored copy, a list template, and copy tokens
+- `src/flexicare-product.js`, NEW `docs/product-copy-embed.html`, `ARCHITECTURE.md`
+- **`docs/product-copy-embed.html`** is the paste-ready copy database, transcribed from the
+  A10/B10/C10 recommendation designs: one block per archetype x product plus a `*`
+  fallback, using single-axis keys where the copy only varies on one axis (`framing-sub` is
+  per-archetype; `plan-eyebrow` is per-product). Verified by replaying the resolution rules
+  over the file for all six combinations.
+  - TWO GAPS IN THE SOURCE DESIGN, flagged in comments rather than papered over: C10 shows
+    PLUS only, so **C:CORE copy is my placeholder and needs a copywriter** (the API can
+    still return CORE for C — product comes from `tier_score`); and A10's "Tell me more"
+    slide wasn't supplied, so archetype A has no `tell-more-*` copy.
+  - Caught while verifying: C's `tell-more-intro` named "Flexicare Plus", which C:CORE
+    inherited from the archetype-only block. Plan-naming copy has to be keyed per pair.
+- **List templates.** `[data-product-list="plan-benefit"]` + ONE
+  `[data-product-list-template]` inside it: the script clones the template per copy entry,
+  so a 4-line list for A and a 5-line list for C:PLUS need no extra Webflow work. Clones
+  strip `data-anim`/`-anim-fade`/`-text-reveal` (the FOUC rule would otherwise leave them
+  invisible — the bug the quiz's option clones already hit) and glass is re-scanned.
+  `[data-product-list-text]` is the text slot, so the item's arrow glyph is never
+  overwritten. A list whose slot has no copy gets its template hidden rather than left
+  showing one placeholder bullet.
+- **Copy tokens.** `{name}` `{price}` `{amount}` `{product}` `{archetype}` `{echo}` are
+  substituted into every slot, so the embed can carry "Your Flex, {name}." as one sentence.
+  A token resolving to nothing eats one comma/space run before it, so a missing name gives
+  "Your Flex." not "Your Flex, ." Unknown tokens are left visible.
+- No Webflow footer change (the file list is unchanged since the last entry).
+- **WEBFLOW:** build ONE benefit row, mark it `[data-product-list-template]`, wrap it in
+  `[data-product-list="plan-benefit"]`, and put `[data-product-list-text]` on its text
+  element (the arrow belongs in a sibling). IDs needed on the copy slots: `framing-lead`,
+  `framing-sub`, `plan-eyebrow`, `plan-heading`, `tell-more-intro`, `tell-more-note`.
+
 ## 2026-08-24 — NEW `/flexicare-product`: the recommendation page
 - NEW `src/flexicare-product.js`; `src/flexicare-quiz.js`, `ARCHITECTURE.md`, `CLAUDE.md`,
   `docs/hosting-and-publishing.md`

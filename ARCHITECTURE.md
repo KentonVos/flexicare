@@ -640,10 +640,27 @@ target's Webflow ID (or `[data-product-slot]`), the embed must live INSIDE
 `data-barba="container"` (else it is recovered from the incoming page's HTML and warns),
 JSON blocks accepted, copy inserted as HTML.
 
-**Repeated slots do double duty.** N items + N elements = a LIST, one item per element in
-order — that is how the design's three benefit lines are authored. N items + ONE element =
-a CYCLE, all cycling slots sharing one timer. Same syntax, and which one you get depends
-on how many elements carry the ID.
+**Repeated slots** resolve against whatever the page offers for that slot, in order:
+a `[data-product-list]` container → the items are cloned from ONE authored
+`[data-product-list-template]` inside it (the benefit-line path, and the only one that
+copes with a list whose length changes per combination — C:PLUS has five lines where A has
+four); several elements with the ID → one item each in order; one element → they CYCLE,
+all cycling slots sharing one timer. Clones get `[data-product-list-item]`, are rebuilt on
+every paint with `data-anim`/`-anim-fade`/`-text-reveal` stripped (else the FOUC rule
+leaves them invisible, since they're built after the entrance animation) and glass
+re-scanned — the same idiom as the quiz's option template. `[data-product-list-text]`
+inside the template is the text slot, so the item's arrow glyph survives.
+
+**Tokens** are substituted into every slot as it's painted: `{name}`, `{price}`,
+`{amount}`, `{product}` (`product_label`), `{archetype}`, `{echo}`. That lets the embed
+carry `"Your Flex, {name}."` as one sentence rather than splitting it around a
+`[data-product-name]` span. A token resolving to NOTHING also eats one comma-or-space run
+before it, so a missing name degrades to `"Your Flex."` rather than `"Your Flex, ."`; an
+unknown token is left visible so typos surface.
+
+**The authored copy lives in `docs/product-copy-embed.html`** — paste-ready, one block per
+archetype x product, with the two gaps in the source design flagged in comments (no
+approved Core copy for archetype C, and no `tell-more-*` copy for archetype A).
 
 `[data-product-for="A:PLUS"]` hides/shows whole structural blocks on the same keys.
 API-driven slots (written from the result, not the embed): `[data-product-name]`

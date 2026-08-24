@@ -137,16 +137,35 @@
                                   ID: data-copy="plan-heading" writes into
                                   #plan-heading. ([data-product-slot="plan-heading"]
                                   works too if you'd rather not use IDs.)
-                                • REPEAT a slot name to give it several items —
-                                  the target then CYCLES through them, all
-                                  cycling slots sharing one timer. One item is
-                                  static. That is how the three benefit lines in
-                                  the design are authored: three
-                                  data-copy="plan-benefit" entries, three
-                                  elements with that ID... or one element, if
-                                  you want them to cycle in place.
+                                • REPEAT a slot name to give it several items.
+                                  What happens then depends on what the page
+                                  offers for that slot, in this order:
+                                    1. a [data-product-list] container → the
+                                       items are CLONED from one authored
+                                       template (see below). This is the path
+                                       for the benefit lines.
+                                    2. several elements with that ID → one item
+                                       each, in order.
+                                    3. one element → the items CYCLE through it,
+                                       all cycling slots sharing one timer.
+                                  One item is always just static text.
                                 • Copy is inserted as HTML, so <strong>, <em>
                                   and <br> inside the embed work.
+                                • TOKENS are substituted into every slot:
+                                    {name}       the first name
+                                    {price}      "From R249/month"
+                                    {amount}     just "249"
+                                    {product}    product_label
+                                    {archetype}  archetype_label
+                                    {echo}       the R03 answer label
+                                  So the copy can read "Your Flex, {name}." as
+                                  one sentence instead of being split around a
+                                  [data-product-name] span. When a token
+                                  resolves to NOTHING, one comma-or-space run
+                                  immediately before it is eaten too, so a
+                                  missing name leaves "Your Flex." rather than
+                                  "Your Flex, ." An unknown token is left
+                                  visible — that is how a typo gets noticed.
                                 • A JSON block is accepted as an alternative:
                                   <script type="application/json" data-product-copy>
                                     { "A:PLUS": { "plan-heading": "…",
@@ -154,6 +173,29 @@
                                   </script>
                                   (One stray comma kills the whole block — the
                                   script warns and leaves the Webflow copy.)
+
+     LIST TEMPLATES (the benefit lines):
+     [data-product-list="plan-benefit"]  A container for a repeated slot. Build
+                                ONE item inside it, mark that item
+                                [data-product-list-template], and the script
+                                clones it per copy entry — so a list that is 4
+                                lines for one archetype and 5 for another needs
+                                no extra Webflow work.
+     [data-product-list-template]  The ONE authored item, INSIDE the container.
+                                Keep it styled and visible in the Designer (the
+                                card never looks empty while you work); the
+                                script hides it at paint time. Clones get
+                                [data-product-list-item] and are rebuilt on
+                                every paint, with data-anim/-anim-fade/
+                                -text-reveal stripped (they'd otherwise inherit
+                                the entrance rule and stay invisible) and glass
+                                re-scanned.
+     [data-product-list-text]   Optional, INSIDE the template: the text slot. If
+                                absent the whole clone gets the text — so put
+                                this on the text element whenever the item also
+                                holds an arrow glyph or an icon, or the glyph is
+                                overwritten. It's also what shimmers while the
+                                copy loads.
 
      [data-product-for="PLUS"]  Whole BLOCKS shown only for a matching
                                 archetype/product; non-matching ones are hidden.
@@ -200,6 +242,7 @@
     token: 0, // bumped on every init/teardown; async work checks it
     archetype: null,
     product: null,
+    result: null, // the finish response — token interpolation reads it
     cycles: [], // { el, items } — copy slots with more than one entry
     cycleTimer: null,
     cycleMs: 4000,
@@ -566,6 +609,134 @@
     return Object.keys(seen);
   }
 
+  /* ------------------------ token interpolation ------------------------ */
+
+  /* The copy is written by a copywriter, in the embed, with the personalised
+     bits inline — "Your Flex, {name}." reads as one sentence there instead of
+     being split into three elements with a [data-product-name] span in the
+     middle. So substitute the handful of values we know into every slot as it
+     is painted.
+
+       {name}       the first name, or "" when we don't have one
+       {price}      the formatted price ("From R249/month")
+       {amount}     just the number ("249")
+       {product}    product_label ("Flexicare Plus")
+       {archetype}  archetype_label
+       {echo}       the R03 answer label
+
+     An unknown token is left alone rather than blanked — a stray brace in the
+     copy stays visible, which is how a typo gets noticed.
+
+     PUNCTUATION: an empty {name} would leave "Your Flex, ." So when a token
+     resolves to nothing, one comma-or-space run immediately before it is eaten
+     too. That is why the copy can be written as though the name is always
+     there. */
+  function tokenValue(key) {
+    var r = state.result || {};
+    switch (key) {
+      case "name":
+        return FC.firstName || "";
+      case "price":
+        return priceText(null);
+      case "amount":
+        return amountText();
+      case "product":
+        return r.product_label || "";
+      case "archetype":
+        return r.archetype_label || "";
+      case "echo":
+        return FC.echo || "";
+    }
+    return null; // unknown → leave the token in place
+  }
+
+  function interpolate(html) {
+    if (html == null || html.indexOf("{") === -1) return html;
+    return String(html).replace(
+      /([,\s]*)\{([a-z]+)\}/gi,
+      function (whole, lead, key) {
+        var v = tokenValue(key.toLowerCase());
+        if (v === null) return whole; // unknown token — leave it visible
+        if (v === "") return ""; // eat the leading comma/space run too
+        return lead + v;
+      }
+    );
+  }
+
+  /* --------------------------- list templates --------------------------- */
+
+  /* The benefit lines are a LIST of unknown length that differs per
+     archetype/product, so Webflow can't author them as fixed elements. Same
+     answer as the quiz's options: build ONE item in the Designer, marked
+     [data-product-list-template], and clone it per entry.
+
+       <div data-product-list="plan-benefit">
+         <div data-product-list-template>
+           <div class="arrow">-></div>
+           <div data-product-list-text>Doctor access for the whole household</div>
+         </div>
+       </div>
+
+     The template stays in the Designer, styled and visible, so the card never
+     looks empty while you work on it — the script hides it at paint time. */
+  function listContainer(name) {
+    return slots('[data-product-list="' + name + '"]')[0] || null;
+  }
+
+  function clearList(box) {
+    all("[data-product-list-item]", box).forEach(function (node) {
+      if (window.LiquidGlass && typeof window.LiquidGlass.kill === "function") {
+        try {
+          window.LiquidGlass.kill(node);
+        } catch (e) {}
+      }
+      if (node.parentNode) node.parentNode.removeChild(node);
+    });
+  }
+
+  function renderList(box, items) {
+    var tpl = one("[data-product-list-template]", box);
+    if (!tpl) {
+      console.warn(
+        "[product] [data-product-list=\"" +
+          box.getAttribute("data-product-list") +
+          '"] has no [data-product-list-template] inside it — nothing to clone.'
+      );
+      return false;
+    }
+    clearList(box);
+    tpl.style.display = "none";
+
+    items.forEach(function (html) {
+      var clone = tpl.cloneNode(true);
+      clone.removeAttribute("data-product-list-template");
+      clone.removeAttribute("data-product-skeleton");
+      clone.setAttribute("data-product-list-item", "");
+      /* The clone inherits transition.js's entrance attributes from the
+         template; strip them or the FOUC rule (opacity:0) leaves every clone
+         invisible, because these are built AFTER the page's entrance animation
+         has already run. Exactly the bug the quiz's option clones hit. */
+      clone.removeAttribute("data-anim");
+      clone.removeAttribute("data-anim-fade");
+      clone.removeAttribute("data-text-reveal");
+      clone.style.display = "";
+      var textEl = clone.querySelector("[data-product-list-text]") || clone;
+      textEl.innerHTML = interpolate(html);
+      all("[data-product-skeleton]", clone).forEach(function (el) {
+        el.removeAttribute("data-product-skeleton");
+      });
+      box.appendChild(clone);
+    });
+
+    // Attach glass to the fresh clones, if the item uses it.
+    if (window.LiquidGlass && typeof window.LiquidGlass.scan === "function") {
+      try {
+        window.LiquidGlass.scan(box);
+      } catch (e) {}
+    }
+    return true;
+  }
+
   function paintDatabaseCopy(code, product) {
     stopCycle();
     // The database is data, not layout — never let it render.
@@ -604,24 +775,30 @@
         return t != null && String(t).trim() !== "";
       });
       if (!items.length) return;
+      /* A [data-product-list] container wins: ONE authored item, cloned per
+         entry. That is the path for the benefit lines, and the only one that
+         handles a list whose length changes per archetype/product. */
+      var box = listContainer(name);
+      if (box) {
+        if (renderList(box, items)) return;
+      }
+
       var targets = copyTargets(name);
       if (!targets.length) {
-        dbg('slot "' + name + '" has copy but no element with that ID');
+        dbg('slot "' + name + '" has copy but no element or list for it');
         return;
       }
-      /* Several items and several elements = a LIST (the three benefit lines
-         in the design): hand out one item per element, in order. Several items
-         but ONE element = a CYCLE. That distinction is what lets the same
-         repeated-slot syntax author both. */
+      /* No list container: several items across several elements = one item
+         per element, in order. Several items into ONE element = a CYCLE. */
       if (items.length > 1 && targets.length > 1) {
         targets.forEach(function (el, i) {
-          if (i < items.length) el.innerHTML = items[i];
+          if (i < items.length) el.innerHTML = interpolate(items[i]);
           else show(el, false); // more slots than copy — hide the leftovers
         });
         return;
       }
       targets.forEach(function (el) {
-        el.innerHTML = items[0];
+        el.innerHTML = interpolate(items[0]);
         if (items.length > 1) state.cycles.push({ el: el, items: items });
       });
     });
@@ -681,32 +858,47 @@
       state.cycles.forEach(function (c) {
         // The node may have been swapped out from under us mid-cycle.
         if (!attached(c.el)) return;
-        swapText(c.el, c.items[state.cycleIndex % c.items.length]);
+        swapText(c.el, interpolate(c.items[state.cycleIndex % c.items.length]));
       });
     }, state.cycleMs);
   }
 
   /* --------------------------- API-driven copy --------------------------- */
 
-  function formatPrice(cents, fmtEl) {
+  function havePrice() {
+    var c = state.result && state.result.recommended_price_cents;
+    return typeof c === "number" && !isNaN(c);
+  }
+
+  // Just the number: "249". "" when the API returned no price.
+  function amountText() {
+    if (!havePrice()) return "";
     var decimals = parseInt(
       attr(state.wrap, "data-product-price-decimals", "0"),
       10
     );
     if (isNaN(decimals) || decimals < 0) decimals = 0;
-    var amount = (cents / 100).toFixed(decimals);
+    var amount = (state.result.recommended_price_cents / 100).toFixed(decimals);
     // Thousands separators, without Intl (this has to run on old Android too).
     var bits = amount.split(".");
     bits[0] = bits[0].replace(/\B(?=(\d{3})+(?!\d))/g, " ");
-    amount = bits.join(".");
+    return bits.join(".");
+  }
 
+  // The whole line: "From R249/month". fmtEl lets one element override the
+  // wrapper's format, so a card and a sticky bar can word it differently.
+  function priceText(fmtEl) {
+    if (!havePrice()) return "";
     var fmt =
       attr(fmtEl, "data-product-price-format", null) ||
       attr(state.wrap, "data-product-price-format", "From R{amount}/month");
-    return fmt.replace(/\{amount\}/g, amount);
+    return fmt.replace(/\{amount\}/g, amountText());
   }
 
   function paintResult(r) {
+    // [data-product-name] is the standalone slot; copy that says "…, {name}."
+    // inline is handled by interpolate() instead. Both work; use whichever
+    // suits the sentence.
     var name = FC.firstName || "";
     setText("[data-product-name]", name);
     slots("[data-product-name-wrap]").forEach(function (el) {
@@ -720,16 +912,15 @@
 
     // The API is allowed to return no price — hide the slot rather than
     // printing "From R0/month" or "From RNaN/month".
-    var cents = r.recommended_price_cents;
-    var havePrice = typeof cents === "number" && !isNaN(cents);
+    var priced = havePrice();
     slots("[data-product-price]").forEach(function (el) {
-      if (havePrice) el.textContent = formatPrice(cents, el);
-      show(el, havePrice);
+      if (priced) el.textContent = priceText(el);
+      show(el, priced);
     });
     slots("[data-product-price-wrap]").forEach(function (el) {
-      show(el, havePrice);
+      show(el, priced);
     });
-    if (!havePrice)
+    if (!priced)
       dbg("no recommended_price_cents on the result — price slots hidden");
   }
 
@@ -820,7 +1011,17 @@
       wrap
     );
     allSlotNames().forEach(function (name) {
-      targets = targets.concat(all('[id="' + name + '"],[data-product-slot="' + name + '"]', wrap));
+      targets = targets.concat(
+        all('[id="' + name + '"],[data-product-slot="' + name + '"]', wrap)
+      );
+    });
+    /* The authored list template is the only list item on screen until the
+       clones land, so it is what has to shimmer. Mark its TEXT slot, not the
+       item — the item usually carries the arrow glyph and the row layout, and
+       shimmering the whole row hides the arrow and squashes the spacing. */
+    all("[data-product-list-template]", wrap).forEach(function (tpl) {
+      var textEl = tpl.querySelector("[data-product-list-text]") || tpl;
+      skeletonOn(textEl);
     });
     targets.forEach(skeletonOn);
   }
@@ -828,6 +1029,14 @@
   function clearSkeleton() {
     all("[data-product-skeleton]").forEach(function (el) {
       el.removeAttribute("data-product-skeleton");
+    });
+    /* A list whose slot had no copy never went through renderList(), so its
+       template is still the visible placeholder row. Hide it — a lone
+       lorem-ipsum bullet reads as real content. */
+    all("[data-product-list]").forEach(function (box) {
+      if (one("[data-product-list-item]", box)) return; // rendered fine
+      var tpl = one("[data-product-list-template]", box);
+      if (tpl) tpl.style.display = "none";
     });
     if (state.wrap) state.wrap.setAttribute("data-product-state", "ready");
   }
@@ -909,6 +1118,7 @@
     state.wrap = wrap;
     state.archetype = null;
     state.product = null;
+    state.result = null;
     state.lang = attr(wrap, "data-product-lang", FC.config.language || "en");
     state.cycleMs = num(wrap, "data-product-cycle", 4000, 1200);
     state.cycleFade = num(wrap, "data-product-cycle-fade", 0.4, 0);
@@ -926,6 +1136,7 @@
     ensureResult()
       .then(function (r) {
         if (!alive(token)) return;
+        state.result = r; // before any paint — interpolate() reads it
         state.archetype = r.archetype;
         state.product = r.product;
         recoverEcho();
@@ -970,6 +1181,7 @@
     state.wrap = null;
     state.archetype = null;
     state.product = null;
+    state.result = null;
   }
 
   /* ------------------------------ lifecycle ------------------------------ */

@@ -1,0 +1,164 @@
+<!-- ============================================================
+     /flexicare-product — the copy database
+     ------------------------------------------------------------
+     Paste this whole thing into ONE Webflow HTML Embed on the
+     /flexicare-product page, INSIDE data-barba="container".
+
+     If it sits outside the container, Barba never swaps it in and the
+     cards keep the Designer's placeholder copy on every navigation
+     (a hard refresh hides the bug completely). flexicare-product.js
+     recovers from the incoming page's HTML and warns in the console,
+     but fix the placement rather than relying on that.
+
+     The script HIDES this embed — it's data, not layout.
+
+     KEYS are ARCHETYPE:PRODUCT. Either half may be "*", and a bare
+     token is read from its own vocabulary (A/B/C archetypes,
+     CORE/PLUS products), so "B" means "B:*" and "PLUS" means
+     "*:PLUS". More specific wins, slot by slot:
+         *  →  a product  →  an archetype  →  a pair
+
+     SLOTS (the name is the Webflow ID of the element it writes into,
+     or [data-product-slot="..."]):
+       framing-lead     "Your Flex, {name}."      — same for everyone
+       framing-sub      "Based on your family —"  — per ARCHETYPE only
+       plan-eyebrow     the card's header strip
+       plan-heading     the quoted line in the card
+       plan-benefit     REPEATED — the arrow lines. Rendered by cloning
+                        [data-product-list-template] inside
+                        [data-product-list="plan-benefit"].
+       tell-more-intro  the accordion's opening line
+       tell-more-note   the accordion's closing caveat
+
+     THE ARROW GLYPH ("→") IS NOT IN THIS COPY. It belongs to the list
+     template item in Webflow, alongside [data-product-list-text].
+     Put the arrow in its own element in the template and the script
+     will never overwrite it.
+
+     TOKENS: {name} {price} {amount} {product} {archetype} {echo}.
+     A token that resolves to nothing also eats one comma/space run
+     before it, so "Your Flex, {name}." degrades to "Your Flex."
+     ============================================================ -->
+
+<div data-product-copy>
+
+  <!-- ============ SHARED / FALLBACK ============
+       Covers any combination not written out below, so the page is
+       never blank if the API returns something unexpected. -->
+  <div data-copy-for="*">
+    <div data-copy="framing-lead">Your Flex, {name}.</div>
+    <div data-copy="framing-sub">Based on your answers &mdash;</div>
+    <div data-copy="plan-eyebrow">{product}</div>
+    <div data-copy="plan-heading">{product} fits where you are right now.</div>
+    <div data-copy="plan-benefit">Primary health cover &mdash; doctor visits, scripts, basic tests</div>
+    <div data-copy="plan-benefit">Catches it early &mdash; before it gets expensive</div>
+    <div data-copy="plan-benefit">Less than a note out of pocket on most visits</div>
+    <div data-copy="plan-benefit">Fixed monthly cost. No surprise bills.</div>
+  </div>
+
+  <!-- The card header strip is the same wherever it isn't overridden:
+       it names the plan the server picked. -->
+  <div data-copy-for="CORE">
+    <div data-copy="plan-eyebrow">Flexicare Core</div>
+  </div>
+  <div data-copy-for="PLUS">
+    <div data-copy="plan-eyebrow">Flexicare Plus</div>
+  </div>
+
+
+  <!-- ==================== ARCHETYPE A ==================== -->
+  <!-- A10. The framing line is per-archetype, so it lives in the
+       archetype-only block and applies to both products. -->
+  <div data-copy-for="A">
+    <div data-copy="framing-sub">Based on your answers &mdash;</div>
+  </div>
+
+  <div data-copy-for="A:CORE">
+    <div data-copy="plan-heading">Flexicare Core fits where you are right now.</div>
+    <div data-copy="plan-benefit">Primary health cover &mdash; doctor visits, scripts, basic tests</div>
+    <div data-copy="plan-benefit">Catches it early &mdash; before it gets expensive</div>
+    <div data-copy="plan-benefit">Less than a note out of pocket on most visits</div>
+    <div data-copy="plan-benefit">Fixed monthly cost. No surprise bills.</div>
+  </div>
+
+  <div data-copy-for="A:PLUS">
+    <div data-copy="plan-heading">Flexicare Plus fits where you are right now.</div>
+    <div data-copy="plan-benefit">Full access &mdash; doctor, specialist, pathology, and more</div>
+    <div data-copy="plan-benefit">Catches problems early. Chronic conditions managed.</div>
+    <div data-copy="plan-benefit">Less than a note out of pocket on most visits</div>
+    <div data-copy="plan-benefit">Fixed cost. No surprises.</div>
+  </div>
+
+
+  <!-- ==================== ARCHETYPE B ==================== -->
+  <div data-copy-for="B">
+    <div data-copy="framing-sub">Based on your family &mdash;</div>
+    <div data-copy="tell-more-intro">Your whole family is covered under one membership. Here&rsquo;s what that means in practice.</div>
+    <div data-copy="tell-more-note">Dependent children added during sign-up. Terms apply.</div>
+  </div>
+
+  <div data-copy-for="B:CORE">
+    <div data-copy="plan-heading">Flexicare Core covers your family now.</div>
+    <div data-copy="plan-benefit">Doctor visits &mdash; for all of you</div>
+    <div data-copy="plan-benefit">Co-payments less than a takeaway</div>
+    <div data-copy="plan-benefit">Primary health cover &mdash; doctor, scripts, basic tests</div>
+    <div data-copy="plan-benefit">Fixed monthly amount</div>
+  </div>
+
+  <div data-copy-for="B:PLUS">
+    <div data-copy="plan-heading">Flexicare Plus covers your family now.</div>
+    <div data-copy="plan-benefit">Doctor visits for all of you &mdash; any time</div>
+    <div data-copy="plan-benefit">Chronic management &mdash; full household</div>
+    <div data-copy="plan-benefit">Specialist access included</div>
+    <div data-copy="plan-benefit">Co-payments less than a takeaway</div>
+  </div>
+
+
+  <!-- ==================== ARCHETYPE C ==================== -->
+  <div data-copy-for="C">
+    <div data-copy="framing-sub">Based on what you&rsquo;re responsible for &mdash;</div>
+    <div data-copy="tell-more-note">Extended family members require separate enrolment. Confirm during sign-up.</div>
+  </div>
+
+  <!-- tell-more-intro NAMES THE PLAN, so it cannot sit in the archetype-only
+       block above: C:CORE would inherit an intro that says "Flexicare Plus".
+       Keep it per-pair. (The note above is plan-neutral, so it stays shared.) -->
+  <div data-copy-for="C:PLUS">
+    <div data-copy="tell-more-intro">Flexicare Plus covers your household and the extended family members you support. Here&rsquo;s what that includes.</div>
+    <div data-copy="plan-eyebrow">Flexicare Plus &mdash; most likely for Archetype C</div>
+    <div data-copy="plan-heading">Broad enough for two generations.</div>
+    <div data-copy="plan-benefit">Doctor access for the whole household</div>
+    <div data-copy="plan-benefit">Chronic conditions: full management programme</div>
+    <div data-copy="plan-benefit">Specialist referrals handled</div>
+    <div data-copy="plan-benefit">Co-payments less than a note on most doctor visits</div>
+    <div data-copy="plan-benefit">Dental and optical: basic included &nbsp;|&nbsp; Mental health: included</div>
+  </div>
+
+  <!-- ###  NEEDS A COPYWRITER  ###
+       C10 in the design shows PLUS only ("most likely for Archetype C"),
+       so there is no approved Core copy for this archetype. But the API
+       CAN still return CORE for C — product comes from tier_score, and a
+       low scorer with dependants lands here. Without this block such a
+       user would fall through to the generic "*" copy, which talks about
+       neither their household nor two generations.
+
+       So this is written in C's voice from Core's feature set, and it is
+       a PLACEHOLDER. Get it approved or replace it. -->
+  <div data-copy-for="C:CORE">
+    <div data-copy="tell-more-intro">Flexicare Core covers the basics for your household. Here&rsquo;s what that includes.</div>
+    <div data-copy="plan-heading">A base that covers the people who count on you.</div>
+    <div data-copy="plan-benefit">Doctor visits for your household</div>
+    <div data-copy="plan-benefit">Primary health cover &mdash; doctor, scripts, basic tests</div>
+    <div data-copy="plan-benefit">Co-payments less than a note on most doctor visits</div>
+    <div data-copy="plan-benefit">Fixed monthly amount. No surprise bills.</div>
+  </div>
+
+  <!-- ###  MISSING FROM THE DESIGN  ###
+       A10's "Tell me more" accordion is the reference for the 3-block
+       structure B10 and C10 point at, but the slide itself wasn't in the
+       screenshots, so there is no tell-more-intro / tell-more-note for
+       archetype A. Until it is supplied, A falls back to nothing for
+       those two slots — check that the accordion reads sensibly empty,
+       or add a data-copy-for="A" pair here. -->
+
+</div>
