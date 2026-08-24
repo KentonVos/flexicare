@@ -406,6 +406,12 @@ answer; tag its text `[data-quiz-option-label]`; may carry `data-liquid-glass`),
 `-images`/`[data-quiz-image-for="R01"]`, `-next` (disabled until a pick), `-back`,
 `-loading`, `-error`. Selected option gets `is-selected` (or `data-selected-class`). This
 controller drives the `[data-progress-bar]` width directly as questions advance.
+**Per-question Next label**: put `[data-quiz-next-label]` on the text element inside the
+next button and the wrapper's `data-quiz-next-text-last` (default: `data-quiz-next-text`,
+which itself defaults to whatever text the button already carries) is swapped in on the
+FINAL question — that's how the routing quiz ends on "See your 2 selves". Set in
+`applyState()`, so it's right on first paint, on every advance, and reverts on Back.
+Without the label attribute the button text is never touched.
 **Loading skeleton** (`docs/quiz-loading-state.md`): nothing can paint until `GET /quiz`
 lands, and the authored `[data-quiz-option-template]` card was visible in that gap. A
 `beforeEnter` hook calls `prime()` on the incoming container — before it is visible — which

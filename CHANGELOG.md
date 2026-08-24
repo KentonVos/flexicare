@@ -14,7 +14,7 @@ Format:
 
 ---
 
-## Where things stand — 2026-08-21
+## Where things stand — 2026-08-24
 
 A snapshot for the next session, so nothing below has to be re-derived. Details are in
 the dated entries under it.
@@ -24,14 +24,29 @@ the dated entries under it.
 finished**; the current pass is polishing what exists rather than adding pages.
 
 **Recently done (all live on `main`):**
-- Loading skeletons on the two pages that fetch before they can paint — the avatar grid
-  and the quiz options. Both stamp state on Barba `beforeEnter` (before the incoming page
-  is visible) and **inject their own CSS**, because Barba never swaps the `<head>` and
-  page-level head CSS is missing on every `barba.go()` arrival. See
-  `docs/avatar-loading-state.md` and `docs/quiz-loading-state.md`.
+- Loading skeletons now on all three pages that fetch before they can paint — the avatar
+  grid, the quiz options, and (new this pass) the reveal page's copy + image cards. All
+  stamp state on Barba `beforeEnter` (before the incoming page is visible) and **inject
+  their own CSS**, because Barba never swaps the `<head>` and page-level head CSS is
+  missing on every `barba.go()` arrival. See `docs/avatar-loading-state.md`,
+  `docs/quiz-loading-state.md`, `docs/reveal-loading-state.md`.
+- The routing quiz's Next button reads **"See your 2 selves"** on the final question.
 - The avatar picker displays the **transparent-background** renders from
   `GET /avatars/web` and gates selection on `GET /avatars` — two endpoints joined on `id`.
   "Unavailable" now means *not pickable*, never *no image*.
+- **The reveal page's shell was one level too deep**, which mis-pasted every shell class
+  by one level on arrival (correct after a refresh — the classic tell). Fixed in Webflow;
+  the canonical tree every page must ship is now written down in ARCHITECTURE.md
+  § transition.js. Its `copy-database-embed` was also outside the Barba container, so the
+  cards silently kept the Designer's placeholder copy on arrival. Both confirmed fixed.
+
+**New diagnostic — use it before theorising about layout.** Load any page with
+`?fcdebug` (it sticks in localStorage; `?fcdebug=off` clears it) for a live on-page panel:
+resolved page identity and where it came from, nav should-hide vs is-hidden with its live
+height, document overflow with a peak, the container's persistent siblings and their
+heights, the container's ancestor chain live vs incoming, and anything stranded outside
+the container. It found the bug above on its first outing. `PageTransition.shellSnapshot()`
+is the console-side equivalent for shell classes alone.
 
 **Waiting on the backend (no frontend work pending):**
 - The dev is generating the missing **with/without-cover image pairs**. Only 19 of 90
@@ -47,16 +62,43 @@ finished**; the current pass is polishing what exists rather than adding pages.
 (`api-staging-discovery.injozitech.com`).
 
 **Webflow attributes added this pass** (set them in the Designer, they aren't in code):
-`data-avatar-state="loading"` and `data-quiz-state="loading"` as static attributes on
-`[data-avatar]` / `[data-quiz]`, plus `data-quiz-skeleton-count`. Optional:
-`data-avatar-transparent="off"`, `data-avatar-skeleton="off"`, `data-quiz-skeleton="off"`,
-`data-loading-class`.
+`data-quiz-next-label` on the text element inside the quiz's next button, plus
+`data-quiz-next-text-last="See your 2 selves"` on `[data-quiz]`. The reveal skeleton needs
+nothing, but optionally `data-reveal-copy-state="loading"` / `data-reveal-state="loading"`
+as static attributes on `[data-reveal]`, `data-reveal-image-frame`,
+`data-reveal-no-skeleton`, `data-reveal-skeleton-target`, `data-reveal-skeleton="off"`.
+From the previous pass: `data-avatar-state="loading"`, `data-quiz-state="loading"`,
+`data-quiz-skeleton-count`.
 
-**Next up:** other bugs and page-transition issues (fresh session).
+**Next up:** the FLEX stage / next phase of the journey (fresh session).
 
 ---
 
-## 2026-08-21 — Debug panel: ancestor-chain compare + a "stranded outside the container" check
+## 2026-08-24 — Docs: the canonical shell structure, and the reveal page's shell fixed
+
+- `ARCHITECTURE.md` (§ transition.js), `CLAUDE.md`
+- Wrote down the exact tree every page must ship outside `data-barba="container"`,
+  because it had to be re-derived from scratch to find this bug and the panel's
+  CHAIN block now makes it checkable in seconds.
+- The cause, measured: the reveal page had ONE EXTRA level —
+  `content-flex-wrapper` between `container-large` and `scroll-wrapper`, with
+  `top-section-wrapper` inside it rather than beside the container. Every other
+  page is `container-large > <scroll wrapper> > { top-section-wrapper, container }`.
+- One level is enough to break everything after the first page: `syncAncestors()`
+  walks both chains in lockstep checking only tagName, so off by one it pastes
+  every class one level from where it belongs. The container came out 684px on
+  arrival vs 789px on refresh, and it threw a bogus
+  `live is <main>, next has <div>` warning from comparing `<main>` against
+  `content-wrapper` — symptoms that look unrelated and aren't.
+- **Fixed in Webflow** (no code change): on `/meet-your-two-selves`,
+  `top-section-wrapper` moved inside `scroll-wrapper` above the container,
+  `scroll-wrapper` moved up to be a direct child of `container-large`,
+  `content-flex-wrapper` deleted with its layout styles moved onto
+  `scroll-wrapper`. Also `copy-database-embed` moved INSIDE the container — at
+  body level Barba never brought it across, so the cards silently kept the
+  Designer's placeholder copy on every arrival. Confirmed working.
+
+## 2026-08-24 — Debug panel: ancestor-chain compare + a "stranded outside the container" check
 
 - `src/transition.js`, `src/flexicare-reveal.js`
 - The reveal page's Navigator showed the Barba container is `glass-content-wrapper`
@@ -78,7 +120,7 @@ finished**; the current pass is polishing what exists rather than adding pages.
   database, and says what to check. Silent-by-default was the wrong call here.
 - Webflow: move the `copy-database-embed` INSIDE the reveal page's Barba container.
 
-## 2026-08-21 — Debug panel: list every abandoned branch + the container's siblings
+## 2026-08-24 — Debug panel: list every abandoned branch + the container's siblings
 
 - `src/transition.js`
 - The panel found the reveal-page bug on its first outing but only printed the
@@ -91,7 +133,7 @@ finished**; the current pass is polishing what exists rather than adding pages.
   heights are flagged red.
 - Panel now scrolls (max-height 70vh) since it can get long.
 
-## 2026-08-21 — transition.js: a visual layout debug panel (?fcdebug)
+## 2026-08-24 — transition.js: a visual layout debug panel (?fcdebug)
 
 - `src/transition.js`
 - Chasing the reveal page's "content pushed off screen on arrival, fine on refresh".
@@ -107,7 +149,7 @@ finished**; the current pass is polishing what exists rather than adding pages.
 - Webflow: no change. The file list is unchanged (it lives in transition.js, not
   a new file), so the footer stays as it is.
 
-## 2026-08-21 — transition.js: name the shell-sync failure instead of failing quietly
+## 2026-08-24 — transition.js: name the shell-sync failure instead of failing quietly
 
 - `src/transition.js`
 - Chasing "the reveal page's layout is wrong on arrival but right after a
@@ -124,7 +166,7 @@ finished**; the current pass is polishing what exists rather than adding pages.
   are ruled out and the cause is the container's own entrance instead.
 - Webflow: no change.
 
-## 2026-08-21 — Reveal page: actually hide the placeholder image under the shimmer
+## 2026-08-24 — Reveal page: actually hide the placeholder image under the shimmer
 
 - `src/flexicare-reveal.js`, `docs/reveal-loading-state.md`
 - The image skeleton shimmered but you could still see Webflow's placeholder
@@ -140,7 +182,7 @@ finished**; the current pass is polishing what exists rather than adding pages.
   itself now, rather than waiting for init.
 - Webflow: no change needed.
 
-## 2026-08-21 — Reveal page: loading skeleton for the copy and the images
+## 2026-08-24 — Reveal page: loading skeleton for the copy and the images
 
 - `src/flexicare-reveal.js`
 - The reveal page painted the Designer's PLACEHOLDER copy until the archetype
@@ -161,7 +203,7 @@ finished**; the current pass is polishing what exists rather than adding pages.
   to exclude an element, `data-reveal-skeleton-target` to add one,
   `data-reveal-skeleton="off"` on `[data-reveal]` to turn it all off.
 
-## 2026-08-21 — Quiz: per-question label on the Next button
+## 2026-08-24 — Quiz: per-question label on the Next button
 
 - `src/flexicare-quiz.js`
 - The nav's Next button can now read something else on the FINAL question, so the
