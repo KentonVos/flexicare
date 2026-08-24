@@ -1278,6 +1278,18 @@
   }
   window.addEventListener("pagehide", teardown);
 
+  /* The shimmer goes on NOW, at script-execution time — not at
+     DOMContentLoaded, and not in boot(). On a hard load the browser can paint
+     the Designer's placeholder copy before DOMContentLoaded fires, which reads
+     as "the copy appears, THEN the shimmer starts, then the real copy arrives"
+     — the placeholder flashing past as if it were the answer.
+
+     Webflow loads these scripts in the FOOTER, so the reveal markup above them
+     is already parsed and this finds its targets. If the script is ever moved
+     to the head it is simply a no-op (no [data-reveal] yet) and init() marks
+     again a moment later, so this is safe either way. */
+  markSkeleton(document);
+
   function boot() {
     init(document);
   }

@@ -65,8 +65,25 @@ Nothing is **required** — the script marks everything from attributes that are
 already on the page. The optional knobs:
 
 1. On `[data-reveal]`, add static `data-reveal-copy-state` = `loading` and
-   `data-reveal-state` = `loading`. On a hard load the footer scripts run after
-   first paint; the script clears both.
+   `data-reveal-state` = `loading`. The script clears both.
+
+   `markSkeleton()` runs at **script-execution time** (not `DOMContentLoaded`), so on a
+   hard load the shimmer is in place as early as a footer script can manage — otherwise
+   the placeholder copy paints first and the sequence reads "copy, then shimmer, then the
+   real copy", with the placeholder flashing past as if it were the answer. That closes
+   most of the gap but not all of it: CSS in the `<head>` is the only thing that applies
+   at first paint. If you still catch a flash, pair the static attribute above with this
+   in **Site Settings → Custom Code → Head** (the skeleton CSS itself ships with the
+   script, so this is only about the pre-JS frames):
+
+   ```html
+   <style>
+     [data-reveal-copy-state="loading"] #with-cover-heading,
+     [data-reveal-copy-state="loading"] #without-cover-heading,
+     [data-reveal-copy-state="loading"] #with-cover-text,
+     [data-reveal-copy-state="loading"] #without-cover-text { color: transparent }
+   </style>
+   ```
 2. Set the `[data-reveal-copy]` embed's wrapper to **display: none** in the
    Designer. The script hides it, but only once it runs — on a hard load the raw
    copy blocks are briefly visible otherwise.

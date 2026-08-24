@@ -14,6 +14,18 @@ Format:
 
 ---
 
+## 2026-08-24 — Reveal: shimmer before the placeholder can paint
+- `src/flexicare-reveal.js`, `docs/reveal-loading-state.md`
+- On a hard load the sequence read "placeholder copy → shimmer starts → real copy": the
+  browser paints before `DOMContentLoaded`, and that is when `boot()` first called
+  `markSkeleton()`. The placeholder flashed past looking like the answer.
+- `markSkeleton(document)` now runs at script-execution time. Webflow loads these in the
+  footer, so the reveal markup above them is parsed and the targets are found; if the
+  script is ever moved to the head it is a no-op and `init()` marks again. Idempotent
+  either way.
+- Webflow: nothing required. For the last few pre-JS frames, `docs/reveal-loading-state.md`
+  step 1 now has an optional head `<style>` — the only thing that applies at first paint.
+
 ## 2026-08-24 — Reveal copy: FIXED — it was going into the outgoing container
 - `src/flexicare-reveal.js`, `ARCHITECTURE.md`
 - Root cause, from the `?fcdebug` audit: `our element still in the DOM: false` on all four
