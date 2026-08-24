@@ -642,7 +642,7 @@
       });
     });
     dbg("copy applied", slots.length + " slots,", state.cycles.length + " cycling");
-    if (tracing()) traceCopy(slots);
+    if (tracing()) traceCopy(slots, copy);
     startCycle();
   }
 
@@ -650,9 +650,11 @@
      "The right copy appears, then the placeholder comes back" has several
      causes that look identical on screen: the copy went into a DIFFERENT
      element than the visible one (a duplicate ID, a hidden [data-reveal-for]
-     block, a second copy of the card for another breakpoint), or something
-     rewrote the element AFTER the paint. This says which, and for the second
-     case prints a stack trace naming the culprit.
+     block, a second copy of the card for another breakpoint), or the element we
+     wrote into being REPLACED afterwards — in which case the cycler keeps
+     updating orphaned nodes and the page keeps the placeholder. The PAINT lines
+     say where the copy went; the AUDIT line 1.5s later says whether that is
+     still the element on screen.
 
      Gated behind ?fcdebug — the same flag transition.js sticks into
      localStorage, precisely because the bug spans a barba.go(). */
@@ -686,62 +688,86 @@
     return null;
   }
 
-  var traceObs = [];
-  function stopTrace() {
-    traceObs.forEach(function (o) {
-      o.disconnect();
-    });
-    traceObs = [];
+  function text(el) {
+    if (!el) return "(none)";
+    return (el.textContent || "").replace(/\s+/g, " ").trim().slice(0, 60);
   }
 
-  function traceCopy(slots) {
+  var traceAudit = null;
+  function stopTrace() {
+    if (traceAudit) {
+      clearTimeout(traceAudit);
+      traceAudit = null;
+    }
+  }
+
+  function traceCopy(slots, copy) {
     stopTrace();
     var live = all("[data-reveal-copy]").length;
+    var containers = all('[data-barba="container"]');
     console.log(
-      "[reveal:trace] database read from",
+      "[reveal:trace] PAINT | database from",
       live ? "the LIVE DOM" : "the INCOMING HTML",
-      "| live [data-reveal-copy]:",
-      live,
-      "| recovered sources:",
-      copySources().length,
+      '| [data-barba="container"] in the DOM:',
+      containers.length,
+      "(" +
+        containers
+          .map(function (c) {
+            return c.getAttribute("data-barba-namespace") || "no namespace";
+          })
+          .join(" + ") +
+        ")",
       "| slots:",
       slots.join(", ")
     );
+
+    var watched = [];
     slots.forEach(function (name) {
       var target = copyTargets(name)[0];
       console.log(
-        "[reveal:trace]",
+        "[reveal:trace] PAINT",
         name,
-        "| #id matches:",
-        all('[id="' + name + '"]').length,
-        "| [data-reveal-slot] matches:",
-        all('[data-reveal-slot="' + name + '"]').length,
+        "| targets:",
+        all('[id="' + name + '"]').length + " by id,",
+        all('[data-reveal-slot="' + name + '"]').length + " by slot",
         "| wrote into:",
         describe(target),
+        "| attached:",
+        !!(target && document.contains(target)),
         "| data-text-reveal:",
         !!(target && target.hasAttribute && target.hasAttribute("data-text-reveal")),
         "| hidden by:",
         target ? hiddenBy(target) || "nothing" : "n/a",
-        "| text now:",
-        target ? (target.textContent || "").slice(0, 60) : ""
+        "| text after the write:",
+        text(target)
       );
-      if (!target || !window.MutationObserver) return;
-      var obs = new MutationObserver(function () {
-        // console.trace, not console.log: the stack is the answer here.
-        console.trace(
-          "[reveal:trace] " +
-            name +
-            " REWRITTEN after the copy paint → now: " +
-            (target.textContent || "").slice(0, 80)
+      if (target) watched.push({ name: name, el: target });
+    });
+
+    /* ONE audit, once — no MutationObserver, because our own cycler trips it
+       every few seconds and drowns the console. 1.5s is past the entrance
+       animation, any word-splitter and any second container swap. The question
+       it answers: is the element we wrote into still the element on screen? */
+    traceAudit = setTimeout(function () {
+      traceAudit = null;
+      watched.forEach(function (w) {
+        var now = copyTargets(w.name)[0];
+        console.log(
+          "[reveal:audit]",
+          w.name,
+          "| our element still in the DOM:",
+          document.contains(w.el),
+          "| our element's text:",
+          text(w.el),
+          "| the element in the page NOW:",
+          describe(now),
+          "→",
+          text(now),
+          "| same element:",
+          now === w.el
         );
       });
-      obs.observe(target, {
-        childList: true,
-        characterData: true,
-        subtree: true,
-      });
-      traceObs.push(obs);
-    });
+    }, 1500);
   }
 
   /* --------------------------- copy cycling --------------------------- */
