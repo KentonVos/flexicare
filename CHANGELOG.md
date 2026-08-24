@@ -14,6 +14,25 @@ Format:
 
 ---
 
+## 2026-08-24 — Product benefit lines: list them all, don't cycle them
+- `src/flexicare-product.js`, `ARCHITECTURE.md`
+- The benefit lines were animating one at a time. A multi-item slot landing on ONE element
+  fell through to the CYCLE branch — the right behaviour for a rotating strapline and the
+  wrong one for a set of benefits that are all meant to be read at once.
+- **Multi-item slots now LIST by default.** With one element and several items, that
+  element is itself cloned in place, once per item, as siblings after itself. So the plain
+  Webflow build needs no wrapper: put the ID on the benefit row and five items give five
+  rows. `[data-product-list]` + `[data-product-list-template]` is still there and still
+  preferred when the row markup is elaborate.
+- **`[data-product-row]`** — put it on an ancestor when the ID sits on the text element and
+  the arrow glyph is a SIBLING; that ancestor is what gets cloned, so the arrows survive.
+  Without it, cloning the text alone gives text with no arrows.
+- Clones keep the ID off (duplicate IDs are invalid and would send the next paint down the
+  one-item-per-element branch), strip the entrance attributes, and get a glass re-scan.
+- **Cycling is now opt-in: `data-product-cycle-slot` on the element.**
+- No Webflow change needed for the benefit lines to start listing. If the arrow glyph
+  vanishes from the cloned rows, add `data-product-row` to the row.
+
 ## 2026-08-24 — Trim the product embed to the two slots that need it
 - `docs/product-copy-embed.html`, `ARCHITECTURE.md`
 - The embed now carries ONLY `plan-heading` and `plan-benefit` — the copy that genuinely

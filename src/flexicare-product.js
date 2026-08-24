@@ -66,7 +66,8 @@
                                   data-product-price-decimals="0"  0 → R249,
                                      2 → R249.00
                                   data-product-cycle="4000"       ms per item for
-                                     slots defined more than once (min 1200)
+                                     slots that opted into cycling with
+                                     data-product-cycle-slot (min 1200)
                                   data-product-cycle-fade="0.4"   seconds of the
                                      crossfade (0 = hard cut)
                                   data-product-debug              console logging
@@ -138,17 +139,33 @@
                                   #plan-heading. ([data-product-slot="plan-heading"]
                                   works too if you'd rather not use IDs.)
                                 • REPEAT a slot name to give it several items.
-                                  What happens then depends on what the page
-                                  offers for that slot, in this order:
+                                  They all end up on screen TOGETHER; how
+                                  depends on what the page offers for that
+                                  slot, in this order:
                                     1. a [data-product-list] container → the
                                        items are CLONED from one authored
-                                       template (see below). This is the path
-                                       for the benefit lines.
+                                       template inside it (see below).
                                     2. several elements with that ID → one item
                                        each, in order.
-                                    3. one element → the items CYCLE through it,
-                                       all cycling slots sharing one timer.
+                                    3. ONE element → that element is itself
+                                       cloned in place, once per item, as
+                                       siblings after itself. So the plain
+                                       build needs no wrapper: put the ID on
+                                       the benefit row and five items give you
+                                       five rows. Mark a [data-product-row]
+                                       ancestor if the arrow glyph is a SIBLING
+                                       of the ID'd text element — that ancestor
+                                       is then what gets cloned. Clones carry
+                                       [data-product-clone="<slot>"] and are
+                                       rebuilt on every paint; the ID stays on
+                                       the original only (duplicate IDs are
+                                       invalid and would confuse the next
+                                       paint).
                                   One item is always just static text.
+                                • To make a multi-item slot ROTATE instead of
+                                  listing, put data-product-cycle-slot on its
+                                  element. Cycling is opt-in: a list is the
+                                  common case, a rotating slot the exception.
                                 • Copy is inserted as HTML, so <strong>, <em>
                                   and <br> inside the embed work.
                                 • TOKENS are substituted into every slot:
@@ -190,6 +207,17 @@
                                 -text-reveal stripped (they'd otherwise inherit
                                 the entrance rule and stay invisible) and glass
                                 re-scanned.
+     [data-product-row]         Optional, on an ANCESTOR of a copy slot: when
+                                that slot has several items and only one
+                                element, THIS is the element cloned per item.
+                                Use it when the ID sits on the text and the row
+                                also holds an arrow glyph or an icon, so the
+                                clones keep the whole row.
+     [data-product-cycle-slot]  Optional, on a copy slot's element: its items
+                                ROTATE (crossfading, sharing one timer with
+                                every other cycling slot) instead of being
+                                listed. Opt-in.
+
      [data-product-list-text]   Optional, INSIDE the template: the text slot. If
                                 absent the whole clone gets the text — so put
                                 this on the text element whenever the item also
@@ -737,6 +765,91 @@
     return true;
   }
 
+  /* ------------------------ in-place row cloning ------------------------ */
+
+  /* The no-container fallback. A slot with several items landing on ONE
+     element used to CYCLE through them, which is wrong for a list: the
+     benefit lines are all meant to be on screen at once. So instead the
+     element itself becomes the template — it is cloned in place, once per
+     item, as siblings after itself.
+
+     That means the plain build works with no wrapper: put the ID on the
+     benefit row and you get five rows. Cycling is now opt-in
+     (data-product-cycle-slot), because a slot that should rotate is the rare
+     case and a list is the common one.
+
+     ROWS vs TEXT. If the ID sits on the text element and the arrow glyph is a
+     SIBLING, cloning the text alone gives you text without arrows. Mark the
+     row with [data-product-row] and that ancestor is what gets cloned, with
+     the copy written into the ID'd descendant inside each clone. */
+  function rowFor(el) {
+    var row = el.closest && el.closest("[data-product-row]");
+    return row || el;
+  }
+
+  function clearClones(name, parent) {
+    all('[data-product-clone="' + name + '"]', parent).forEach(function (node) {
+      if (window.LiquidGlass && typeof window.LiquidGlass.kill === "function") {
+        try {
+          window.LiquidGlass.kill(node);
+        } catch (e) {}
+      }
+      if (node.parentNode) node.parentNode.removeChild(node);
+    });
+  }
+
+  function renderInPlace(name, el, items) {
+    var row = rowFor(el);
+    var host = row.parentNode;
+    if (!host) return false;
+
+    clearClones(name, host);
+
+    // The original keeps the ID and gets item 0.
+    el.innerHTML = interpolate(items[0]);
+    show(row, true);
+
+    var last = row;
+    for (var i = 1; i < items.length; i++) {
+      var clone = row.cloneNode(true);
+      /* Duplicate IDs are invalid and would break copyTargets() on the next
+         paint (it would find several elements for one slot and switch to the
+         one-item-per-element branch). Strip them from the clone; the ID lives
+         on the original only. */
+      var idHolder =
+        row === el ? clone : clone.querySelector('[id="' + name + '"]');
+      if (clone.id) clone.removeAttribute("id");
+      if (idHolder && idHolder !== clone) idHolder.removeAttribute("id");
+      // Entrance attributes: these clones are built after the page's entrance
+      // animation ran, so the FOUC rule would leave them at opacity 0.
+      clone.removeAttribute("data-anim");
+      clone.removeAttribute("data-anim-fade");
+      clone.removeAttribute("data-text-reveal");
+      all("[data-anim],[data-anim-fade],[data-text-reveal]", clone).forEach(
+        function (n) {
+          n.removeAttribute("data-anim");
+          n.removeAttribute("data-anim-fade");
+          n.removeAttribute("data-text-reveal");
+        }
+      );
+      all("[data-product-skeleton]", clone).forEach(function (n) {
+        n.removeAttribute("data-product-skeleton");
+      });
+      clone.setAttribute("data-product-clone", name);
+      clone.style.display = "";
+      (idHolder || clone).innerHTML = interpolate(items[i]);
+      host.insertBefore(clone, last.nextSibling);
+      last = clone;
+    }
+
+    if (window.LiquidGlass && typeof window.LiquidGlass.scan === "function") {
+      try {
+        window.LiquidGlass.scan(host);
+      } catch (e) {}
+    }
+    return true;
+  }
+
   function paintDatabaseCopy(code, product) {
     stopCycle();
     // The database is data, not layout — never let it render.
@@ -788,8 +901,8 @@
         dbg('slot "' + name + '" has copy but no element or list for it');
         return;
       }
-      /* No list container: several items across several elements = one item
-         per element, in order. Several items into ONE element = a CYCLE. */
+      // No list container: several items across several elements = one item
+      // per element, in order.
       if (items.length > 1 && targets.length > 1) {
         targets.forEach(function (el, i) {
           if (i < items.length) el.innerHTML = interpolate(items[i]);
@@ -797,9 +910,24 @@
         });
         return;
       }
+
+      /* Several items, ONE element. Default: clone the element per item so all
+         of them are on screen together (a list). Cycling is opt-in, because a
+         rotating slot is the exception — before this, every multi-item slot
+         silently animated one line at a time. */
+      if (items.length > 1 && targets.length === 1) {
+        var solo = targets[0];
+        if (solo.hasAttribute("data-product-cycle-slot")) {
+          solo.innerHTML = interpolate(items[0]);
+          state.cycles.push({ el: solo, items: items });
+        } else if (!renderInPlace(name, solo, items)) {
+          solo.innerHTML = interpolate(items[0]); // detached — best effort
+        }
+        return;
+      }
+
       targets.forEach(function (el) {
         el.innerHTML = interpolate(items[0]);
-        if (items.length > 1) state.cycles.push({ el: el, items: items });
       });
     });
     dbg(
@@ -812,8 +940,10 @@
 
   /* --------------------------- copy cycling --------------------------- */
 
-  /* All cycling slots share ONE timer so they always change together — the
-     same rule as the reveal page's two cards. */
+  /* OPT-IN, via data-product-cycle-slot on the element. Multi-item slots
+     default to being LISTED (all items on screen at once) — cycling one line
+     at a time is right for a rotating strapline and wrong for a set of
+     benefits. All cycling slots share ONE timer so they change together. */
   function stopCycle() {
     if (state.cycleTimer) {
       clearInterval(state.cycleTimer);

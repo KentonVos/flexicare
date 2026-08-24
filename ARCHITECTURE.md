@@ -640,16 +640,25 @@ target's Webflow ID (or `[data-product-slot]`), the embed must live INSIDE
 `data-barba="container"` (else it is recovered from the incoming page's HTML and warns),
 JSON blocks accepted, copy inserted as HTML.
 
-**Repeated slots** resolve against whatever the page offers for that slot, in order:
-a `[data-product-list]` container → the items are cloned from ONE authored
-`[data-product-list-template]` inside it (the benefit-line path, and the only one that
-copes with a list whose length changes per combination — C:PLUS has five lines where A has
-four); several elements with the ID → one item each in order; one element → they CYCLE,
-all cycling slots sharing one timer. Clones get `[data-product-list-item]`, are rebuilt on
-every paint with `data-anim`/`-anim-fade`/`-text-reveal` stripped (else the FOUC rule
-leaves them invisible, since they're built after the entrance animation) and glass
-re-scanned — the same idiom as the quiz's option template. `[data-product-list-text]`
-inside the template is the text slot, so the item's arrow glyph survives.
+**Repeated slots always end up on screen TOGETHER.** How, depends on what the page offers
+for that slot, in order: a `[data-product-list]` container → the items are cloned from ONE
+authored `[data-product-list-template]` inside it; several elements with the ID → one item
+each in order; ONE element → that element is cloned in place, once per item, as siblings
+after itself, so the plain build needs no wrapper at all. Mark a `[data-product-row]`
+ancestor when the ID sits on the text and the arrow glyph is a sibling — that ancestor is
+then what gets cloned. The ID stays on the original only; duplicate IDs are invalid and
+would push the next paint down the one-item-per-element branch. This is what copes with a
+list whose length changes per combination (C:PLUS has five lines where A has four).
+
+**Cycling is opt-in**, via `data-product-cycle-slot` on the element. It was briefly the
+default for multi-item slots, which animated the benefit lines one at a time — right for a
+rotating strapline, wrong for a set of benefits.
+
+Clones (both paths) are rebuilt on every paint with `data-anim`/`-anim-fade`/`-text-reveal`
+stripped (else the FOUC rule leaves them invisible, since they're built after the entrance
+animation) and glass re-scanned — the same idiom as the quiz's option template.
+`[data-product-list-text]` inside a template is its text slot, so the item's arrow glyph
+survives.
 
 **Tokens** are substituted into every slot as it's painted: `{name}`, `{price}`,
 `{amount}`, `{product}` (`product_label`), `{archetype}`, `{echo}`. That lets the embed
