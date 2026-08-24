@@ -527,6 +527,17 @@ stays collapsed here exactly as it does on the landing page — which means **th
 live inside the container**, not in the synced nav region, or it would be hidden with the
 nav.
 
+**No controller may resolve its own elements document-wide.** Both containers are in the
+DOM during a swap and they are structurally identical, so `document.getElementById` /
+`document.querySelector` is a coin toss between the incoming and the OUTGOING page. Two
+2026-08-24 bugs came from it: the reveal copy written into the dying container, and
+`resolveWrap()`'s document fallback letting the QUIZ controller initialise on the reveal
+page, conclude the stage was complete and fire a second `barba.go()` — so the destination
+ran its entrance animation, init, skeleton and copy paint twice. The fallback is now
+restricted to the hard-load path (`scope === document`); an incoming container that lacks
+the page's wrapper means "not this page". Each `go()` also refuses to navigate to the path
+it is already on.
+
 **The canonical shell structure.** Every page must ship this tree. Only the CLASS names
 may differ per page (`landing-glass-container` vs `glass-container`, `scroll-wrapper` vs
 `responsive-wrapper` — that's exactly what the class sync is for). The nesting depth,

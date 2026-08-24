@@ -14,6 +14,25 @@ Format:
 
 ---
 
+## 2026-08-24 — FIXED: the reveal page was entered TWICE (double entrance animation)
+- `src/flexicare-quiz.js`, `src/flexicare-reveal.js`, `src/flexicare-avatar.js`, `CLAUDE.md`
+- The "data-anim runs twice, then everything re-animates when the shimmer resolves"
+  symptom, caught by the new ENTERS warning. Stack: `quiz init → completeStage → go`.
+- Cause: every controller's `resolveWrap()` ended with a document-wide fallback. During a
+  Barba swap the OUTGOING container is still in the DOM, so arriving at the reveal page the
+  QUIZ controller's `afterEnter` hook matched the wrapper of the page we had just LEFT,
+  initialised there, found every routing answer already present (resumed session), called
+  `completeStage()` and fired a SECOND `barba.go('/meet-your-two-selves')`. Everything on
+  the destination ran twice: entrance animation, controller init, skeleton pass, copy paint.
+  This is also why two reveal containers coexisted in the earlier copy bug.
+- Fix, in all three controllers that had the resolver: the document fallback is now used
+  ONLY when the scope IS the document (the hard-load path). An incoming container without
+  the page's wrapper means "not this page" → bail. If the wrapper is genuinely parked
+  outside `data-barba="container"` it warns, naming the authoring bug, instead of guessing.
+- Also added `samePath()` to those three `go()` helpers: never navigate to the page you are
+  already on, so a stale controller can't enter a page twice even if one slips through.
+- Webflow: nothing.
+
 ## 2026-08-24 — Debug panel: ENTERS row (is the page entered twice?)
 - `src/transition.js`
 - "`data-anim` runs twice", "the copy loads, THEN the shimmer starts", and the original

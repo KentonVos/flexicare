@@ -121,6 +121,16 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
   cascade and look unrelated, so don't chase them individually: load any page with
   `?fcdebug` and read the CHAIN block. Anything PAGE-SPECIFIC must also live inside
   `data-barba="container"` or Barba never brings it across (the panel's STRANDED line).
+- **During a swap BOTH containers are in the DOM, so no controller may look up
+  its own elements document-wide.** `document.getElementById` / `document.querySelector`
+  return the FIRST match in document order, which can be the OUTGOING container — the
+  pages are structurally identical, so it is a coin toss. Two bugs came from this on the
+  reveal page alone (2026-08-24): the copy was written into the dying container, and every
+  controller's `resolveWrap()` fell back to `document`, so the QUIZ controller initialised
+  on the reveal page, decided the stage was already complete, and fired a second
+  `barba.go()` — the destination ran its entrance animation, init and skeleton twice.
+  Rules: resolve within the incoming container (or `state.wrap`), filter to nodes that are
+  actually attached, and never navigate to the page you are already on (`samePath()`).
 - **The click model is event delegation.** Controllers attach ONE listener to
   `document` and re-resolve the target by attribute at click time. This is deliberate
   (it survives glass rebuilds and Barba swaps). Don't refactor it to attach listeners

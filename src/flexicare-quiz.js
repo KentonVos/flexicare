@@ -202,12 +202,33 @@
     var v = el && el.getAttribute(name);
     return v === null || v === "" ? def : v;
   }
+  // Same page? Compare PATHS only — a query string or hash is not a new page
+  // here, and barba.go() drops them anyway.
+  function samePath(url) {
+    try {
+      return (
+        new URL(url, location.href).pathname.replace(/\/+$/, "") ===
+        location.pathname.replace(/\/+$/, "")
+      );
+    } catch (e) {
+      return false; // unparseable → let the navigation through
+    }
+  }
+
   function realHref(el) {
     var h = el && el.getAttribute && el.getAttribute("href");
     return h && h !== "#" ? h : null;
   }
   function go(url) {
     if (!url) return;
+    // Never navigate to the page we are already on. A stale controller that
+    // re-ran its "we're done here" path used to fire a second barba.go() to a
+    // page already on screen, which entered it twice: two entrance animations,
+    // two inits, two skeleton passes.
+    if (samePath(url)) {
+      dbg("already at", url, "— not navigating");
+      return;
+    }
     if (window.barba && typeof window.barba.go === "function")
       window.barba.go(url);
     else window.location.href = url;
@@ -825,7 +846,26 @@
     if (scope.matches && scope.matches("[data-quiz]")) return scope;
     var found = scope.querySelector && scope.querySelector("[data-quiz]");
     if (found) return found;
-    return scope !== document ? document.querySelector("[data-quiz]") : null;
+    if (scope === document) return document.querySelector("[data-quiz]");
+
+    /* The incoming container has no [data-quiz], so this is NOT this page — and
+       the old document-wide fallback here was a bug. During a Barba swap the
+       OUTGOING container is still in the DOM, so it matched the wrapper of the
+       page we just LEFT and initialised this controller on the page we arrived
+       at. On a resumed session (every routing answer already in the session) that
+       re-ran completeStage() and fired a second barba.go(), so the destination
+       page was ENTERED TWICE.
+       Measured 2026-08-24, stack: quiz init → completeStage → go.
+
+       A wrapper parked OUTSIDE the container is a real authoring bug (Barba
+       never brings it across) — say so rather than papering over it. */
+    var stray = document.querySelector("[data-quiz]");
+    if (stray && !(stray.closest && stray.closest('[data-barba="container"]')))
+      console.warn(
+        "[quiz] [data-quiz] is outside data-barba=\"container\", so Barba never " +
+          "brings it across on a navigation. Move it INSIDE the container."
+      );
+    return null;
   }
 
   function init(scope) {
