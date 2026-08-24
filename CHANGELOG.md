@@ -14,6 +14,21 @@ Format:
 
 ---
 
+## 2026-08-24 — Trim the product embed to the two slots that need it
+- `docs/product-copy-embed.html`, `ARCHITECTURE.md`
+- The embed now carries ONLY `plan-heading` and `plan-benefit` — the copy that genuinely
+  varies on both axes. Dropped `framing-lead`, `framing-sub`, `plan-eyebrow`,
+  `tell-more-intro` and `tell-more-note`: the first is static text plus
+  `[data-product-name]`, the eyebrow is `product_label` via `[data-product-label]`, and the
+  rest are better as static Webflow blocks. Six pair blocks plus a `*` fallback, verified
+  across all six combinations.
+- **The one thing that moved rather than disappeared:** `framing-sub`
+  ("Based on your family —") varies per ARCHETYPE and is NOT in the API, so it can't be
+  plain static text. Build the three variants in Webflow and gate them with
+  `data-product-for="A"` / `"B"` / `"C"` — the script hides the two that don't match.
+  Same for the "Tell me more" copy.
+- No script change; the controller reads whatever slots the embed defines.
+
 ## 2026-08-24 — Product page: the authored copy, a list template, and copy tokens
 - `src/flexicare-product.js`, NEW `docs/product-copy-embed.html`, `ARCHITECTURE.md`
 - **`docs/product-copy-embed.html`** is the paste-ready copy database, transcribed from the

@@ -659,8 +659,14 @@ before it, so a missing name degrades to `"Your Flex."` rather than `"Your Flex,
 unknown token is left visible so typos surface.
 
 **The authored copy lives in `docs/product-copy-embed.html`** — paste-ready, one block per
-archetype x product, with the two gaps in the source design flagged in comments (no
-approved Core copy for archetype C, and no `tell-more-*` copy for archetype A).
+archetype x product plus a `*` fallback. It holds only the TWO slots that vary on both
+axes: `plan-heading` and `plan-benefit`. Everything else on the page comes from somewhere
+cheaper — `[data-product-label]`/`[data-product-price]` from the API, `"Your Flex, [Name]."`
+as static text plus `[data-product-name]`, and the per-archetype framing line
+(`"Based on your family —"`) as three static Webflow variants gated by
+`[data-product-for="A|B|C"]`, since it is not in the API and does not vary by product.
+The archetype-C Core block is a flagged placeholder: C10 designs PLUS only, but the API can
+still return `CORE` for C because `product` comes from `tier_score`.
 
 `[data-product-for="A:PLUS"]` hides/shows whole structural blocks on the same keys.
 API-driven slots (written from the result, not the embed): `[data-product-name]`
