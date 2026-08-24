@@ -642,7 +642,106 @@
       });
     });
     dbg("copy applied", slots.length + " slots,", state.cycles.length + " cycling");
+    if (tracing()) traceCopy(slots);
     startCycle();
+  }
+
+  /* ------------------- dev-only copy tracer (?fcdebug) -------------------
+     "The right copy appears, then the placeholder comes back" has several
+     causes that look identical on screen: the copy went into a DIFFERENT
+     element than the visible one (a duplicate ID, a hidden [data-reveal-for]
+     block, a second copy of the card for another breakpoint), or something
+     rewrote the element AFTER the paint. This says which, and for the second
+     case prints a stack trace naming the culprit.
+
+     Gated behind ?fcdebug — the same flag transition.js sticks into
+     localStorage, precisely because the bug spans a barba.go(). */
+  function tracing() {
+    try {
+      if (window.FLEXICARE_DEBUG) return true;
+      return !!window.localStorage && localStorage.getItem("fcDebug") === "1";
+    } catch (e) {
+      return false; // storage blocked
+    }
+  }
+
+  function describe(el) {
+    if (!el) return "(none)";
+    var s = el.tagName ? el.tagName.toLowerCase() : "?";
+    if (el.id) s += "#" + el.id;
+    if (el.className && typeof el.className === "string" && el.className.trim())
+      s += "." + el.className.trim().split(/\s+/).join(".");
+    return s;
+  }
+
+  // The nearest ancestor (or the element itself) that is display:none — the
+  // "wrote into the hidden twin" case.
+  function hiddenBy(el) {
+    var n = el;
+    while (n && n.nodeType === 1) {
+      var cs = window.getComputedStyle ? getComputedStyle(n) : null;
+      if (cs && cs.display === "none") return describe(n);
+      n = n.parentElement;
+    }
+    return null;
+  }
+
+  var traceObs = [];
+  function stopTrace() {
+    traceObs.forEach(function (o) {
+      o.disconnect();
+    });
+    traceObs = [];
+  }
+
+  function traceCopy(slots) {
+    stopTrace();
+    var live = all("[data-reveal-copy]").length;
+    console.log(
+      "[reveal:trace] database read from",
+      live ? "the LIVE DOM" : "the INCOMING HTML",
+      "| live [data-reveal-copy]:",
+      live,
+      "| recovered sources:",
+      copySources().length,
+      "| slots:",
+      slots.join(", ")
+    );
+    slots.forEach(function (name) {
+      var target = copyTargets(name)[0];
+      console.log(
+        "[reveal:trace]",
+        name,
+        "| #id matches:",
+        all('[id="' + name + '"]').length,
+        "| [data-reveal-slot] matches:",
+        all('[data-reveal-slot="' + name + '"]').length,
+        "| wrote into:",
+        describe(target),
+        "| data-text-reveal:",
+        !!(target && target.hasAttribute && target.hasAttribute("data-text-reveal")),
+        "| hidden by:",
+        target ? hiddenBy(target) || "nothing" : "n/a",
+        "| text now:",
+        target ? (target.textContent || "").slice(0, 60) : ""
+      );
+      if (!target || !window.MutationObserver) return;
+      var obs = new MutationObserver(function () {
+        // console.trace, not console.log: the stack is the answer here.
+        console.trace(
+          "[reveal:trace] " +
+            name +
+            " REWRITTEN after the copy paint → now: " +
+            (target.textContent || "").slice(0, 80)
+        );
+      });
+      obs.observe(target, {
+        childList: true,
+        characterData: true,
+        subtree: true,
+      });
+      traceObs.push(obs);
+    });
   }
 
   /* --------------------------- copy cycling --------------------------- */
@@ -1070,6 +1169,7 @@
     stopPolling();
     stopCycle();
     clearImageSkeleton();
+    stopTrace();
     state.nextHtml = null; // don't hold a whole page's HTML after we leave
     state.nextDoc = null;
     state.token++; // invalidate anything still in flight

@@ -14,6 +14,20 @@ Format:
 
 ---
 
+## 2026-08-24 — Reveal copy: dev-only tracer for the "placeholder comes back" case
+- `src/flexicare-reveal.js`
+- The HTML fallback below made the copy appear on arrival, but it then reverted to the
+  Designer's placeholder once the shimmer cleared. Nothing in this repo restores cached
+  text, so this is either the copy landing in a DIFFERENT element than the visible one
+  (duplicate ID / hidden `[data-reveal-for]` twin / a second breakpoint copy of the card)
+  or something rewriting the element after the paint.
+- Added `traceCopy()`, gated behind `?fcdebug` (the sticky localStorage flag transition.js
+  already owns, since the bug spans a `barba.go()`): per slot it logs how many `#id` and
+  `[data-reveal-slot]` matches exist, which element was written, whether it carries
+  `data-text-reveal`, what (if anything) makes it `display:none`, and the resulting text —
+  then MutationObserves each target and `console.trace()`s any later rewrite.
+- Webflow: nothing. Dev-only; silent without `?fcdebug`.
+
 ## 2026-08-24 — Reveal copy: populate on arrival, not only after a refresh
 - `src/flexicare-reveal.js`, `ARCHITECTURE.md`
 - Bug: on `/meet-your-two-selves`, the with/without headings and text kept Webflow's
