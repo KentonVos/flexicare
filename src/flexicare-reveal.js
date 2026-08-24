@@ -492,10 +492,37 @@
          them (see startCycle). One item = static text.
        • The embed itself is hidden by the script — it's data, not layout. */
 
+  function attached(el) {
+    return !!(el && document.contains(el));
+  }
+
+  /* Where the copy is WRITTEN.
+     NOT document.getElementById(): during a Barba swap the document briefly
+     holds BOTH containers, and getElementById() returns whichever comes first
+     in DOCUMENT ORDER — which can be the outgoing one. That is how a whole
+     page of correct copy ended up in a container that was about to be removed,
+     with the cycler then updating orphaned nodes for as long as the page was
+     open while the cards kept the Designer's placeholder text.
+
+     So: search the incoming wrapper first, then its container, then the whole
+     document as a last resort — and at every level keep only nodes that are
+     actually attached. Every match is written, not just the first, so a second
+     copy of a card (another breakpoint) gets the copy too. */
   function copyTargets(name) {
-    var byId = document.getElementById(name);
-    if (byId) return [byId];
-    return all('[data-reveal-slot="' + name + '"]');
+    var sel = '[id="' + name + '"],[data-reveal-slot="' + name + '"]';
+    var roots = [];
+    if (state.wrap) {
+      roots.push(state.wrap);
+      var c =
+        state.wrap.closest && state.wrap.closest('[data-barba="container"]');
+      if (c && c !== state.wrap) roots.push(c);
+    }
+    roots.push(document);
+    for (var i = 0; i < roots.length; i++) {
+      var found = all(sel, roots[i]).filter(attached);
+      if (found.length) return found;
+    }
+    return [];
   }
 
   /* Where the copy database is READ from.
@@ -693,6 +720,20 @@
     return (el.textContent || "").replace(/\s+/g, " ").trim().slice(0, 60);
   }
 
+  // Which container a node belongs to — the outgoing one is the interesting
+  // answer, and "(none)" means the node is detached entirely.
+  function containerOf(el) {
+    if (!el || !el.closest) return "(n/a)";
+    var c = el.closest('[data-barba="container"]');
+    if (!c) return el.getRootNode && el.getRootNode() === document
+      ? "(no container)"
+      : "(detached)";
+    return (
+      (c.getAttribute("data-barba-namespace") || "no namespace") +
+      (attached(c) ? "" : " — DETACHED")
+    );
+  }
+
   var traceAudit = null;
   function stopTrace() {
     if (traceAudit) {
@@ -733,7 +774,9 @@
         "| wrote into:",
         describe(target),
         "| attached:",
-        !!(target && document.contains(target)),
+        attached(target),
+        "| in container:",
+        containerOf(target),
         "| data-text-reveal:",
         !!(target && target.hasAttribute && target.hasAttribute("data-text-reveal")),
         "| hidden by:",
@@ -759,6 +802,8 @@
           document.contains(w.el),
           "| our element's text:",
           text(w.el),
+          "| our element's container:",
+          containerOf(w.el),
           "| the element in the page NOW:",
           describe(now),
           "→",
@@ -803,6 +848,13 @@
     if (!state.cycles.length) return;
     state.cycleIndex = 0;
     state.cycleTimer = setInterval(function () {
+      // Prune nodes that have left the DOM, the way orb-motion.js prunes tweens
+      // for removed elements: a cycler pointed at orphans burns a timer forever
+      // and writes where nobody can see it.
+      state.cycles = state.cycles.filter(function (c) {
+        return attached(c.el);
+      });
+      if (!state.cycles.length) return stopCycle();
       state.cycleIndex++;
       state.cycles.forEach(function (c) {
         swapText(c.el, c.items[state.cycleIndex % c.items.length]);

@@ -14,6 +14,21 @@ Format:
 
 ---
 
+## 2026-08-24 — Reveal copy: FIXED — it was going into the outgoing container
+- `src/flexicare-reveal.js`, `ARCHITECTURE.md`
+- Root cause, from the `?fcdebug` audit: `our element still in the DOM: false` on all four
+  slots, with a different node carrying the same id on screen. `copyTargets()` used
+  `document.getElementById()`, which searches the whole document in DOCUMENT ORDER — and
+  during a Barba swap the document holds BOTH containers, so it handed back the OUTGOING
+  one. The correct copy (archetype B) was written into a container about to be removed, the
+  cycler then updated orphaned nodes for the rest of the visit, and the visible cards kept
+  the Designer's placeholder. A refresh has one container, hence "only works on refresh".
+- Fix: `copyTargets()` searches `state.wrap` → its `[data-barba="container"]` → the
+  document, keeps only nodes that are actually attached, and writes EVERY match (so a
+  second copy of a card for another breakpoint gets the copy too). `startCycle()` prunes
+  detached nodes each tick, like `orb-motion.js` does for removed elements.
+- Webflow: nothing.
+
 ## 2026-08-24 — Reveal copy: dev-only tracer for the "placeholder comes back" case
 - `src/flexicare-reveal.js`
 - The HTML fallback below made the copy appear on arrival, but it then reverted to the

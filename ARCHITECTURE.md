@@ -449,6 +449,20 @@ change in step, with a `data-reveal-cycle-fade` crossfade (GSAP; hard cut under 
 motion or with GSAP absent). Invalid JSON warns and leaves the Webflow copy untouched.
 `Flexicare.reveal.copy("A")` dumps what the database resolves to.
 
+**Targets are resolved inside the incoming wrapper, never with
+`document.getElementById()`.** During a Barba swap the document briefly holds BOTH
+containers, and `getElementById()` returns whichever comes first in DOCUMENT ORDER — so it
+can hand back the OUTGOING one. Measured 2026-08-24: a full page of correct copy went into
+the dying container, the cycler then updated orphaned nodes for the rest of the visit, and
+the cards kept the Designer's placeholder — which looks exactly like "the copy never
+loaded", and comes right after a refresh (one container, no ambiguity). `copyTargets()`
+therefore searches `state.wrap` → its container → the document, keeping only **attached**
+nodes, and writes EVERY match rather than the first. The cycler prunes detached nodes on
+each tick, the same way `orb-motion.js` prunes tweens for removed elements. This is the
+same trap as transition.js's "never match elements by class across containers" rule: on
+this page the containers are structurally identical, so any document-wide lookup is a
+coin toss.
+
 **The database is read from the live DOM, or failing that from the incoming page's HTML.**
 The embed belongs INSIDE `data-barba="container"` — Barba swaps nothing else, so an embed
 parked in the shell (or at body level) is simply absent on every `barba.go()` arrival and
