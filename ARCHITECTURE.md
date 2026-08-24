@@ -449,6 +449,16 @@ change in step, with a `data-reveal-cycle-fade` crossfade (GSAP; hard cut under 
 motion or with GSAP absent). Invalid JSON warns and leaves the Webflow copy untouched.
 `Flexicare.reveal.copy("A")` dumps what the database resolves to.
 
+**The database is read from the live DOM, or failing that from the incoming page's HTML.**
+The embed belongs INSIDE `data-barba="container"` — Barba swaps nothing else, so an embed
+parked in the shell (or at body level) is simply absent on every `barba.go()` arrival and
+the cards keep the Designer's placeholder copy, which looks like real copy and comes right
+after a hard refresh. `copySources()` therefore falls back to parsing `data.next.html`
+(stashed in the `beforeEnter` hook) with `DOMParser` — the same trick `syncShellClasses()`
+uses — and warns, naming the structural problem. Note the asymmetry: **sources** may be a
+detached document, **targets** (`copyTargets()`) are always live DOM, since the ID'd slots
+live inside the container and do get swapped.
+
 Structural variants: `[data-reveal-for="A"]` (comma-separated list allowed) still hides
 non-matching blocks, for differences the copy database can't express; the wrapper also
 gets `data-archetype` for CSS-only variants. Images: `[data-reveal-image="with|without"]` (an `<img>` gets

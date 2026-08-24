@@ -140,7 +140,11 @@
      [data-reveal-copy]         An HTML Embed holding ALL the per-archetype copy
                                 for every card, in one place, instead of six
                                 duplicated cards in the Designer. It is hidden by
-                                the script (it's data, not layout). Inside it:
+                                the script (it's data, not layout). Belongs
+                                INSIDE data-barba="container"; if it isn't, the
+                                copy is recovered from the incoming page's HTML
+                                and a console warning names the problem.
+                                Inside it:
 
                                   <div data-reveal-copy>
                                     <div data-copy-for="A">
@@ -258,6 +262,8 @@
     cycleMs: 4000,
     cycleFade: 0.4,
     cycleIndex: 0,
+    nextHtml: null, // the incoming page's HTML, for the copy-database fallback
+    nextDoc: null, // ...parsed, lazily, once per arrival
   };
 
   function dbg() {
@@ -492,6 +498,40 @@
     return all('[data-reveal-slot="' + name + '"]');
   }
 
+  /* Where the copy database is READ from.
+     Normally the live DOM. But the embed only reaches the live DOM if Webflow
+     ships it INSIDE data-barba="container" — Barba swaps nothing else, so an
+     embed parked anywhere in the shell (or at body level) is simply absent on
+     every barba.go() arrival, and the cards keep the Designer's placeholder
+     copy. That looks like real copy, and a hard refresh hides the bug
+     completely, so it goes unnoticed for a long time.
+
+     So: fall back to the INCOMING PAGE'S HTML, which Barba already handed us in
+     beforeEnter — the same trick transition.js uses for the shell classes. The
+     database is pure data (we only ever read innerHTML/textContent out of it),
+     so a detached DOMParser document does the job perfectly. Parsed once per
+     arrival and cached, because collectCopy() and allSlotNames() both ask.
+
+     Note the asymmetry: SOURCES may come from the parsed document, but the
+     TARGETS (copyTargets) are always live DOM — those are the ID'd slots
+     inside the container, which Barba does bring across. */
+  function copySources() {
+    var live = all("[data-reveal-copy]");
+    if (live.length) return live;
+    if (!state.nextHtml) return [];
+    if (!state.nextDoc) {
+      try {
+        state.nextDoc = new DOMParser().parseFromString(
+          state.nextHtml,
+          "text/html"
+        );
+      } catch (e) {
+        return [];
+      }
+    }
+    return all("[data-reveal-copy]", state.nextDoc);
+  }
+
   function matchesArchetype(value, code) {
     var list = (value || "").split(",");
     for (var i = 0; i < list.length; i++) {
@@ -507,7 +547,7 @@
     var defaults = {},
       specific = {};
 
-    all("[data-reveal-copy]").forEach(function (src) {
+    copySources().forEach(function (src) {
       if (src.tagName === "SCRIPT") {
         var data;
         try {
@@ -565,19 +605,28 @@
       if (el.tagName !== "SCRIPT") el.style.display = "none";
     });
 
+    // Recovered from the incoming HTML rather than the live DOM? Then the embed
+    // is outside data-barba="container". The page renders correctly either way
+    // now, but say so once — it is still a Webflow structure bug worth fixing.
+    if (!all("[data-reveal-copy]").length && copySources().length) {
+      console.warn(
+        "[reveal] the [data-reveal-copy] embed is NOT in the live DOM — it was " +
+          "read out of the incoming page's HTML instead. That means Webflow " +
+          'ships it OUTSIDE data-barba="container", so Barba never swaps it ' +
+          "in. The copy is correct, but move the embed INSIDE the container."
+      );
+    }
+
     var copy = collectCopy(code);
     var slots = Object.keys(copy);
     if (!slots.length) {
-      // Loud, not dbg(): on a barba.go() arrival this is almost always the
-      // embed being parked OUTSIDE data-barba="container". Barba only swaps the
-      // container, so the incoming page's embed is never inserted and the page
-      // silently keeps the Designer's placeholder copy — which looks like real
-      // copy, so nobody notices. A hard reload hides the bug completely.
+      // Nothing in the live DOM and nothing in the incoming HTML either: the
+      // embed is missing, empty, or its blocks match no archetype.
       console.warn(
-        "[reveal] no [data-reveal-copy] database in the DOM — the cards keep " +
-          "the Designer's placeholder copy. If this page is fine after a hard " +
-          "refresh but not on arrival, the embed is outside " +
-          'data-barba="container": move it INSIDE the container.'
+        "[reveal] no [data-reveal-copy] database found (live DOM or incoming " +
+          "page HTML) — the cards keep the Designer's placeholder copy. Check " +
+          "the embed exists on this page and that its [data-copy-for] blocks " +
+          'cover "' + (code || "?") + '" or "*".'
       );
       return;
     }
@@ -721,7 +770,7 @@
   // collectCopy(code).
   function allSlotNames() {
     var seen = {};
-    all("[data-reveal-copy]").forEach(function (src) {
+    copySources().forEach(function (src) {
       if (src.tagName === "SCRIPT") {
         var data;
         try {
@@ -1021,6 +1070,8 @@
     stopPolling();
     stopCycle();
     clearImageSkeleton();
+    state.nextHtml = null; // don't hold a whole page's HTML after we leave
+    state.nextDoc = null;
     state.token++; // invalidate anything still in flight
     state.wrap = null;
     state.archetype = null;
@@ -1037,6 +1088,10 @@
     // Before the page is VISIBLE: mark the skeleton only (DOM-only, no fetch),
     // so the arrival never flashes the Designer's placeholder copy.
     window.barba.hooks.beforeEnter(function (data) {
+      // Stashed BEFORE markSkeleton: that reads allSlotNames() out of the copy
+      // database, which may have to come from this very HTML string.
+      state.nextHtml = (data && data.next && data.next.html) || null;
+      state.nextDoc = null;
       markSkeleton((data && data.next && data.next.container) || document);
     });
     window.barba.hooks.beforeLeave(function () {

@@ -14,6 +14,25 @@ Format:
 
 ---
 
+## 2026-08-24 — Reveal copy: populate on arrival, not only after a refresh
+- `src/flexicare-reveal.js`, `ARCHITECTURE.md`
+- Bug: on `/meet-your-two-selves`, the with/without headings and text kept Webflow's
+  placeholder copy on a `barba.go()` arrival and only came right on a hard refresh.
+  Cause: `[data-reveal-copy]` was not in the live DOM on arrival
+  (`document.querySelectorAll('[data-reveal-copy]').length === 0`), so `collectCopy()`
+  had nothing to read — the embed is outside `data-barba="container"`, which is the only
+  thing Barba swaps.
+- Fix: new `copySources()` reads the database from the live DOM and, when that is empty,
+  from the INCOMING PAGE'S HTML — `data.next.html`, stashed in the `beforeEnter` hook and
+  parsed once per arrival with `DOMParser` (same approach as `syncShellClasses()`).
+  `collectCopy()` and `allSlotNames()` both go through it, so the skeleton derives the
+  right slots too. Targets stay live-DOM (`copyTargets()`) — those are inside the
+  container. The old "no database in the DOM" warning now only fires when there is no
+  source at all; recovering from HTML warns separately and names the structure bug.
+- Webflow: nothing required — the page renders correctly as-is. Still worth moving the
+  `copy-database-embed` INSIDE `data-barba="container"` (`glass-content-wrapper`) to
+  clear the warning and keep the page-specific data with the page.
+
 ## Where things stand — 2026-08-24
 
 A snapshot for the next session, so nothing below has to be re-derived. Details are in
