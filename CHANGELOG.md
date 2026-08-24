@@ -14,6 +14,37 @@ Format:
 
 ---
 
+## 2026-08-24 — NEW `/flexicare-product`: the recommendation page
+- NEW `src/flexicare-product.js`; `src/flexicare-quiz.js`, `ARCHITECTURE.md`, `CLAUDE.md`,
+  `docs/hosting-and-publishing.md`
+- The last beat of the funnel. Renders the plan the server picked out of ONE object —
+  `Flexicare.result`, the `POST /sessions/{id}/finish` response the FLEX quiz already
+  stashed — so on a `barba.go()` arrival the page paints in the same frame. No polling,
+  no generation step. Hard reload / deep link re-reads `GET /sessions/{id}`; a session
+  that isn't `COMPLETED` bounces to `data-product-quiz` (default `/flexicare`) instead of
+  rendering an empty plan.
+- **The copy embed is keyed on BOTH axes**, archetype AND product, because the plan copy
+  differs per combination (six variants of every card). `data-copy-for="A:PLUS"`; either
+  half may be `*`; a bare token is read from its own vocabulary (`A/B/C` archetypes,
+  `CORE/PLUS` products) so `"A"` = `"A:*"` and `"PLUS"` = `"*:PLUS"`. More specific wins
+  slot by slot on the ladder `*` → product → archetype → pair, replacing rather than
+  merging. A typo'd token matches nothing rather than acting as a wildcard.
+- Repeated slot names do double duty: N items across N elements = a list (the design's
+  three benefit lines), N items into ONE element = a cycle.
+- `recommended_price_cents` is in CENTS and may be `null` — divided by 100, formatted with
+  `data-product-price-format="From R{amount}/month"`, and the slot is HIDDEN when the API
+  returns no price rather than printing `R0`.
+- `src/flexicare-quiz.js`: the FLEX `data-quiz-done` default is now `/flexicare-product`
+  (was the never-built `/results`).
+- **WEBFLOW — the file list CHANGED, so the footer needs the new line** (after
+  `flexicare-reveal.js`, before the dev tuners):
+  `<script src="https://flexicare.kenton-323.workers.dev/src/flexicare-product.js"></script>`
+- **WEBFLOW — on the new page**, inside `data-barba="container"`: `[data-product]` on the
+  container, `data-product-next="<spin-to-win slug>"` (the `/spin-to-win` fallback warns in
+  the console), a `[data-product-copy]` HTML Embed of `[data-copy-for]` blocks, Webflow IDs
+  on the copy slots, and `[data-product-label]` / `[data-product-price]` /
+  `[data-product-name]` on the API-driven bits. Shell STRUCTURE must match the other pages.
+
 ## 2026-08-24 — Route the reveal CTA to the new FLEX quiz page, `/flexicare`
 - `src/flexicare-reveal.js`, `src/flexicare-quiz.js` (docs), `ARCHITECTURE.md`, `CLAUDE.md`
 - `data-reveal-next` now defaults to **`/flexicare`** instead of the never-built `/flex`,

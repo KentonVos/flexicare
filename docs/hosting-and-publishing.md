@@ -73,6 +73,7 @@ load-bearing (see ARCHITECTURE.md); GSAP and Barba are libraries and stay pinned
 <script src="https://flexicare.kenton-323.workers.dev/src/flexicare-onboarding.js"></script>
 <script src="https://flexicare.kenton-323.workers.dev/src/flexicare-quiz.js"></script>
 <script src="https://flexicare.kenton-323.workers.dev/src/flexicare-reveal.js"></script>
+<script src="https://flexicare.kenton-323.workers.dev/src/flexicare-product.js"></script>
 <!-- dev-only tuner, loaded last; gated behind ?tune in the URL -->
 <script src="https://flexicare.kenton-323.workers.dev/src/slider.js"></script>
 <!-- dev-only orb tuner; gated behind ?orbtune -->

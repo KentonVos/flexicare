@@ -27,7 +27,9 @@
            `archetype` matches Flexicare.archetype (recovered via a
            preview if missing — else bounce to data-quiz-routing).
            After the last: POST /sessions/{id}/finish
-           → store Flexicare.result, navigate to data-quiz-done.
+           → store Flexicare.result (the archetype + product + price the
+           product page renders), navigate to data-quiz-done
+           (/flexicare-product).
 
    The session id (from /onboarding, in sessionStorage) is required —
    if it's missing we bounce to data-quiz-onboarding (default /onboarding).
@@ -50,10 +52,9 @@
                                   data-quiz-done="/meet-your-two-selves"  where to
                                      go when the stage completes (ROUTING (/archetype)
                                      → the archetype reveal, flexicare-reveal.js;
-                                     FLEX (/flexicare) → results/product page. There
-                                     is no sane default for the FLEX target, so SET
-                                     THIS on /flexicare — unset it falls back to
-                                     "/results")
+                                     FLEX (/flexicare) → the product page,
+                                     flexicare-product.js, which defaults to
+                                     "/flexicare-product")
                                   data-quiz-onboarding="/onboarding"  bounce target
                                      if there's no session id
                                   data-quiz-routing="/archetype"  (FLEX only) where
@@ -771,14 +772,14 @@
         .then(function (res) {
           FC.result = res;
           state.done = true;
-          go(attr(state.wrap, "data-quiz-done", "/results"));
+          go(attr(state.wrap, "data-quiz-done", "/flexicare-product"));
         })
         .catch(function (err) {
           if (err && err.status === 409) {
             // already finished — re-fetch and proceed
             FC.api("/sessions/" + id).then(function (s) {
               FC.result = s;
-              go(attr(state.wrap, "data-quiz-done", "/results"));
+              go(attr(state.wrap, "data-quiz-done", "/flexicare-product"));
             });
           } else {
             setBusy(false);

@@ -45,8 +45,12 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
 11. `src/flexicare-reveal.js` — `/meet-your-two-selves`, the archetype reveal (the page
     that replaced `/loading`): recovers/confirms the archetype, personalises copy, and
     polls for the generated with/without-cover image pair.
-12. `src/slider.js` — **NOT a content slider.** This is the "Liquid Glass Tuner", a dev-only control panel gated behind `?tune` in the URL. Ignore it for production changes unless the task is about tuning glass presets.
-13. `src/orb-tuner.js` — dev-only orb-motion control panel, gated behind `?orbtune`
+12. `src/flexicare-product.js` — `/flexicare-product`, the recommendation page. Renders
+    the plan the server picked from `Flexicare.result` (the `/finish` response): copy keyed
+    on **archetype AND product** (`data-copy-for="A:PLUS"`), plus `product_label` and the
+    price from `recommended_price_cents`.
+13. `src/slider.js` — **NOT a content slider.** This is the "Liquid Glass Tuner", a dev-only control panel gated behind `?tune` in the URL. Ignore it for production changes unless the task is about tuning glass presets.
+14. `src/orb-tuner.js` — dev-only orb-motion control panel, gated behind `?orbtune`
     (or `?tune`, so it can sit beside the glass tuner). Writes the `data-orb-*` attributes
     live and hands back a paste-ready list. Ignore for production changes.
 

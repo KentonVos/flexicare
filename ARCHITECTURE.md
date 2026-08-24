@@ -39,6 +39,7 @@ flexicare-selfie.js      page controller
 flexicare-avatar.js      page controller (avatar picker; needs glass for the card clones)
 flexicare-quiz.js        page controller (also needs glass for option styling)
 flexicare-reveal.js      page controller (archetype reveal; core only)
+flexicare-product.js     page controller (the recommendation; core only)
 slider.js                dev-only tuner; needs glass.js
 orb-tuner.js             dev-only tuner; needs orb-motion.js
 ```
@@ -107,7 +108,13 @@ Pages, in order, and where state is created:
    `Flexicare.archetype` (recovered with a preview if the page was hard-loaded, or a
    bounce to `data-quiz-routing` if the routing answers aren't all there). `GET /quiz` is
    not re-fetched — `FC.quizData` is still warm. After the last,
-   `POST /sessions/{id}/finish` → `Flexicare.result` → `data-quiz-done`.
+   `POST /sessions/{id}/finish` → `Flexicare.result` → `data-quiz-done`
+   (`/flexicare-product`).
+7. **Product** (`/flexicare-product`, `flexicare-product.js`) — the recommendation. Renders
+   the plan the server picked, straight out of `Flexicare.result`: `product` (`CORE`/`PLUS`),
+   `product_label`, `archetype_label` and `recommended_price_cents`. Nothing to wait for —
+   every value is resolved server-side, so on a `barba.go()` arrival the page paints in the
+   same frame. CTA → the spin-to-win page (`data-product-next`).
 
 On a **hard reload** mid-funnel, in-memory state is gone but recoverable: answers are
 rebuilt from `GET /sessions/{id}`, and a missing archetype is recovered with a preview.
@@ -605,6 +612,52 @@ was written, whether it is attached, what makes it `display:none`, and the resul
 1.5s later one AUDIT line per slot says whether the element written is still the element on
 screen — the question that separates "the copy never arrived" from "the copy went into a
 container that was then removed".
+
+### flexicare-product.js
+`/flexicare-product` — the last beat: the plan the server recommended. Config on the
+`[data-product]` wrapper: `data-product-next` (CTA → spin-to-win; **set it**, the
+`/spin-to-win` fallback warns in the console), `-onboarding` (bounce if no session id),
+`-quiz` (bounce if the session isn't `COMPLETED`, default `/flexicare`), `-lang`,
+`-price-format` / `-price-decimals`, `-cycle` / `-cycle-fade`, `-debug`, `-skeleton="off"`.
+
+**Where the data comes from.** One object: `Flexicare.result`, the
+`POST /sessions/{id}/finish` response the FLEX quiz stashed before navigating. On a hard
+reload / deep link it is re-read from `GET /sessions/{id}`, which carries the same fields
+once the session is `COMPLETED`; a session *without* a product means the FLEX stage isn't
+finished, so we bounce to `data-product-quiz` rather than render an empty plan. There is no
+polling and no generation step — unlike the reveal page, nothing here is asynchronous
+except that recovery.
+
+**The copy database is keyed on TWO axes.** The reveal page keys on the archetype alone;
+plan copy differs per archetype *and* per product, which is six variants of every card.
+So `data-copy-for` takes `ARCHETYPE:PRODUCT` — `"A:PLUS"` — and either half may be `*`. A
+bare token is read from its own vocabulary (`A`/`B`/`C` are archetypes, `CORE`/`PLUS` are
+products), so `"A"` means `"A:*"` and `"PLUS"` means `"*:PLUS"`. Commas separate
+alternatives. **More specific wins, slot by slot**, replacing rather than merging, on the
+ladder `*` → product → archetype → pair; a typo'd token matches nothing (it is never
+silently treated as a wildcard). Everything else mirrors the reveal database: slot name =
+target's Webflow ID (or `[data-product-slot]`), the embed must live INSIDE
+`data-barba="container"` (else it is recovered from the incoming page's HTML and warns),
+JSON blocks accepted, copy inserted as HTML.
+
+**Repeated slots do double duty.** N items + N elements = a LIST, one item per element in
+order — that is how the design's three benefit lines are authored. N items + ONE element =
+a CYCLE, all cycling slots sharing one timer. Same syntax, and which one you get depends
+on how many elements carry the ID.
+
+`[data-product-for="A:PLUS"]` hides/shows whole structural blocks on the same keys.
+API-driven slots (written from the result, not the embed): `[data-product-name]`
+(+ `-name-wrap`, hidden when there's no name), `-echo`, `-archetype-label`, `-label`
+(`product_label`), `-code` (the raw `CORE`/`PLUS`), `-price`. **The price is in CENTS** and
+may be `null` — `formatPrice()` divides by 100, applies `data-product-price-format`
+(`"From R{amount}/month"`, overridable per element) and thin-space thousands separators
+without `Intl`; a null price hides `[data-product-price]` and `[data-product-price-wrap]`
+instead of printing `R0`.
+
+**Skeleton**: same approach as the reveal page and for the same reason — script-injected
+CSS (`data-js-injected`), marked on `beforeEnter` before the page is visible, cleared only
+*after* the paints so the real text is revealed already correct. Normally invisible, since
+the result is usually already in memory; it exists for the hard-reload path.
 
 ### slider.js → the Liquid Glass Tuner (dev only)
 Despite the name, this is a floating control panel for tuning glass parameters live. Gated:
