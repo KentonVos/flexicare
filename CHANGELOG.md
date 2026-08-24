@@ -14,6 +14,21 @@ Format:
 
 ---
 
+## 2026-08-24 — Reveal: data-reveal-hide-class (the `is-0` combo class)
+- `src/flexicare-reveal.js`, `ARCHITECTURE.md`, `docs/reveal-loading-state.md`
+- Closes the pre-JS gap properly, from the Webflow side instead of a head snippet: the
+  page ships its copy slots with a combo class at `opacity: 0`, Webflow's stylesheet is in
+  the `<head>` so it applies at FIRST PAINT, and `clearCopySkeleton()` strips the class
+  from the whole `[data-reveal]` subtree once the real copy is in. Also on the error path,
+  so an unresolvable archetype falls back to the Designer's copy rather than an invisible
+  card. Invalid class name warns and bails instead of stranding the page.
+- Name it with `data-reveal-hide-class` on `[data-reveal]` (default `is-0`, empty = off).
+- **Webflow:** add the `is-0` combo class (`opacity: 0`) to `#with-cover-heading`,
+  `#without-cover-heading`, `#with-cover-text`, `#without-cover-text`. Because `opacity: 0`
+  also hides that element's shimmer bar, put `data-reveal-skeleton-target` on the slot's
+  WRAPPER if you want a shimmer while the text is invisible. The head `<style>` from the
+  previous entry is no longer needed.
+
 ## 2026-08-24 — Reveal: shimmer before the placeholder can paint
 - `src/flexicare-reveal.js`, `docs/reveal-loading-state.md`
 - On a hard load the sequence read "placeholder copy → shimmer starts → real copy": the

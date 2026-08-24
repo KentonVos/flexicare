@@ -72,33 +72,40 @@ already on the page. The optional knobs:
    the placeholder copy paints first and the sequence reads "copy, then shimmer, then the
    real copy", with the placeholder flashing past as if it were the answer. That closes
    most of the gap but not all of it: CSS in the `<head>` is the only thing that applies
-   at first paint. If you still catch a flash, pair the static attribute above with this
-   in **Site Settings → Custom Code → Head** (the skeleton CSS itself ships with the
-   script, so this is only about the pre-JS frames):
+   at first paint, and no script can beat that.
 
-   ```html
-   <style>
-     [data-reveal-copy-state="loading"] #with-cover-heading,
-     [data-reveal-copy-state="loading"] #without-cover-heading,
-     [data-reveal-copy-state="loading"] #with-cover-text,
-     [data-reveal-copy-state="loading"] #without-cover-text { color: transparent }
-   </style>
-   ```
-2. Set the `[data-reveal-copy]` embed's wrapper to **display: none** in the
+2. **To close the gap completely, ship the slots hidden — the `is-0` combo class.**
+   Give each copy slot a combo class (`is-0`) styled `opacity: 0` in the Designer.
+   Webflow's stylesheet is in the `<head>`, so it applies at first paint and there is no
+   frame in which the placeholder is legible. The script removes the class from the whole
+   `[data-reveal]` subtree the moment the real copy is in — and on the error path too, so
+   a page that can't resolve its archetype falls back to the Designer's copy rather than
+   staying invisible.
+
+   Rename it with `data-reveal-hide-class` on `[data-reveal]`; set it empty to switch the
+   behaviour off. Default: `is-0`.
+
+   **Trade-off to know:** `opacity: 0` hides that element's shimmer bar as well — the bar
+   and its sheen are painted by the element's own background and `::after`. If you want a
+   shimmer *and* invisible copy, put `is-0` on the text element and
+   `data-reveal-skeleton-target` on its **wrapper** (e.g. `two-selves-heading-wrapper`):
+   the wrapper shimmers, the text inside stays invisible until the copy lands. A
+   `transition: opacity` on the base class in Webflow gives you a fade-in for free.
+3. Set the `[data-reveal-copy]` embed's wrapper to **display: none** in the
    Designer. The script hides it, but only once it runs — on a hard load the raw
    copy blocks are briefly visible otherwise.
-3. `data-reveal-image-frame` on the wrapper *around* a `[data-reveal-image]`, if
+4. `data-reveal-image-frame` on the wrapper *around* a `[data-reveal-image]`, if
    the image's own parent isn't the box you want shimmering (the script falls
    back to `parentNode`, which is usually right; reach for this when the parent
    is the whole card).
-4. `data-reveal-no-skeleton` on any element that should be left alone — most
+5. `data-reveal-no-skeleton` on any element that should be left alone — most
    likely the inline `", Lerato"` span, if you'd rather it stayed blank than
    flickered mid-headline.
-5. `data-reveal-skeleton-target` on any extra element you want shimmered that
+6. `data-reveal-skeleton-target` on any extra element you want shimmered that
    the auto-marking doesn't cover.
-6. `data-reveal-skeleton="off"` on `[data-reveal]` turns the whole thing off,
+7. `data-reveal-skeleton="off"` on `[data-reveal]` turns the whole thing off,
    CSS inject included, and you style the two state attributes yourself.
-7. Nothing to paste. The CSS ships with the script.
+8. Nothing to paste. The CSS ships with the script.
 
 Tune the look with custom properties on `[data-reveal]` — no `!important`
 needed, the injected selectors are `:where()`-wrapped and carry zero

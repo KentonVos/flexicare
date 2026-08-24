@@ -449,6 +449,16 @@ change in step, with a `data-reveal-cycle-fade` crossfade (GSAP; hard cut under 
 motion or with GSAP absent). Invalid JSON warns and leaves the Webflow copy untouched.
 `Flexicare.reveal.copy("A")` dumps what the database resolves to.
 
+**Shipping the slots hidden (`is-0`).** No script can beat the first paint, so the page
+may paint the Designer's placeholder before a footer script runs. The fix lives in
+Webflow: give each copy slot a combo class (`is-0`, `opacity: 0`) — Webflow's stylesheet
+is in the `<head>`, so it applies at first paint — and `clearCopySkeleton()` strips that
+class from the whole `[data-reveal]` subtree once the copy is in, including on the error
+path (an unresolvable archetype must fall back to the Designer's copy, not to an invisible
+card). Rename via `data-reveal-hide-class` on `[data-reveal]`, empty to disable. Note that
+`opacity: 0` also hides that element's shimmer bar, so a shimmer *and* invisible copy means
+`is-0` on the text and `data-reveal-skeleton-target` on its wrapper.
+
 **Targets are resolved inside the incoming wrapper, never with
 `document.getElementById()`.** During a Barba swap the document briefly holds BOTH
 containers, and `getElementById()` returns whichever comes first in DOCUMENT ORDER — so it

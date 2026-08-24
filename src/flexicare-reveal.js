@@ -107,6 +107,16 @@
                                 -radius. Overriding needs no !important — the
                                 injected selectors are :where()-wrapped, so they
                                 carry zero specificity.
+     [data-reveal-hide-class]   On [data-reveal]. The combo class the page ships
+                                its copy slots with — opacity 0 in Webflow — so
+                                the placeholder can never flash before the
+                                script runs. Removed from the whole wrapper once
+                                the real copy is in (and on the error path too).
+                                Default "is-0"; set it empty to switch off.
+                                NOTE: opacity 0 hides that element's shimmer bar
+                                as well, so put data-reveal-skeleton-target on
+                                its WRAPPER if you want a shimmer there.
+
      [data-reveal-no-skeleton]  On any element that would otherwise shimmer, to
                                 leave it alone (e.g. an inline ", Lerato" span
                                 you'd rather stayed blank than flickered).
@@ -1031,11 +1041,48 @@
     dbg("skeleton on:", targets.length, "text slots,", frames, "image frames");
   }
 
+  /* The pre-JS gap, closed from the Webflow side.
+     No script can beat the first paint — a footer script may run after it, so
+     the Designer's placeholder copy can flash past looking like the answer.
+     CSS in the <head> is the only thing that applies at first paint, and
+     Webflow's stylesheet IS in the head: so ship the slots hidden with a combo
+     class (opacity 0) and let this strip it once the real copy is in.
+
+     Name it with data-reveal-hide-class on [data-reveal]; the default is
+     "is-0". Stripped from the whole wrapper subtree — including images, whose
+     own data-reveal-image-pending keeps them hidden until their file decodes,
+     so they don't jump the queue.
+
+     It runs on the error path too (clearCopySkeleton is called from both the
+     then and the catch): a page that can't resolve its archetype must fall back
+     to the Designer's copy, never to a permanently invisible card. */
+  function revealHidden() {
+    var root = state.wrap;
+    if (!root) return;
+    var cls = attr(root, "data-reveal-hide-class", "is-0");
+    if (!cls) return;
+    var hidden;
+    try {
+      hidden = all("." + cls, root);
+    } catch (e) {
+      // A class name that isn't a valid selector must not strand the page
+      // shimmering — this runs on the last step before the copy is revealed.
+      console.warn("[reveal] data-reveal-hide-class is not usable:", cls);
+      return;
+    }
+    if (root.classList && root.classList.contains(cls)) hidden.push(root);
+    hidden.forEach(function (el) {
+      el.classList.remove(cls);
+    });
+    if (hidden.length) dbg("removed ." + cls + " from", hidden.length, "elements");
+  }
+
   function clearCopySkeleton() {
     if (state.wrap) state.wrap.setAttribute("data-reveal-copy-state", "ready");
     all("[data-reveal-skeleton]").forEach(function (el) {
       el.removeAttribute("data-reveal-skeleton");
     });
+    revealHidden();
   }
 
   function unhideImage(el) {
