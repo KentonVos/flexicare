@@ -1,5 +1,5 @@
 /* ============================================================
-   Flexicare Quiz v1 — dynamic question renderer  (/archetype)
+   Flexicare Quiz v1 — dynamic question renderer  (/archetype + /flexicare)
    ------------------------------------------------------------
    Plain JS (ES5-style). Load AFTER flexicare-core.js, @barba/core,
    gsap, and (for glass options) glass.js.
@@ -19,10 +19,14 @@
            (A/B/C) on Flexicare.archetype, then navigate to data-quiz-done
            (the reveal page — /meet-your-two-selves — NOT a loading screen).
 
-       FLEX stage (a later page, set data-quiz-stage="FLEX"):
-         • Same renderer. Shows only the FLEX questions whose
+       FLEX stage (/flexicare — a DUPLICATE of the /archetype page in
+       Webflow, identical structure, only the [data-quiz] config attributes
+       differ; set data-quiz-stage="FLEX"):
+         • Same renderer, and /quiz is NOT re-fetched (FC.quizData is still
+           warm from the routing page). Shows only the FLEX questions whose
            `archetype` matches Flexicare.archetype (recovered via a
-           preview if missing). After the last: POST /sessions/{id}/finish
+           preview if missing — else bounce to data-quiz-routing).
+           After the last: POST /sessions/{id}/finish
            → store Flexicare.result, navigate to data-quiz-done.
 
    The session id (from /onboarding, in sessionStorage) is required —
@@ -44,9 +48,12 @@
                                   data-quiz-stage="ROUTING"    (default) | "FLEX"
                                   data-quiz-lang="en"          (default core lang)
                                   data-quiz-done="/meet-your-two-selves"  where to
-                                     go when the stage completes (ROUTING → the
-                                     archetype reveal, flexicare-reveal.js;
-                                     FLEX → results/product page)
+                                     go when the stage completes (ROUTING (/archetype)
+                                     → the archetype reveal, flexicare-reveal.js;
+                                     FLEX (/flexicare) → results/product page. There
+                                     is no sane default for the FLEX target, so SET
+                                     THIS on /flexicare — unset it falls back to
+                                     "/results")
                                   data-quiz-onboarding="/onboarding"  bounce target
                                      if there's no session id
                                   data-quiz-routing="/archetype"  (FLEX only) where
@@ -92,6 +99,9 @@
      [data-quiz-back]           Optional. The "Back" button. Goes to the previous
                                 question in place; on question 1 it navigates to
                                 data-quiz-back (a URL value) or data-quiz-onboarding.
+                                ON /flexicare SET data-quiz-back="/meet-your-two-selves"
+                                — otherwise Back on the first FLEX question throws the
+                                user all the way out to /onboarding.
      [data-quiz-loading]        Optional. Shown while the quiz is fetching; hidden
                                 once the first question renders.
 

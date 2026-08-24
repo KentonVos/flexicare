@@ -100,10 +100,14 @@ Pages, in order, and where state is created:
    `GET /sessions/{id}/images` every ~2.5s for the generated with/without-cover pair.
    The images never block: copy and CTA render immediately, images fade in when ready,
    and `PENDING`/`FAILED`/timeout all fall through to `[data-reveal-images-fallback]`.
-   CTA → the FLEX quiz page.
-6. **Quiz — FLEX stage** (a later page with `data-quiz-stage="FLEX"`) — same renderer,
-   shows only FLEX questions whose `archetype` matches. After the last,
-   `POST /sessions/{id}/finish` → `Flexicare.result`.
+   CTA → the FLEX quiz page (`data-reveal-next`, default `/flexicare`).
+6. **Quiz — FLEX stage** (`/flexicare`, `data-quiz-stage="FLEX"`) — the SAME controller
+   and the same Webflow page duplicated from `/archetype`; only the `[data-quiz]` config
+   attributes differ. Shows only FLEX questions whose `archetype` matches
+   `Flexicare.archetype` (recovered with a preview if the page was hard-loaded, or a
+   bounce to `data-quiz-routing` if the routing answers aren't all there). `GET /quiz` is
+   not re-fetched — `FC.quizData` is still warm. After the last,
+   `POST /sessions/{id}/finish` → `Flexicare.result` → `data-quiz-done`.
 
 On a **hard reload** mid-funnel, in-memory state is gone but recoverable: answers are
 rebuilt from `GET /sessions/{id}`, and a missing archetype is recovered with a preview.
@@ -397,7 +401,9 @@ decodes on teardown. **It never calls the API with the session** — the choice 
 and onboarding sends it.
 
 ### flexicare-quiz.js
-`/archetype` (ROUTING) and later FLEX stages. Config on the `[data-quiz]` wrapper:
+`/archetype` (ROUTING) and `/flexicare` (FLEX). One controller, two pages: `/flexicare`
+is a Webflow duplicate of `/archetype` — identical structure and element hooks, different
+`[data-quiz]` config. Config on the `[data-quiz]` wrapper:
 `data-quiz-stage="ROUTING|FLEX"`, `-lang`, `-done` (where to go when the stage completes),
 `-onboarding` (bounce target if no session id), `-routing` (FLEX fallback), `-accent`,
 `-progress-start/-end/-format`. Element hooks: `[data-quiz-prompt]`, `-helper`,
@@ -428,7 +434,8 @@ without `!important`; `data-quiz-skeleton="off"` skips the inject.
 
 ### flexicare-reveal.js
 `/meet-your-two-selves` — the archetype reveal between ROUTING and FLEX. Config on the
-`[data-reveal]` wrapper: `data-reveal-next` (CTA target: the FLEX page), `-onboarding`
+`[data-reveal]` wrapper: `data-reveal-next` (CTA target: the FLEX page, default
+`/flexicare`), `-onboarding`
 (bounce if no session id), `-routing` (bounce if the archetype can't be recovered),
 `-lang`, `-poll` (ms, default 2500, min 1000), `-timeout` (ms, default 90000), `-debug`.
 Copy slots: `[data-reveal-name]` (+ `[data-reveal-name-wrap]`, hidden when there's no

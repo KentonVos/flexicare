@@ -14,6 +14,26 @@ Format:
 
 ---
 
+## 2026-08-24 — Route the reveal CTA to the new FLEX quiz page, `/flexicare`
+- `src/flexicare-reveal.js`, `src/flexicare-quiz.js` (docs), `ARCHITECTURE.md`, `CLAUDE.md`
+- `data-reveal-next` now defaults to **`/flexicare`** instead of the never-built `/flex`,
+  so the reveal CTA lands on the FLEX quiz without needing the attribute set by hand.
+- No renderer changes: `flexicare-quiz.js` already supports the FLEX stage
+  (`data-quiz-stage="FLEX"`, archetype filter, `ensureArchetype()` recovery,
+  `POST /sessions/{id}/finish`). `/flexicare` is a Webflow **duplicate of `/archetype`** —
+  same structure, same element hooks, different `[data-quiz]` config. Nothing to add to
+  the footer: the file list is unchanged.
+- **Webflow side — on the duplicated `/flexicare` page's `[data-quiz]` wrapper:**
+  - `data-quiz-stage="FLEX"` (required — without it the page re-runs the routing quiz)
+  - `data-quiz-back="/meet-your-two-selves"` (else Back on question 1 exits to
+    `/onboarding`)
+  - `data-quiz-done="<the page after FLEX>"` (falls back to `/results`)
+  - `data-quiz-routing="/archetype"` (default; the bounce if the archetype is unrecoverable)
+  - `data-quiz-progress-start` / `-end` for this stage's slice of the global bar, and
+    `data-progress` on the container
+  - `data-quiz-next-text-last` — the routing page's "See your 2 selves" is wrong here
+  - keep the shell STRUCTURE identical to the other pages (only classes may differ)
+
 ## Where things stand — 2026-08-24 (end of the reveal-page debugging pass)
 
 A snapshot for the next session, so nothing below has to be re-derived. Details are in

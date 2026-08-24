@@ -38,7 +38,10 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
 9. `src/flexicare-avatar.js` — avatar-picker page controller (the alternative to the
    selfie: race/gender filters + a 3×3 grid from `GET /avatars`). Buffers the chosen
    `avatar_id`; **onboarding** is what sends it.
-10. `src/flexicare-quiz.js` — `/archetype` quiz + later FLEX stage.
+10. `src/flexicare-quiz.js` — the quiz renderer for BOTH `/archetype` (ROUTING) and
+    `/flexicare` (FLEX). `/flexicare` is a Webflow duplicate of `/archetype`; only the
+    `[data-quiz]` config attributes differ (`data-quiz-stage="FLEX"`, `-done`, `-back`,
+    `-progress-start/-end`).
 11. `src/flexicare-reveal.js` — `/meet-your-two-selves`, the archetype reveal (the page
     that replaced `/loading`): recovers/confirms the archetype, personalises copy, and
     polls for the generated with/without-cover image pair.

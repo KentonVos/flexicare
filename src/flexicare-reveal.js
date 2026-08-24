@@ -39,7 +39,8 @@
           so the very first poll returns READY (api-contract §3.8) —
           "developing…" and FAILED are selfie-path states. Same code
           either way; it just resolves on call one.
-       5. The CTA goes on to the FLEX quiz page (data-reveal-next).
+       5. The CTA goes on to the FLEX quiz page (data-reveal-next,
+          default /flexicare).
 
    The session id (from /onboarding, sessionStorage) is required — if it's
    missing we bounce to data-reveal-onboarding (default /onboarding).
@@ -63,10 +64,11 @@
    WEBFLOW ATTRIBUTE CONTRACT
      [data-reveal]              REQUIRED. Wrapper/marker for the page — gates
                                 init. Optional config attributes on it:
-                                  data-reveal-next="/flex"        CTA target: the
-                                     FLEX quiz page (the one with
-                                     data-quiz-stage="FLEX"). The CTA's own
-                                     href / data-reveal-next value wins over this.
+                                  data-reveal-next="/flexicare"   CTA target: the
+                                     FLEX quiz page (/flexicare — the duplicate of
+                                     /archetype carrying data-quiz-stage="FLEX").
+                                     The CTA's own href / data-reveal-next value
+                                     wins over this.
                                   data-reveal-onboarding="/onboarding"  bounce
                                      target when there's no session id
                                   data-reveal-routing="/archetype"  bounce target
@@ -1222,7 +1224,7 @@
     var btn = one("[data-reveal-next]");
     return (
       (btn && (attr(btn, "data-reveal-next", null) || realHref(btn))) ||
-      attr(state.wrap, "data-reveal-next", "/flex")
+      attr(state.wrap, "data-reveal-next", "/flexicare")
     );
   }
 
