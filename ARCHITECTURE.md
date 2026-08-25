@@ -658,7 +658,18 @@ Clones (both paths) are rebuilt on every paint with `data-anim`/`-anim-fade`/`-t
 stripped (else the FOUC rule leaves them invisible, since they're built after the entrance
 animation) and glass re-scanned — the same idiom as the quiz's option template.
 `[data-product-list-text]` inside a template is its text slot, so the item's arrow glyph
-survives.
+(or check icon) survives — anything else in the template is cloned untouched, which is how
+every row gets its own icon.
+
+**The list attributes are swap-prone.** The contract is container OUTSIDE
+(`data-product-list`), template INSIDE (`data-product-list-template`), and reversing them
+fails in a way that looks unrelated: the template becomes an ANCESTOR of the container, the
+"is there a template in here?" lookup finds nothing, the slot falls through to the ID path,
+and you get the text cloned as siblings *inside* the row — laid out along the row's flex
+axis, with no icon on any clone. `resolveList()` therefore detects the inversion (and the
+both-attributes-on-one-element case), renders it the intended way round, and warns with
+what to change. Clones are stripped of BOTH attributes, or the next paint's resolve would
+find a clone instead of the real container.
 
 **Tokens** are substituted into every slot as it's painted: `{name}`, `{price}`,
 `{amount}`, `{product}` (`product_label`), `{archetype}`, `{echo}`. That lets the embed

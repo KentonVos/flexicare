@@ -198,6 +198,12 @@
                                 clones it per copy entry — so a list that is 4
                                 lines for one archetype and 5 for another needs
                                 no extra Webflow work.
+                                CONTAINER OUTSIDE, TEMPLATE INSIDE. Getting
+                                those two the wrong way round is easy to do and
+                                the symptom looks unrelated (the text clones
+                                without its icon row), so the script detects the
+                                swap, renders it the intended way round, and
+                                warns with what to change.
      [data-product-list-template]  The ONE authored item, INSIDE the container.
                                 Keep it styled and visible in the Designer (the
                                 card never looks empty while you work); the
@@ -707,8 +713,53 @@
 
      The template stays in the Designer, styled and visible, so the card never
      looks empty while you work on it — the script hides it at paint time. */
-  function listContainer(name) {
-    return slots('[data-product-list="' + name + '"]')[0] || null;
+  /* Resolve the pair {container, template}. The contract is container OUTSIDE,
+     template INSIDE — but the two attributes are trivially easy to swap in the
+     Designer, and the resulting failure looks nothing like its cause (the
+     template is then an ANCESTOR of the container, so the "is there a template
+     in here?" lookup finds nothing, the slot falls through to the ID path, and
+     you get the text cloned without its icon row). So detect the inversion,
+     recover, and say exactly what to change. Measured 2026-08-25. */
+  function resolveList(name) {
+    var marked = slots('[data-product-list="' + name + '"]')[0];
+    if (!marked) return null;
+
+    // The intended shape: the template is a descendant of the container.
+    var inner = one("[data-product-list-template]", marked);
+    if (inner) return { box: marked, tpl: inner };
+
+    // Both attributes on ONE element: it can't be its own container, so the
+    // parent holds the clones.
+    if (marked.hasAttribute("data-product-list-template") && marked.parentNode) {
+      console.warn(
+        '[product] data-product-list="' +
+          name +
+          '" and data-product-list-template are on the SAME element. Put the ' +
+          "list attribute on the WRAPPER and the template attribute on the " +
+          "one item inside it. Using the parent as the container for now."
+      );
+      return { box: marked.parentNode, tpl: marked };
+    }
+
+    // Inverted: the template attribute is on an ANCESTOR. That ancestor is the
+    // wrapper the author meant, and the marked element is the item.
+    var outer =
+      marked.closest && marked.closest("[data-product-list-template]");
+    if (outer) {
+      console.warn(
+        "[product] the list attributes for \"" +
+          name +
+          '" are swapped: data-product-list-template is on the WRAPPER and ' +
+          'data-product-list="' +
+          name +
+          '" is on the item inside it. It should be the other way round — the ' +
+          "container holds the list attribute, the ONE item inside it holds " +
+          "the template attribute. Rendering it the intended way round for now."
+      );
+      return { box: outer, tpl: marked };
+    }
+
+    return { box: marked, tpl: null }; // renderList() reports the missing template
   }
 
   function clearList(box) {
@@ -722,13 +773,14 @@
     });
   }
 
-  function renderList(box, items) {
-    var tpl = one("[data-product-list-template]", box);
+  function renderList(box, tpl, items) {
     if (!tpl) {
       console.warn(
-        "[product] [data-product-list=\"" +
+        '[product] [data-product-list="' +
           box.getAttribute("data-product-list") +
-          '"] has no [data-product-list-template] inside it — nothing to clone.'
+          '"] has no [data-product-list-template] inside it — nothing to ' +
+          "clone. Build ONE item inside the container and put the template " +
+          "attribute on it."
       );
       return false;
     }
@@ -738,6 +790,10 @@
     items.forEach(function (html) {
       var clone = tpl.cloneNode(true);
       clone.removeAttribute("data-product-list-template");
+      /* Also the list attribute: in the swapped-attributes case the template
+         IS the element carrying it, and a clone that kept it would be found by
+         the next paint's resolveList() instead of the real container. */
+      clone.removeAttribute("data-product-list");
       clone.removeAttribute("data-product-skeleton");
       clone.setAttribute("data-product-list-item", "");
       /* The clone inherits transition.js's entrance attributes from the
@@ -891,9 +947,9 @@
       /* A [data-product-list] container wins: ONE authored item, cloned per
          entry. That is the path for the benefit lines, and the only one that
          handles a list whose length changes per archetype/product. */
-      var box = listContainer(name);
-      if (box) {
-        if (renderList(box, items)) return;
+      var list = resolveList(name);
+      if (list) {
+        if (renderList(list.box, list.tpl, items)) return;
       }
 
       var targets = copyTargets(name);

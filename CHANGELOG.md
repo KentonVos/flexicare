@@ -14,6 +14,25 @@ Format:
 
 ---
 
+## 2026-08-25 — Recover from swapped list attributes on the product page
+- `src/flexicare-product.js`, `ARCHITECTURE.md`
+- The benefit list came out "completely wrong" on the live page because the two list
+  attributes were the wrong way round in the Designer: `data-product-list-template` on the
+  WRAPPER and `data-product-list="plan-benefit"` on the item inside it.
+- **Why that symptom looks unrelated to that cause:** with the attributes swapped the
+  template is an ANCESTOR of the container, so `one("[data-product-list-template]", box)`
+  finds nothing, the slot falls through to the ID path, and the TEXT element gets cloned as
+  siblings *inside* the row — laid out along the row's flex axis, and with no check icon on
+  any clone, because the icon lives in the row that wasn't cloned.
+- `resolveList()` now detects the inversion (and both attributes on one element), renders
+  it the way the author meant, and warns in the console with exactly what to change. The
+  contract is unchanged and still the thing to fix: container OUTSIDE, template INSIDE.
+- Clones are now stripped of `data-product-list` as well as `-list-template`; in the
+  swapped case the template carries the list attribute, and a clone that kept it would be
+  picked up as the container by the next paint.
+- Anything else inside the template (a check-wrapper, an arrow) is cloned untouched — that
+  is how every row gets its own icon, with no extra attributes.
+
 ## 2026-08-24 — Product benefit lines: list them all, don't cycle them
 - `src/flexicare-product.js`, `ARCHITECTURE.md`
 - The benefit lines were animating one at a time. A multi-item slot landing on ONE element
