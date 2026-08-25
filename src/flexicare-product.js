@@ -804,6 +804,13 @@
     return { box: marked, tpl: null }; // renderList() reports the missing template
   }
 
+  function hideTemplate(tpl) {
+    if (!tpl) return;
+    tpl.style.display = "none";
+    tpl.setAttribute("data-product-template-hidden", "");
+    tpl.setAttribute("aria-hidden", "true");
+  }
+
   function clearList(box) {
     all("[data-product-list-item]", box).forEach(function (node) {
       if (window.LiquidGlass && typeof window.LiquidGlass.kill === "function") {
@@ -827,7 +834,7 @@
       return false;
     }
     clearList(box);
-    tpl.style.display = "none";
+    hideTemplate(tpl);
 
     items.forEach(function (html) {
       var clone = tpl.cloneNode(true);
@@ -1166,6 +1173,13 @@
     ":where([data-product-skeleton]){position:relative;overflow:hidden;color:transparent!important;border-radius:var(--fc-product-skeleton-radius,.35em);background-color:var(--fc-product-skeleton-bg,rgba(255,255,255,.06))}" +
     ':where([data-product-skeleton])::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:2;background-image:linear-gradient(100deg,rgba(255,255,255,0) 20%,var(--fc-product-skeleton-sheen,rgba(255,255,255,.18)) 50%,rgba(255,255,255,0) 80%);background-size:200% 100%;background-repeat:no-repeat;animation:fc-product-shimmer var(--fc-product-skeleton-speed,1.5s) linear infinite}' +
     ":where([data-product-skeleton] *){visibility:hidden}" +
+    /* The authored template row must NOT be on screen once its clones are in.
+       An inline display:none is the obvious way to do that, but it loses to any
+       Webflow class carrying !important — and a template left visible reads as
+       a real (empty) row, which is exactly the "one extra row, text shifted
+       down by one" symptom. So hide it by attribute, with !important of our
+       own. */
+    "[data-product-template-hidden]{display:none!important}" +
     // The CTA is live the whole time, but it shouldn't look clickable yet.
     ':where([data-product-state="loading"] [data-product-next]){opacity:.45;transition:opacity .2s ease}' +
     "@media (prefers-reduced-motion:reduce){:where([data-product-skeleton])::after{animation:none}}";
@@ -1244,8 +1258,7 @@
        lorem-ipsum bullet reads as real content. */
     all("[data-product-list]").forEach(function (box) {
       if (one("[data-product-list-item]", box)) return; // rendered fine
-      var tpl = one("[data-product-list-template]", box);
-      if (tpl) tpl.style.display = "none";
+      hideTemplate(one("[data-product-list-template]", box));
     });
     if (state.wrap) state.wrap.setAttribute("data-product-state", "ready");
   }
@@ -1429,9 +1442,61 @@
     document.addEventListener("DOMContentLoaded", boot);
   else boot();
 
+  /* Flexicare.product.debugList("plan-benefit") — print what actually got
+     built for a list slot. Answers, in one line, the questions that otherwise
+     take a round of screenshots: which element is the container, which is the
+     template, whether the template is still visible, how many rows are on
+     screen, and what text and icons each row ended up with. */
+  function debugList(name) {
+    name = name || "plan-benefit";
+    var list = resolveList(name);
+    if (!list) {
+      console.log(
+        '[product] no [data-product-list="' + name + '"] on this page.'
+      );
+      return;
+    }
+    function describe(el) {
+      if (!el) return "(none)";
+      var out = el.tagName.toLowerCase();
+      if (el.id) out += "#" + el.id;
+      if (el.className && typeof el.className === "string" && el.className.trim())
+        out += "." + el.className.trim().split(/\s+/).join(".");
+      return out;
+    }
+    function visible(el) {
+      if (!el) return false;
+      var cs = window.getComputedStyle ? getComputedStyle(el) : null;
+      return !!cs && cs.display !== "none" && cs.visibility !== "hidden";
+    }
+    console.log("[product] list:", name);
+    console.log("  container:", describe(list.box));
+    console.log(
+      "  template :",
+      describe(list.tpl),
+      list.tpl ? (visible(list.tpl) ? "*** STILL VISIBLE ***" : "hidden (ok)") : ""
+    );
+    var rows = all("[data-product-list-item]", list.box);
+    console.log("  clones   :", rows.length);
+    // Every direct child of the container, in order — the template included,
+    // so an off-by-one row shows up as an unexpected entry in this list.
+    var kids = Array.prototype.slice.call(list.box.children);
+    kids.forEach(function (kid, i) {
+      var txt = kid.querySelector("[data-product-list-text]") || kid;
+      console.log(
+        "   " + i + ".",
+        describe(kid),
+        visible(kid) ? "visible" : "HIDDEN",
+        kid.hasAttribute("data-product-list-item") ? "[clone]" : "[authored]",
+        "text=" + JSON.stringify((txt.textContent || "").trim().slice(0, 40))
+      );
+    });
+  }
+
   FC.product = {
     init: init,
     teardown: teardown,
+    debugList: debugList,
     // Flexicare.product.copy("A", "PLUS") — inspect the resolved database
     copy: collectCopy,
     skeleton: markSkeleton,

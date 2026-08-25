@@ -14,6 +14,19 @@ Format:
 
 ---
 
+## 2026-08-25 — Harden the list-template hiding, add a list diagnostic
+- `src/flexicare-product.js`
+- Reported symptom: five rows for four items, checks on rows 1-4 and text on rows 2-5 — an
+  authored template row surviving at the top, which reads as the text being shifted down one.
+- The template was hidden with an INLINE `display:none`, which loses to any Webflow class
+  carrying `!important`. Now hidden by attribute (`data-product-template-hidden`) with a
+  matching `display:none!important` in the injected stylesheet, plus `aria-hidden`. Both
+  the render path and the no-copy path in `clearSkeleton()` go through `hideTemplate()`.
+- NEW `Flexicare.product.debugList("plan-benefit")` — prints the resolved container and
+  template, whether the template is still visible, the clone count, and then EVERY direct
+  child of the container in order with its text and whether it is a clone or authored. An
+  off-by-one row shows up immediately as an unexpected `[authored]` entry.
+
 ## 2026-08-25 — Cloned benefit rows rendered their icons but no text
 - `src/flexicare-product.js`, `ARCHITECTURE.md`
 - With the list attributes the right way round, the rows cloned correctly — four rows, four
