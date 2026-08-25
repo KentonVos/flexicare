@@ -668,6 +668,16 @@ that sweep — a blanket un-hide would also reveal whatever the template hides o
 (or check icon) survives — anything else in the template is cloned untouched, which is how
 every row gets its own icon.
 
+**The authored template is DETACHED, not hidden.** `resolveList()` keeps a pristine
+`cloneNode(true)` in `state.lists[slot]` and removes the original from the DOM the first
+time it sees it; every paint clones from that detached copy. Hiding it was tried twice and
+failed twice — an inline `display:none` loses to a Webflow class carrying `!important`, and
+an attribute rule of our own gets inherited by the clones (they are made FROM the template)
+and hides the whole list. A detached node cannot render whatever any stylesheet says. The
+symptom when the template DOES render is worth recognising: one empty row above the real
+ones, which reads as "the text is shifted down by one" (2026-08-25). The same removal is
+applied in `clearSkeleton()` to a list whose slot got no copy at all.
+
 **The list attributes are swap-prone.** The contract is container OUTSIDE
 (`data-product-list`), template INSIDE (`data-product-list-template`), and reversing them
 fails in a way that looks unrelated: the template becomes an ANCESTOR of the container, the

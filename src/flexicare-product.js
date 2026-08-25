@@ -277,6 +277,7 @@
     archetype: null,
     product: null,
     result: null, // the finish response — token interpolation reads it
+    lists: {}, // slot name -> { box, tpl } with tpl DETACHED (see resolveList)
     cycles: [], // { el, items } — copy slots with more than one entry
     cycleTimer: null,
     cycleMs: 4000,
@@ -755,24 +756,47 @@
 
      The template stays in the Designer, styled and visible, so the card never
      looks empty while you work on it — the script hides it at paint time. */
-  /* Resolve the pair {container, template}. The contract is container OUTSIDE,
-     template INSIDE — but the two attributes are trivially easy to swap in the
-     Designer, and the resulting failure looks nothing like its cause (the
-     template is then an ANCESTOR of the container, so the "is there a template
-     in here?" lookup finds nothing, the slot falls through to the ID path, and
-     you get the text cloned without its icon row). So detect the inversion,
-     recover, and say exactly what to change. Measured 2026-08-25. */
+  /* Resolve the pair {container, template}, and TAKE THE TEMPLATE OUT OF THE
+     DOM the first time we see it.
+
+     Why removal rather than hiding: the authored template is a real, styled row
+     sitting in the container, so while it is in the document it is a visible
+     empty row above the real ones — which reads as "the text is shifted down by
+     one". Hiding it is the obvious fix and it kept not sticking: an inline
+     display:none loses to a Webflow class with !important, and an attribute
+     rule of our own gets inherited by the clones (which are made FROM the
+     template) and hides the entire list instead. A DETACHED node cannot render,
+     no matter what any stylesheet says, so this removes the whole class of bug.
+
+     We keep a pristine detached CLONE and delete the original, then clone from
+     that copy on every paint. The container stays in the DOM, so the cached
+     entry is valid for as long as it is attached.
+
+     The contract is container OUTSIDE, template INSIDE. Getting those the wrong
+     way round is easy and the symptom looks unrelated, so the inversion (and
+     both attributes on one element) is detected, recovered, and warned about.
+     Measured 2026-08-25. */
   function resolveList(name) {
+    // Already taken: the template lives only in memory now.
+    var cached = state.lists[name];
+    if (cached && attached(cached.box)) return cached;
+
     var marked = slots('[data-product-list="' + name + '"]')[0];
     if (!marked) return null;
 
+    var box = null;
+    var tpl = null;
+
     // The intended shape: the template is a descendant of the container.
     var inner = one("[data-product-list-template]", marked);
-    if (inner) return { box: marked, tpl: inner };
-
-    // Both attributes on ONE element: it can't be its own container, so the
-    // parent holds the clones.
-    if (marked.hasAttribute("data-product-list-template") && marked.parentNode) {
+    if (inner) {
+      box = marked;
+      tpl = inner;
+    } else if (
+      marked.hasAttribute("data-product-list-template") &&
+      marked.parentNode
+    ) {
+      // Both attributes on ONE element: it can't be its own container.
       console.warn(
         '[product] data-product-list="' +
           name +
@@ -780,28 +804,45 @@
           "list attribute on the WRAPPER and the template attribute on the " +
           "one item inside it. Using the parent as the container for now."
       );
-      return { box: marked.parentNode, tpl: marked };
+      box = marked.parentNode;
+      tpl = marked;
+    } else {
+      // Inverted: the template attribute is on an ANCESTOR.
+      var outer =
+        marked.closest && marked.closest("[data-product-list-template]");
+      if (outer) {
+        console.warn(
+          '[product] the list attributes for "' +
+            name +
+            '" are swapped: data-product-list-template is on the WRAPPER and ' +
+            'data-product-list="' +
+            name +
+            '" is on the item inside it. It should be the other way round — ' +
+            "the container holds the list attribute, the ONE item inside it " +
+            "holds the template attribute. Rendering it the intended way " +
+            "round for now."
+        );
+        box = outer;
+        tpl = marked;
+      }
     }
 
-    // Inverted: the template attribute is on an ANCESTOR. That ancestor is the
-    // wrapper the author meant, and the marked element is the item.
-    var outer =
-      marked.closest && marked.closest("[data-product-list-template]");
-    if (outer) {
-      console.warn(
-        "[product] the list attributes for \"" +
-          name +
-          '" are swapped: data-product-list-template is on the WRAPPER and ' +
-          'data-product-list="' +
-          name +
-          '" is on the item inside it. It should be the other way round — the ' +
-          "container holds the list attribute, the ONE item inside it holds " +
-          "the template attribute. Rendering it the intended way round for now."
-      );
-      return { box: outer, tpl: marked };
-    }
+    if (!box) return { box: marked, tpl: null }; // renderList reports it
+    if (!tpl) return { box: box, tpl: null };
 
-    return { box: marked, tpl: null }; // renderList() reports the missing template
+    /* Keep a pristine copy and delete the authored one. Pristine BEFORE any
+       clone-time edits, and before markSkeleton's shimmer attribute can be
+       baked in. */
+    var pristine = tpl.cloneNode(true);
+    pristine.removeAttribute("data-product-skeleton");
+    all("[data-product-skeleton]", pristine).forEach(function (el) {
+      el.removeAttribute("data-product-skeleton");
+    });
+    pristine.style.display = "";
+    if (tpl.parentNode) tpl.parentNode.removeChild(tpl);
+
+    state.lists[name] = { box: box, tpl: pristine };
+    return state.lists[name];
   }
 
   function hideTemplate(tpl) {
@@ -834,7 +875,6 @@
       return false;
     }
     clearList(box);
-    hideTemplate(tpl);
 
     items.forEach(function (html) {
       var clone = tpl.cloneNode(true);
@@ -1282,11 +1322,16 @@
       el.removeAttribute("data-product-skeleton");
     });
     /* A list whose slot had no copy never went through renderList(), so its
-       template is still the visible placeholder row. Hide it — a lone
-       lorem-ipsum bullet reads as real content. */
+       authored template is still sitting there as a placeholder row — a lone
+       lorem-ipsum bullet reads as real content. REMOVE it rather than hide it,
+       for the same reason resolveList() detaches: hiding kept losing to the
+       page's own CSS. */
     all("[data-product-list]").forEach(function (box) {
       if (one("[data-product-list-item]", box)) return; // rendered fine
-      hideTemplate(one("[data-product-list-template]", box));
+      var tpl = one("[data-product-list-template]", box);
+      if (!tpl) return;
+      hideTemplate(tpl); // in case anything still holds a reference to it
+      if (tpl.parentNode) tpl.parentNode.removeChild(tpl);
     });
     if (state.wrap) state.wrap.setAttribute("data-product-state", "ready");
   }
@@ -1369,6 +1414,7 @@
     state.archetype = null;
     state.product = null;
     state.result = null;
+    state.lists = {}; // fresh container = fresh authored templates
     state.lang = attr(wrap, "data-product-lang", FC.config.language || "en");
     state.cycleMs = num(wrap, "data-product-cycle", 4000, 1200);
     state.cycleFade = num(wrap, "data-product-cycle-fade", 0.4, 0);
@@ -1432,6 +1478,7 @@
     state.archetype = null;
     state.product = null;
     state.result = null;
+    state.lists = {};
   }
 
   /* ------------------------------ lifecycle ------------------------------ */
@@ -1502,7 +1549,13 @@
     console.log(
       "  template :",
       describe(list.tpl),
-      list.tpl ? (visible(list.tpl) ? "*** STILL VISIBLE ***" : "hidden (ok)") : ""
+      !list.tpl
+        ? "MISSING"
+        : attached(list.tpl)
+        ? visible(list.tpl)
+          ? "*** STILL IN THE DOM AND VISIBLE ***"
+          : "in the DOM but hidden"
+        : "detached (ok)"
     );
     var rows = all("[data-product-list-item]", list.box);
     console.log("  clones   :", rows.length);

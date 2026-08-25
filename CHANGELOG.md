@@ -14,6 +14,24 @@ Format:
 
 ---
 
+## 2026-08-25 — Detach the list template instead of hiding it
+- `src/flexicare-product.js`, `ARCHITECTURE.md`
+- Third attempt at the same symptom, and this time by removing the failure mode rather than
+  patching it. The authored template row kept rendering as an empty row above the real ones,
+  which reads as the text being shifted down by one.
+- Hiding it failed twice, in two different ways: an inline `display:none` loses to a Webflow
+  class carrying `!important`, and an attribute rule with our own `!important` gets inherited
+  by the clones — they are made FROM the template — and hid the entire list.
+- `resolveList()` now keeps a pristine detached `cloneNode(true)` in `state.lists[slot]` and
+  REMOVES the original from the DOM the first time it resolves the list; every paint clones
+  from the detached copy. A detached node cannot render whatever any stylesheet says. The
+  cache is keyed per slot, holds the container too (so the swapped-attribute recovery still
+  re-resolves after the marked element is removed), and is cleared on init and teardown, so
+  each Barba arrival picks up the fresh container's authored template.
+- `clearSkeleton()` removes, rather than hides, the template of a list whose slot got no copy.
+- `debugList()` now reports the template as `detached (ok)` / `in the DOM but hidden` /
+  `*** STILL IN THE DOM AND VISIBLE ***`, which is the distinction that mattered here.
+
 ## 2026-08-25 — Fix: clones inherited the template's hide attribute
 - `src/flexicare-product.js`
 - Regression from the commit before this one. The template is hidden by attribute
