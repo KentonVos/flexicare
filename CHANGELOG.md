@@ -14,6 +14,25 @@ Format:
 
 ---
 
+## 2026-08-25 — Cloned benefit rows rendered their icons but no text
+- `src/flexicare-product.js`, `ARCHITECTURE.md`
+- With the list attributes the right way round, the rows cloned correctly — four rows, four
+  check icons, and no words.
+- TWO rules hide authored content until its entrance animation runs:
+  `.lg-anim [data-anim]:not([data-text-reveal]){opacity:0}` (transition.js) and
+  `.tr-ready [data-text-reveal]{visibility:hidden}` (text-reveal.js). A clone inherits
+  both, and clones are built during `afterEnter` — AFTER both animations have already run —
+  so nothing ever comes along to reveal them.
+- The strip was only running on the clone's ROOT. The attribute is normally on the TEXT
+  element INSIDE the row, so the row was revealed and its words were not.
+- New `unhide(root)` sweeps the root and every descendant carrying `data-anim`,
+  `-anim-fade`, `-text-reveal` or `-product-skeleton`, clearing the attribute, the inline
+  `visibility` text-reveal may already have set, and opacity. Used by both clone paths, and
+  on the ORIGINAL row in the in-place path (it holds item 0 and is authored content).
+  Deliberately NOT a blanket "un-hide everything inline-hidden in this row" — that would
+  also reveal whatever the template hides on purpose.
+- No Webflow change needed.
+
 ## 2026-08-25 — Recover from swapped list attributes on the product page
 - `src/flexicare-product.js`, `ARCHITECTURE.md`
 - The benefit list came out "completely wrong" on the live page because the two list

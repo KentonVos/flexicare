@@ -654,9 +654,16 @@ list whose length changes per combination (C:PLUS has five lines where A has fou
 default for multi-item slots, which animated the benefit lines one at a time — right for a
 rotating strapline, wrong for a set of benefits.
 
-Clones (both paths) are rebuilt on every paint with `data-anim`/`-anim-fade`/`-text-reveal`
-stripped (else the FOUC rule leaves them invisible, since they're built after the entrance
-animation) and glass re-scanned — the same idiom as the quiz's option template.
+Clones (both paths) are rebuilt on every paint, glass re-scanned, and run through
+`unhide()` — the same idiom as the quiz's option template. **`unhide()` sweeps the root AND
+every descendant**, because TWO rules hide authored content until its entrance animation
+runs (`.lg-anim [data-anim]{opacity:0}` in transition.js, `.tr-ready [data-text-reveal]
+{visibility:hidden}` in text-reveal.js) and clones inherit both while being built *after*
+those animations have already run — so nothing will ever come along and reveal them. Root-
+only stripping is not enough: the attribute usually sits on the TEXT element inside the row,
+which is how cloned rows once rendered with their check icons and no words (2026-08-25).
+text-reveal's inline `visibility` is cleared per element too, but only on the elements in
+that sweep — a blanket un-hide would also reveal whatever the template hides on purpose.
 `[data-product-list-text]` inside a template is its text slot, so the item's arrow glyph
 (or check icon) survives — anything else in the template is cloned untouched, which is how
 every row gets its own icon.

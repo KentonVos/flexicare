@@ -697,6 +697,48 @@
     );
   }
 
+  /* Force a freshly-injected row visible. TWO separate rules hide authored
+     content until its entrance animation runs, and a clone inherits both:
+
+       transition.js  .lg-anim [data-anim]:not([data-text-reveal]),
+                      .lg-anim [data-anim-fade]:not([data-text-reveal])
+                      { opacity: 0 }
+       text-reveal.js .tr-ready [data-text-reveal] { visibility: hidden }
+
+     Clones are built during afterEnter, AFTER both of those animations have
+     already run, so nothing will ever come along and reveal them — they just
+     stay invisible. Stripping the attributes from the clone's ROOT is not
+     enough: the attribute is usually on the TEXT element INSIDE the row, which
+     is how four cloned rows rendered with their check icons and no words.
+     Measured 2026-08-25. So sweep the root AND every descendant, and clear the
+     inline hiding text-reveal may already have applied to the template.
+
+     text-reveal also sets visibility on the element ITSELF once it has
+     processed it, which no attribute sweep can undo — so each element in the
+     pass gets its inline visibility cleared too. Only those elements, though:
+     a blanket "un-hide everything inline-hidden in this row" would also reveal
+     anything the template hides on purpose.
+
+     Same treatment the quiz gives its option clones (ensureVisible). */
+  function unhide(root) {
+    if (!root) return;
+    var els = [root].concat(
+      all(
+        "[data-anim],[data-anim-fade],[data-text-reveal],[data-product-skeleton]",
+        root
+      )
+    );
+    els.forEach(function (el) {
+      el.removeAttribute("data-anim");
+      el.removeAttribute("data-anim-fade");
+      el.removeAttribute("data-text-reveal");
+      el.removeAttribute("data-product-skeleton");
+      if (el.style) el.style.visibility = "visible";
+      if (gsap) gsap.set(el, { opacity: 1, filter: "none", clearProps: "filter" });
+      else if (el.style) el.style.opacity = "1";
+    });
+  }
+
   /* --------------------------- list templates --------------------------- */
 
   /* The benefit lines are a LIST of unknown length that differs per
@@ -796,19 +838,12 @@
       clone.removeAttribute("data-product-list");
       clone.removeAttribute("data-product-skeleton");
       clone.setAttribute("data-product-list-item", "");
-      /* The clone inherits transition.js's entrance attributes from the
-         template; strip them or the FOUC rule (opacity:0) leaves every clone
-         invisible, because these are built AFTER the page's entrance animation
-         has already run. Exactly the bug the quiz's option clones hit. */
-      clone.removeAttribute("data-anim");
-      clone.removeAttribute("data-anim-fade");
-      clone.removeAttribute("data-text-reveal");
       clone.style.display = "";
       var textEl = clone.querySelector("[data-product-list-text]") || clone;
       textEl.innerHTML = interpolate(html);
-      all("[data-product-skeleton]", clone).forEach(function (el) {
-        el.removeAttribute("data-product-skeleton");
-      });
+      // Root AND descendants — the entrance attribute is usually on the text
+      // element inside the row, not on the row.
+      unhide(clone);
       box.appendChild(clone);
     });
 
@@ -861,9 +896,11 @@
 
     clearClones(name, host);
 
-    // The original keeps the ID and gets item 0.
+    // The original keeps the ID and gets item 0. It is authored content, so it
+    // may carry the entrance attributes itself.
     el.innerHTML = interpolate(items[0]);
     show(row, true);
+    unhide(row);
 
     var last = row;
     for (var i = 1; i < items.length; i++) {
@@ -876,24 +913,10 @@
         row === el ? clone : clone.querySelector('[id="' + name + '"]');
       if (clone.id) clone.removeAttribute("id");
       if (idHolder && idHolder !== clone) idHolder.removeAttribute("id");
-      // Entrance attributes: these clones are built after the page's entrance
-      // animation ran, so the FOUC rule would leave them at opacity 0.
-      clone.removeAttribute("data-anim");
-      clone.removeAttribute("data-anim-fade");
-      clone.removeAttribute("data-text-reveal");
-      all("[data-anim],[data-anim-fade],[data-text-reveal]", clone).forEach(
-        function (n) {
-          n.removeAttribute("data-anim");
-          n.removeAttribute("data-anim-fade");
-          n.removeAttribute("data-text-reveal");
-        }
-      );
-      all("[data-product-skeleton]", clone).forEach(function (n) {
-        n.removeAttribute("data-product-skeleton");
-      });
       clone.setAttribute("data-product-clone", name);
       clone.style.display = "";
       (idHolder || clone).innerHTML = interpolate(items[i]);
+      unhide(clone);
       host.insertBefore(clone, last.nextSibling);
       last = clone;
     }
