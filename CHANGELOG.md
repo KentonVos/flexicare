@@ -14,6 +14,19 @@ Format:
 
 ---
 
+## 2026-08-25 — Fix: clones inherited the template's hide attribute
+- `src/flexicare-product.js`
+- Regression from the commit before this one. The template is hidden by attribute
+  (`data-product-template-hidden` → `display:none!important`), and clones are made FROM the
+  template, so every clone inherited it and the whole list vanished. `debugList()` showed it
+  exactly: 4 clones, all `HIDDEN`. Clones now strip that attribute and its `aria-hidden`.
+- Also confirmed by that output: the earlier five-rows-with-shifted-text symptom WAS the
+  authored template surviving as a visible empty row (`0. div.product-list-item [authored]`).
+  The attribute-based hiding fixed the cause; this fixes the overshoot.
+- `renderList()` now warns if it builds rows that end up invisible, naming the computed
+  `display`/`visibility` and pointing at `debugList()`. A silently empty card looks like
+  "the copy didn't load" and sends you hunting in the wrong place — this was that.
+
 ## 2026-08-25 — Harden the list-template hiding, add a list diagnostic
 - `src/flexicare-product.js`
 - Reported symptom: five rows for four items, checks on rows 1-4 and text on rows 2-5 — an

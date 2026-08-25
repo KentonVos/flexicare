@@ -822,7 +822,7 @@
     });
   }
 
-  function renderList(box, tpl, items) {
+  function renderList(name, box, tpl, items) {
     if (!tpl) {
       console.warn(
         '[product] [data-product-list="' +
@@ -839,6 +839,11 @@
     items.forEach(function (html) {
       var clone = tpl.cloneNode(true);
       clone.removeAttribute("data-product-list-template");
+      /* The template is hidden by attribute (display:none!important), and a
+         clone of it inherits that attribute — which hid every row, not just the
+         template. Strip it, and the aria-hidden that goes with it. */
+      clone.removeAttribute("data-product-template-hidden");
+      clone.removeAttribute("aria-hidden");
       /* Also the list attribute: in the swapped-attributes case the template
          IS the element carrying it, and a clone that kept it would be found by
          the next paint's resolveList() instead of the real container. */
@@ -859,6 +864,29 @@
       try {
         window.LiquidGlass.scan(box);
       } catch (e) {}
+    }
+
+    /* We built rows and none of them are on screen: something is hiding them
+       that this function didn't put there. Say so loudly — a silently empty
+       card is the one failure mode that looks like "the copy didn't load" and
+       sends you hunting in the wrong place. */
+    var first = one("[data-product-list-item]", box);
+    if (first && window.getComputedStyle) {
+      var cs = getComputedStyle(first);
+      if (cs.display === "none" || cs.visibility === "hidden")
+        console.warn(
+          "[product] rendered " +
+            items.length +
+            " rows for \"" +
+            name +
+            '" but they are not visible (display:' +
+            cs.display +
+            "; visibility:" +
+            cs.visibility +
+            "). Run Flexicare.product.debugList(\"" +
+            name +
+            '") and check what is hiding them.'
+        );
     }
     return true;
   }
@@ -979,7 +1007,7 @@
          handles a list whose length changes per archetype/product. */
       var list = resolveList(name);
       if (list) {
-        if (renderList(list.box, list.tpl, items)) return;
+        if (renderList(name, list.box, list.tpl, items)) return;
       }
 
       var targets = copyTargets(name);
