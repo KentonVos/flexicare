@@ -14,6 +14,25 @@ Format:
 
 ---
 
+## 2026-08-25 — The real cause: clones inherited a mid-tween transform
+- `src/flexicare-product.js`, `ARCHITECTURE.md`
+- `debugList()` proved the DOM was correct — 4 clones, template detached, no stray row — and
+  the page still looked like the text was shifted one row down. It was never structural.
+- transition.js animates `[data-anim]` elements in from an offset: gsap writes
+  `transform: translate(0,Npx)` and `opacity:0` INLINE, then clears both when the tween
+  finishes. Clones are built during `afterEnter`, while that tween is still running, so they
+  are born holding a mid-flight transform — and the tween that would clear it is pointed at
+  the template, which by then is detached. Nothing ever clears the clones.
+- Why it read as an off-by-one: `check-wrapper` has no `data-anim`, so the icon stayed put
+  while the text element inside the same row was pushed down ~one row height. Icons and text
+  then looked interleaved, with an orphan icon at the top and an orphan line at the bottom.
+- `unhide()` now calls `clearInlineMotion()` across the whole subtree (not just elements that
+  still carry an entrance attribute — the transform is on the element whether or not the
+  attribute survived), and the pristine template is cleaned at capture time so no page ever
+  renders rows from a frozen copy. INLINE properties only; Webflow class styling is untouched.
+- `debugList()` now prints `dy` (text top minus row top) and the inline transform per row.
+  `dy` should be ~0; a row height means this bug is back.
+
 ## 2026-08-25 — Detach the list template instead of hiding it
 - `src/flexicare-product.js`, `ARCHITECTURE.md`
 - Third attempt at the same symptom, and this time by removing the failure mode rather than

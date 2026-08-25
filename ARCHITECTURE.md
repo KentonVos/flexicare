@@ -668,6 +668,20 @@ that sweep — a blanket un-hide would also reveal whatever the template hides o
 (or check icon) survives — anything else in the template is cloned untouched, which is how
 every row gets its own icon.
 
+**Clones are born mid-animation, so `unhide()` clears inline motion too.** transition.js
+animates `[data-anim]` in from an offset — gsap writes `transform: translate(0,Npx)` and
+`opacity:0` inline, then clears both when the tween ends. Clones are built during
+`afterEnter`, WHILE that tween is running, so they inherit a mid-flight transform, and the
+tween that would clear it is pointed at the template (by then detached). Nothing ever
+clears the clones. The symptom is deceptive: `check-wrapper` has no `data-anim` so it stays
+put while the text inside the same row is pushed down about one row's height, which reads
+as "the text is shifted one row down, the first row has no text and the last has no check"
+— every row is in fact correct and only the text is displaced (2026-08-25). So
+`clearInlineMotion()` wipes inline `transform`/`opacity`/`filter`/`visibility` across the
+whole subtree, on the pristine template at capture time AND on every clone. Inline only, so
+anything authored through a Webflow class survives. `debugList()` prints a `dy` per row for
+exactly this — it should be ~0.
+
 **The authored template is DETACHED, not hidden.** `resolveList()` keeps a pristine
 `cloneNode(true)` in `state.lists[slot]` and removes the original from the DOM the first
 time it sees it; every paint clones from that detached copy. Hiding it was tried twice and

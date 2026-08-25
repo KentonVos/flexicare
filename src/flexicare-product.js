@@ -734,10 +734,49 @@
       el.removeAttribute("data-anim-fade");
       el.removeAttribute("data-text-reveal");
       el.removeAttribute("data-product-skeleton");
-      if (el.style) el.style.visibility = "visible";
-      if (gsap) gsap.set(el, { opacity: 1, filter: "none", clearProps: "filter" });
-      else if (el.style) el.style.opacity = "1";
+      clearInlineMotion(el);
     });
+    /* And the whole subtree, attribute or not. The transform above is applied by
+       GSAP to the ELEMENT, and a clone taken mid-tween carries it whether or not
+       it still has the attribute that earned it. */
+    clearInlineMotion(root);
+    all("*", root).forEach(clearInlineMotion);
+  }
+
+  /* Wipe the inline state an in-flight entrance animation leaves behind.
+
+     THIS IS THE ONE THAT BIT HARDEST. transition.js animates [data-anim]
+     elements in from an offset (gsap sets `transform: translate(0, Npx)` and
+     `opacity: 0` inline, then clears both when the tween finishes). Our clones
+     are built during afterEnter — WHILE that tween is still running — so they
+     are born holding a mid-flight transform, and the tween that would have
+     cleared it is pointed at the template, which by then is detached. Nothing
+     ever clears the clones, so every row sits permanently offset.
+
+     The symptom is nasty because it looks structural: the check-wrapper has no
+     data-anim so it stays put, while the text element inside the same row is
+     pushed down about one row's height. The result reads as "the text is
+     shifted one row down; the first row has no text and the last has no
+     check", when in fact every row is correct and only the text is displaced.
+     Measured 2026-08-25.
+
+     Only INLINE properties are cleared, so anything authored through a Webflow
+     class is untouched. */
+  function clearInlineMotion(el) {
+    if (!el || !el.style) return;
+    if (gsap) {
+      gsap.set(el, {
+        clearProps: "transform,translate,rotate,scale,opacity,filter,visibility",
+      });
+    } else {
+      el.style.transform = "";
+      el.style.opacity = "";
+      el.style.filter = "";
+      el.style.visibility = "";
+    }
+    // gsap's clearProps doesn't touch `visibility` reliably (text-reveal sets it
+    // directly, not through gsap), so make sure of it.
+    if (el.style.visibility === "hidden") el.style.visibility = "";
   }
 
   /* --------------------------- list templates --------------------------- */
@@ -838,7 +877,13 @@
     all("[data-product-skeleton]", pristine).forEach(function (el) {
       el.removeAttribute("data-product-skeleton");
     });
+    /* Clean at the SOURCE as well as per clone: the authored template is very
+       likely mid-entrance-animation right now (we resolve during afterEnter),
+       and a pristine copy that carries a frozen translateY would hand the same
+       offset to every row this page ever renders. */
     pristine.style.display = "";
+    clearInlineMotion(pristine);
+    all("*", pristine).forEach(clearInlineMotion);
     if (tpl.parentNode) tpl.parentNode.removeChild(tpl);
 
     state.lists[name] = { box: box, tpl: pristine };
@@ -1564,12 +1609,20 @@
     var kids = Array.prototype.slice.call(list.box.children);
     kids.forEach(function (kid, i) {
       var txt = kid.querySelector("[data-product-list-text]") || kid;
+      /* Geometry, because "the DOM is right but it looks shifted" is a real
+         and separate failure: a clone taken mid-entrance-tween keeps an inline
+         transform, so the text sits offset from its own row while the icon
+         beside it stays put. dy is that offset — it should be ~0. */
+      var rowTop = kid.getBoundingClientRect().top;
+      var txtTop = txt.getBoundingClientRect().top;
       console.log(
         "   " + i + ".",
         describe(kid),
         visible(kid) ? "visible" : "HIDDEN",
         kid.hasAttribute("data-product-list-item") ? "[clone]" : "[authored]",
-        "text=" + JSON.stringify((txt.textContent || "").trim().slice(0, 40))
+        "dy=" + Math.round(txtTop - rowTop),
+        "transform=" + (txt.style.transform || "none"),
+        "text=" + JSON.stringify((txt.textContent || "").trim().slice(0, 34))
       );
     });
   }
