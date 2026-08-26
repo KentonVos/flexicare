@@ -53,6 +53,13 @@
                                      value wins over this. SET THIS — the
                                      fallback is a guess and warns in the
                                      console when it is used.
+                                  data-product-next-web="/thank-you"  CTA target
+                                     used INSTEAD of data-product-next when this
+                                     device is not a paired kiosk. The prize
+                                     wheel is kiosk-only (a WEB session gets a
+                                     409 from POST /spin), so this is how web
+                                     visitors skip /spin-to-win. Leave it unset
+                                     and everyone goes to data-product-next.
                                   data-product-onboarding="/onboarding"  bounce
                                      target when there's no session id
                                   data-product-quiz="/flexicare"  bounce target
@@ -1384,6 +1391,27 @@
   /* --------------------------- navigation --------------------------- */
 
   function nextUrl() {
+    /* The default CTA target is the prize wheel, and the wheel is KIOSK-ONLY:
+       POST /spin on a WEB session is a hard 409. So a web visitor sent to
+       /spin-to-win gets a page that can only ever show its fallback copy.
+       data-product-next-web is the escape hatch — set it and web traffic
+       skips the spin page entirely, while the tablets still go to it.
+
+       Unset, behaviour is unchanged (everyone goes to data-product-next and
+       the spin page explains itself), which is the right default while the
+       site is web-only and no tablet has been paired yet. */
+    if (
+      FC.kiosk &&
+      typeof FC.kiosk.isKiosk === "function" &&
+      !FC.kiosk.isKiosk()
+    ) {
+      var webUrl = attr(state.wrap, "data-product-next-web", null);
+      if (webUrl) {
+        dbg("web session — CTA goes to data-product-next-web:", webUrl);
+        return webUrl;
+      }
+    }
+
     var btn = slots("[data-product-next]")[0];
     var explicit =
       (btn && (attr(btn, "data-product-next", null) || realHref(btn))) ||

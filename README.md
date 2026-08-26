@@ -42,21 +42,24 @@ flexicare/
 │   ├── quiz-loading-state.md     ← the quiz-options skeleton/shimmer
 │   ├── reveal-loading-state.md   ← the reveal-page skeleton/shimmer
 │   ├── product-copy-embed.html   ← PASTE-READY: the /flexicare-product copy database
+│   ├── kiosk-and-spin.md         ← kiosk pairing + the prize wheel (Webflow build guide)
 │   ├── webflow-head-snippet.md   ← the head snippet that lives in Webflow (site head)
 │   └── hosting-and-publishing.md ← hosting + publish + rollback workflow
-└── src/               ← the fourteen scripts (served by Cloudflare from /src/)
+└── src/               ← the sixteen scripts (served by Cloudflare from /src/)
     ├── glass.js
     ├── transition.js
     ├── text-reveal.js
     ├── background-motion.js
     ├── orb-motion.js
     ├── flexicare-core.js
+    ├── flexicare-kiosk.js   ← device pairing/heartbeat (must precede onboarding)
     ├── flexicare-onboarding.js
     ├── flexicare-selfie.js
     ├── flexicare-avatar.js
     ├── flexicare-quiz.js
     ├── flexicare-reveal.js
     ├── flexicare-product.js
+    ├── flexicare-spin.js    ← the prize wheel (kiosk-only)
     ├── slider.js       ← liquid-glass tuner (dev-only, ?tune)
     └── orb-tuner.js    ← orb-motion tuner (dev-only, ?orbtune)
 ```

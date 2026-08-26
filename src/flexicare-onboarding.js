@@ -284,8 +284,15 @@
   function ensureSession(f) {
     var existing = FC.getSessionId();
     if (existing) return Promise.resolve(existing); // reuse — no update endpoint
+    /* kiosk: true attaches X-Kiosk-Token when this device is PAIRED (see
+       flexicare-kiosk.js). It is what makes the session `channel: "KIOSK"`,
+       and that is the only way it can ever spin the prize wheel — so this
+       header has to go on HERE, at session creation, not on the spin page.
+       On the public site the device is unpaired, the header is omitted, and
+       the session is a normal WEB one. */
     return FC.api("/sessions", {
       method: "POST",
+      kiosk: true,
       body: {
         language: FC.config.language || "en",
         first_name: f.name,
@@ -435,6 +442,23 @@
       })
       .catch(function (err) {
         setBusy(false);
+        /* Kiosk-only failures (never seen on the public site, where no header
+           is sent). 401 = the admin revoked this tablet's token; 403 = the
+           tablet is disabled. Both are device problems, not form problems.
+
+           NEVER retry without the header: that would quietly create a WEB
+           session on a tablet, and the shopper would do the whole quiz only
+           to be told at the wheel that they cannot spin. */
+        if (err && (err.status === 401 || err.status === 403) && FC.kiosk) {
+          if (err.status === 401 && FC.kiosk.unpair)
+            FC.kiosk.unpair("401 on session create");
+          showFormError(
+            err.status === 401
+              ? "This tablet needs to be paired again — please ask a team member."
+              : "This tablet is temporarily unavailable — please ask a team member."
+          );
+          return;
+        }
         showFormError(
           (err && (err.detail || err.message)) ||
             "Something went wrong. Please try again."

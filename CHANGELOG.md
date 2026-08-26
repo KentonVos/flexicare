@@ -14,6 +14,69 @@ Format:
 
 ---
 
+## 2026-08-26 — Kiosk mode + the prize wheel (spin-to-win)
+
+**New files.** The Webflow footer script list CHANGED — see the block in
+`docs/hosting-and-publishing.md` and paste it into Webflow → Project Settings →
+Custom Code → Footer. Two additions, and **order matters**:
+`flexicare-kiosk.js` goes directly after `flexicare-core.js` and **before**
+`flexicare-onboarding.js`; `flexicare-spin.js` goes after `flexicare-product.js`.
+
+- `src/flexicare-kiosk.js` (new) — `window.Flexicare.kiosk`. Device pairing
+  (`?pair=` deep link + manual entry with live formatting and a `Retry-After`
+  countdown), the device token in `localStorage`, `GET /kiosks/me` on boot, the
+  heartbeat loop with server-driven config, and the idle reset back to the attract
+  screen. Completely inert on the public site: no token, no header, no network calls.
+- `src/flexicare-spin.js` (new) — `/spin-to-win`. Draws the wheel as SVG from
+  `GET /prizes/wheel` (segment count/order/labels/colours are all admin data),
+  spins on tap *before* the response, lands on the `segment_index` the server
+  returns, and renders the claim code. Handles the whole §7.4 error table, resume
+  via `has_prize` → `GET /sessions/{id}/prize`, and the consolation case (no
+  claim-code emphasis). Every failure path lands on the same fallback copy — the
+  spin is never allowed to block the flow.
+- `src/flexicare-core.js` — `FC.api()` gained `opts.kiosk` (attaches
+  `X-Kiosk-Token` when paired) and `err.retryAfter` (seconds, from the `Retry-After`
+  header on a 429). Added `FC.config.kiosk` fallbacks; `resetJourney()` now clears
+  `FC.award`.
+- `src/flexicare-onboarding.js` — `POST /sessions` now passes `kiosk: true`. **This
+  is the change that makes the spin possible at all**: it is what makes the session
+  `channel: "KIOSK"`. Added 401/403 handling that shows an operator-facing message
+  and, critically, never retries without the header (that would silently create a
+  `WEB` session on a tablet).
+- `src/flexicare-product.js` — new optional `data-product-next-web` on
+  `[data-product]`: the CTA target used instead of `data-product-next` when the
+  device is not a paired kiosk, so web visitors can skip the kiosk-only wheel.
+  Unset, behaviour is unchanged.
+
+**Docs.** New `docs/kiosk-and-spin.md` — the Webflow build guide: why the wheel is
+drawn by JS rather than authored in the Designer, the stage/pointer/hub structure to
+build, the full panel markup, the pairing page, and a testing checklist.
+`docs/api-contract.md` gained §6 (kiosk) and §7 (prize wheel) plus the kiosk fields
+on §3.2/§3.6; the old §6 checklist is now §8. `ARCHITECTURE.md` and `CLAUDE.md`
+updated (load order, two new module sections, four new gotchas).
+
+**Webflow side — what still needs building:**
+- A `/spin-to-win` page with `[data-spin]`, an empty square `[data-spin-wheel]`,
+  `[data-spin-go]`, and the `[data-spin-when="…"]` panels. Full markup in
+  `docs/kiosk-and-spin.md` §3.
+- A `/kiosk` pairing page with `[data-kiosk-pair]` and friends (§4 of the same doc).
+- `data-kiosk-idle-factor="2"` on the spin page so a claim code isn't yanked away.
+- Optionally `data-product-next-web` on `[data-product]`.
+
+**The thing to remember:** the spin is decided at `/onboarding`, not at
+`/spin-to-win`. If the spin page says "unavailable", the session was started on an
+unpaired browser — fix it there.
+
+**Verified** with 119 assertions against the real files in a jsdom harness: wheel
+geometry and landing maths for 1–12 segments at four pointer positions; the spin
+page's ready/spin/land/prize path, consolation, resume, the web dead-end, and every
+row of the §7.4 error table; kiosk pairing (manual, deep link, 404, 429), boot,
+disabled, revoked-token, network-failure-keeps-token, and web-inertness; and the
+onboarding seam (header present on a tablet, absent on the web, no bare retry after
+a 401/403).
+
+---
+
 ## Where things stand — 2026-08-26 (end of the FLEX + product-page pass)
 
 A snapshot for the next session, so nothing below has to be re-derived. Details are in

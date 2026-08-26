@@ -24,7 +24,12 @@
        clears the other, so whichever the user did LAST is what
        /onboarding sends.
      • Flexicare.api()  — a thin fetch wrapper used by later pages
-       (data capture onward). Unused on the selfie page.
+       (data capture onward). Unused on the selfie page. Pass
+       `{ kiosk: true }` to attach the X-Kiosk-Token header when the
+       device is paired (see flexicare-kiosk.js) — only POST /sessions
+       and POST /sessions/{id}/spin do.
+     • config.kiosk — fallback kiosk settings; the server's per-device
+       config overrides them once paired.
 
    Later pages extend this same object (answers, archetype, echo
    label, etc.). Keep additions on window.Flexicare.
@@ -45,6 +50,18 @@
       mirrorPreview: true, // preview looks like a mirror (natural for selfies)
       captureMirrored: false, // saved image is un-mirrored (true orientation)
       facingMode: "user", // front camera
+    },
+    /* Kiosk mode (flexicare-kiosk.js). Only meaningful on the in-store
+       tablets — a web visitor never pairs, so none of this is ever read.
+       Every value here is a FALLBACK: once the device is paired the server's
+       `config` (from /kiosks/pair, /kiosks/me and every heartbeat) wins, so
+       admins can retune a device without a deploy. */
+    kiosk: {
+      tokenKey: "flx_kiosk_token", // localStorage key (device token + cache)
+      attractUrl: "/", // where an idle timeout returns to
+      heartbeatSeconds: 60, // until the server says otherwise
+      idleTimeoutSeconds: 90, // ditto
+      appVersion: "1.0.0", // stamped into every heartbeat, shown to admins
     },
   };
 
@@ -213,6 +230,18 @@
       init.headers["Content-Type"] = "application/json";
       init.body = JSON.stringify(opts.body);
     }
+    /* opts.kiosk === true  →  attach X-Kiosk-Token if this device is paired.
+       Opt-IN per call on purpose: the header belongs on exactly two funnel
+       calls (POST /sessions and POST /sessions/{id}/spin) plus the kiosk's own
+       /kiosks/* calls, so the call sites that need it say so out loud. On an
+       unpaired device (every web visitor) authHeaders() returns {} and the
+       request goes out bare — which is exactly right: it becomes a WEB
+       session. See docs/kiosk-and-spin.md. */
+    if (opts.kiosk && FC.kiosk && typeof FC.kiosk.authHeaders === "function") {
+      var kh = FC.kiosk.authHeaders();
+      for (var hk in kh)
+        if (kh.hasOwnProperty(hk)) init.headers[hk] = kh[hk];
+    }
     if (opts.headers) {
       for (var k in opts.headers)
         if (opts.headers.hasOwnProperty(k)) init.headers[k] = opts.headers[k];
@@ -233,6 +262,14 @@
           err.status = res.status;
           err.detail = data && data.detail;
           err.data = data;
+          /* Retry-After (SECONDS) accompanies every 429 — pairing and the
+             prize spin are both rate-limited, and both are told to show a
+             live countdown rather than let the user hammer the button. */
+          err.retryAfter = null;
+          try {
+            var ra = parseInt(res.headers.get("Retry-After"), 10);
+            if (!isNaN(ra) && ra >= 0) err.retryAfter = ra;
+          } catch (e2) {}
           throw err;
         }
         return data;
@@ -268,6 +305,7 @@
     FC.echo = null;
     FC.result = null;
     FC.images = null;
+    FC.award = null; // the prize spin's result (flexicare-spin.js)
     return FC;
   };
 

@@ -33,24 +33,32 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
    float. Unlike background-motion it targets elements INSIDE the Barba container, so it
    re-scans on `afterEnter` and prunes tweens for removed nodes.
 6. `src/flexicare-core.js` — `window.Flexicare` (aka `FC`). The persistent brain: config, session id, buffered selfie, API helper, journey reset. **First of the Flexicare scripts.**
-7. `src/flexicare-onboarding.js` — `/onboarding` page controller.
-8. `src/flexicare-selfie.js` — selfie-capture page controller.
-9. `src/flexicare-avatar.js` — avatar-picker page controller (the alternative to the
+7. `src/flexicare-kiosk.js` — `window.Flexicare.kiosk`. Device pairing, heartbeat and
+   idle reset for the in-store tablets. **Must load before onboarding** — it owns the
+   device token that `POST /sessions` needs. Completely inert on the public site.
+8. `src/flexicare-onboarding.js` — `/onboarding` page controller.
+9. `src/flexicare-selfie.js` — selfie-capture page controller.
+10. `src/flexicare-avatar.js` — avatar-picker page controller (the alternative to the
    selfie: race/gender filters + a 3×3 grid from `GET /avatars`). Buffers the chosen
    `avatar_id`; **onboarding** is what sends it.
-10. `src/flexicare-quiz.js` — the quiz renderer for BOTH `/archetype` (ROUTING) and
+11. `src/flexicare-quiz.js` — the quiz renderer for BOTH `/archetype` (ROUTING) and
     `/flexicare` (FLEX). `/flexicare` is a Webflow duplicate of `/archetype`; only the
     `[data-quiz]` config attributes differ (`data-quiz-stage="FLEX"`, `-done`, `-back`,
     `-progress-start/-end`).
-11. `src/flexicare-reveal.js` — `/meet-your-two-selves`, the archetype reveal (the page
+12. `src/flexicare-reveal.js` — `/meet-your-two-selves`, the archetype reveal (the page
     that replaced `/loading`): recovers/confirms the archetype, personalises copy, and
     polls for the generated with/without-cover image pair.
-12. `src/flexicare-product.js` — `/flexicare-product`, the recommendation page. Renders
+13. `src/flexicare-product.js` — `/flexicare-product`, the recommendation page. Renders
     the plan the server picked from `Flexicare.result` (the `/finish` response): copy keyed
     on **archetype AND product** (`data-copy-for="A:PLUS"`), plus `product_label` and the
     price from `recommended_price_cents`.
-13. `src/slider.js` — **NOT a content slider.** This is the "Liquid Glass Tuner", a dev-only control panel gated behind `?tune` in the URL. Ignore it for production changes unless the task is about tuning glass presets.
-14. `src/orb-tuner.js` — dev-only orb-motion control panel, gated behind `?orbtune`
+14. `src/flexicare-spin.js` — `/spin-to-win`, the prize wheel. The one KIOSK-ONLY page:
+    a `WEB` session gets a hard 409 from `POST /spin`. Draws the wheel as SVG from
+    `GET /prizes/wheel` (segment count/order/labels/colours are all admin data) and
+    animates to the `segment_index` the SERVER returns — there is no client-side
+    randomness here and there must never be.
+15. `src/slider.js` — **NOT a content slider.** This is the "Liquid Glass Tuner", a dev-only control panel gated behind `?tune` in the URL. Ignore it for production changes unless the task is about tuning glass presets.
+16. `src/orb-tuner.js` — dev-only orb-motion control panel, gated behind `?orbtune`
     (or `?tune`, so it can sit beside the glass tuner). Writes the `data-orb-*` attributes
     live and hands back a paste-ready list. Ignore for production changes.
 
@@ -138,6 +146,27 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
   `barba.go()` — the destination ran its entrance animation, init and skeleton twice.
   Rules: resolve within the incoming container (or `state.wrap`), filter to nodes that are
   actually attached, and never navigate to the page you are already on (`samePath()`).
+- **The prize spin is decided at /onboarding, not at /spin-to-win.** A session can only
+  spin if `POST /sessions` carried `X-Kiosk-Token` (`channel: "KIOSK"`); on a `WEB`
+  session `POST /spin` is a hard 409. So the kiosk layer is a CHAIN — pair the tablet →
+  token in `localStorage` → header on session create → header on spin — and breaking any
+  link means the shopper completes the whole journey and is refused at the wheel. If the
+  spin page keeps saying "unavailable", the session was started on an unpaired browser;
+  fix it there, not on the spin page. `docs/kiosk-and-spin.md` has the whole chain.
+- **Never retry a kiosk call without the header after a 401.** That silently creates a
+  `WEB` session on a tablet. A 401 means the token was revoked: clear it and show the
+  unpaired screen. And the inverse — **never clear the token on a network error or a
+  5xx**; only a 401 does that, or flaky store wifi strands the tablet.
+- **The server owns the spin outcome.** `segment_index` in the `/spin` response IS the
+  result; the wheel only animates to it. Don't add client-side randomness, don't
+  "pre-pick" a segment while waiting, and don't treat a second `200` from a re-called
+  `/spin` as a second prize — it is idempotent and returns the same award.
+- **The wheel is drawn by JS, not authored in Webflow.** `GET /prizes/wheel` decides how
+  many segments there are and what they say. Webflow supplies an EMPTY square
+  `[data-spin-wheel]` (it is cleared on every render) plus the pointer, hub and button
+  layered over it. A hand-built seven-slice wheel breaks the first time an admin adds a
+  prize. Also: no `data-liquid-glass` on the wheel stage — glass owns `transform` and
+  bakes its map from the layout box, which a spinning child defeats.
 - **The click model is event delegation.** Controllers attach ONE listener to
   `document` and re-resolve the target by attribute at click time. This is deliberate
   (it survives glass rebuilds and Barba swaps). Don't refactor it to attach listeners
@@ -178,6 +207,8 @@ Barba both need a real `https` page. Hard-refresh (Cmd/Ctrl+Shift+R) after publi
 
 ## How to work with me on this
 
+- Kiosk mode and the prize wheel have their own guide: `docs/kiosk-and-spin.md` (the
+  Webflow structure, the wheel rendering decision, and the testing checklist).
 - For anything non-trivial, read `ARCHITECTURE.md` first — it has the module details,
   data flow, and the full Webflow attribute contracts.
 - Keep changes small and reviewable. There is no paste step any more — a push is the

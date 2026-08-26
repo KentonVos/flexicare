@@ -34,12 +34,15 @@ text-reveal.js           needs GSAP; transition.js drives its reveals
 background-motion.js     needs GSAP; attaches its Barba reaction when Barba is present
 orb-motion.js            needs GSAP; re-scans the new container on Barba afterEnter
 flexicare-core.js        first Flexicare script; registers journey-reset afterEnter
+flexicare-kiosk.js       MUST precede onboarding — it owns the device token that
+                         POST /sessions needs. Inert on the public site.
 flexicare-onboarding.js  page controller
 flexicare-selfie.js      page controller
 flexicare-avatar.js      page controller (avatar picker; needs glass for the card clones)
 flexicare-quiz.js        page controller (also needs glass for option styling)
 flexicare-reveal.js      page controller (archetype reveal; core only)
 flexicare-product.js     page controller (the recommendation; core only)
+flexicare-spin.js        page controller (the prize wheel; needs core + kiosk + GSAP)
 slider.js                dev-only tuner; needs glass.js
 orb-tuner.js             dev-only tuner; needs orb-motion.js
 ```
@@ -328,10 +331,15 @@ The persistent brain. Holds:
   `setAvatar()` clears the photo and `setPhoto()` clears the avatar.
 - Buffered selfie — `setPhoto()/getPhoto()/hasPhoto()/clearPhoto()/photoObjectURL()`,
   in-memory Blob.
-- `FC.api(path, opts)` — thin `fetch` wrapper; JSON in/out; throws `Error` with `.status`
-  and `.detail` on non-2xx.
-- `FC.resetJourney()` — wipes per-run state; fires automatically on entering
-  `[data-journey-start]`.
+- `FC.api(path, opts)` — thin `fetch` wrapper; JSON in/out; throws `Error` with `.status`,
+  `.detail` and `.retryAfter` (seconds, from the `Retry-After` header on a 429) on non-2xx.
+  `opts.kiosk === true` attaches `X-Kiosk-Token` when the device is paired — opt-in per
+  call, because the header belongs on exactly two funnel calls.
+- `FC.config.kiosk` — fallback kiosk settings (`tokenKey`, `attractUrl`,
+  `heartbeatSeconds`, `idleTimeoutSeconds`, `appVersion`). The server's per-device config
+  overrides all of them once paired.
+- `FC.resetJourney()` — wipes per-run state (including `FC.award`); fires automatically on
+  entering `[data-journey-start]`.
 
 ### flexicare-onboarding.js
 `/onboarding` controller. Attribute contract (all `data-onboarding-*` unless noted):
@@ -614,9 +622,11 @@ screen — the question that separates "the copy never arrived" from "the copy w
 container that was then removed".
 
 ### flexicare-product.js
-`/flexicare-product` — the last beat: the plan the server recommended. Config on the
-`[data-product]` wrapper: `data-product-next` (CTA → spin-to-win; **set it**, the
-`/spin-to-win` fallback warns in the console), `-onboarding` (bounce if no session id),
+`/flexicare-product` — the last beat of the WEB funnel: the plan the server recommended.
+Config on the `[data-product]` wrapper: `data-product-next` (CTA → spin-to-win; **set it**,
+the `/spin-to-win` fallback warns in the console), `-next-web` (used *instead* when the
+device is not a paired kiosk — the wheel is kiosk-only, so this is how web visitors skip
+`/spin-to-win`; unset, everyone goes to `-next`), `-onboarding` (bounce if no session id),
 `-quiz` (bounce if the session isn't `COMPLETED`, default `/flexicare`), `-lang`,
 `-price-format` / `-price-decimals`, `-cycle` / `-cycle-fade`, `-debug`, `-skeleton="off"`.
 
@@ -733,6 +743,102 @@ CSS (`data-js-injected`), marked on `beforeEnter` before the page is visible, cl
 *after* the paints so the real text is revealed already correct. Normally invisible, since
 the result is usually already in memory; it exists for the hard-reload path.
 
+### flexicare-kiosk.js → `window.Flexicare.kiosk`
+Device pairing, heartbeat and idle reset for the in-store tablets. **Loads after core and
+before onboarding** — it owns the device token that `POST /sessions` needs, and load order
+is what guarantees the token is available by the time onboarding submits.
+
+**Inert on the public site.** No token → `isKiosk()` is `false`, `authHeaders()` is `{}`,
+no heartbeat, no idle timer, no network calls at all. `data-kiosk-state` is `"web"`.
+
+**The token** is the only long-lived credential in the frontend. It identifies a *device*,
+not a person. `localStorage` (it must outlive sessions — the session id stays in
+`sessionStorage` so the next shopper never resumes the last one's run), stored alongside
+the cached `kiosk` and `config` so the attract screen renders before the first network
+call and still renders when the store wifi is down. Shown by the server exactly once, at
+pairing; there is no endpoint to read it back.
+
+**Which calls carry `X-Kiosk-Token`** (and no others): `POST /sessions`,
+`POST /sessions/{id}/spin`, `GET /kiosks/me`, `POST /kiosks/heartbeat`.
+
+**401 vs everything else** — the distinction the whole module turns on. A `401` means the
+admin revoked the token: clear it, drop the session, show the unpaired screen. A network
+error or a `5xx` means nothing of the sort — *keep* the token and the cached config and let
+the next heartbeat sort it out. Clearing on flaky store wifi would strand the tablet.
+Equally: never retry `POST /sessions` without the header after a 401, or you quietly create
+a `WEB` session on a tablet and the shopper finds out at the wheel.
+
+**States** on `<html data-kiosk-state>` and the panel: `web | unpaired | pairing | active |
+disabled`. Contract: `[data-kiosk-pair]` (the panel; its presence makes a page able to
+pair), `-pair-input`, `-pair-submit`, `-pair-error`, `[data-kiosk-name]`,
+`[data-kiosk-store]`, and `[data-kiosk-when="a b"]` for visibility. Per-page:
+`[data-kiosk-screen]` (heartbeat's `screen` field) and `[data-kiosk-idle-factor]`
+(multiplies the idle window — put `2` on the spin page so a claim code isn't yanked away).
+
+**Pairing** accepts a `?pair=XXXX-XXXX` deep link (auto-submits, then strips the parameter
+via `history.replaceState` — the codes are single-use, so a reload with it still there
+would 404 and read as a failed pairing) or manual entry. The input is formatted live: upper
+-cased, restricted to the unambiguous alphabet (no `I O 0 1`), dash after four. A `429`
+becomes a live countdown on the button from `Retry-After`.
+
+**Heartbeat** every `config.heartbeat_seconds` (default 60), on every screen, for the life
+of the app — the admin marks a kiosk offline after ~3 missed beats. It keeps running while
+`DISABLED`, which is the only way the tablet learns it has been switched back on without a
+reload. Every response's `config` is applied, re-arming the timers.
+
+**Idle reset**: after `idle_timeout_seconds` without touch, drop the session id (no server
+call — an abandoned session needs no cleanup) and `barba.go()` to the attract URL.
+
+### flexicare-spin.js
+`/spin-to-win` — the prize wheel. The one **kiosk-only** page in the funnel.
+
+**The server owns the outcome.** There is no client-side randomness anywhere in the file
+and there must never be: `segment_index` in the `POST /spin` response *is* the result, and
+stock and pacing are enforced server-side. The wheel starts turning on tap, *before* the
+response, and only then decelerates onto the segment — which buys the request latency for
+free instead of making the shopper watch a spinner. A minimum spin time
+(`data-spin-min`, default 2.5s) keeps a 200ms response feeling like a spin.
+
+**One `GET /sessions/{id}` answers everything**: is it `COMPLETED`, is the channel
+`KIOSK`, is there a `phone_number`, does `has_prize` say it already spun, and which store.
+A `WEB` channel is detected up front and shows the "unavailable" panel rather than letting
+someone tap a wheel that is guaranteed to 409.
+
+**Idempotent**: the server records exactly one award per session and re-calling `/spin`
+returns the same one, so a double-tap, a dropped connection or a reload mid-animation are
+all safe. On re-entry the page doesn't even ask — `has_prize` sends it to
+`GET /sessions/{id}/prize`.
+
+**The wheel is drawn, not authored.** Webflow supplies an empty square
+`[data-spin-wheel]`; the script injects one `<svg>` (`viewBox="0 0 200 200"`,
+`data-js-injected` so transition.js's class sync skips it) built from
+`GET /prizes/wheel`. Segment count, order, labels and hex colours are all admin data — a
+hand-built seven-slice wheel breaks the first time someone adds a prize. Angles are degrees
+**clockwise from 12 o'clock** throughout (SVG's own 0° is 3 o'clock, hence the `-90` in
+`polar()`); the landing rotation is `pointerAngle - (index + 0.5) * step`, normalised, plus
+`data-spin-turns` full rotations so the deceleration reads as one continuous spin. Colours
+are validated as plain hex before they reach the DOM, and every string from the API is
+written as `textContent`, never HTML. A one-segment wheel is drawn as a `<circle>` (the arc
+would collapse). Radial labels flip on the left half so they never appear upside down.
+
+**Nothing here may block the flow.** Every failure — `503` wheel not configured, network
+down, an unexpected `409` — lands on the same fallback copy ("ask a Clicks team member").
+The shopper keeps their results and their images. The spin is the one part of the journey
+allowed to simply not happen. The §7.4 error table is implemented status-code-first, then
+`detail`.
+
+**States** on `[data-spin]` and `<html>`: `loading | ready | spinning | prize | consolation
+| redeemed | expired | voided | nophone | unavailable | error`, plus `data-spin-reason`
+(`web | wheel | already-spun | other-kiosk | disabled | rate-limit | network | unknown`).
+`[data-spin-when="a b"]` is the single visibility mechanism for every panel — one page, no
+second Barba navigation, so the claim code can never be lost to a swap. A consolation award
+still *has* a claim code but must never emphasise it; the script leaves `[data-spin-claim]`
+empty and hides `[data-spin-claim-wrap]`.
+
+Full attribute contract at the top of the file; the Webflow build guide (including why SVG
+over conic-gradient or canvas, and the stage/pointer/hub structure) is
+`docs/kiosk-and-spin.md`.
+
 ### slider.js → the Liquid Glass Tuner (dev only)
 Despite the name, this is a floating control panel for tuning glass parameters live. Gated:
 only appears when the URL contains `?tune` (or `localStorage.lgTunerAlways = "1"`). Use it
@@ -770,3 +876,6 @@ version-string drift, not a real dependency mismatch.)
   inside `[data-selfie-stage]`.
 - **The backend API** at `Flexicare.config.apiBase` (currently staging). Full endpoint
   contract: `docs/api-contract.md`.
+- **The kiosk device token** — issued by the backend at pairing, held in the tablet's
+  `localStorage`. Not in this repo and not obtainable from it: an admin generates a pairing
+  code in the admin UI and the tablet exchanges it once. See `docs/kiosk-and-spin.md`.

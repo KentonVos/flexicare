@@ -17,13 +17,29 @@
 - **Authentication: NONE.** `POST /sessions` returns a UUID `id`; that UUID *is* the
   credential, passed as a path param on every later call. Treat it as a secret — memory /
   `sessionStorage` only, never logged. (`FC.getSessionId()` / `FC.setSessionId()`.)
+- **`X-Kiosk-Token` (kiosk devices only).** The same build also runs on in-store tablets.
+  A tablet is paired once and holds a long-lived **device token** (`kt_` + 43 URL-safe
+  characters, 46 total), sent as the header `X-Kiosk-Token` on exactly two funnel calls —
+  `POST /sessions` (§3.2) and `POST /sessions/{id}/spin` (§7.2) — plus the kiosk's own
+  `/kiosks/*` calls (§6). **Web visitors never send it** and have no way to obtain one. It
+  identifies a DEVICE, not a person, and is the only long-lived credential in the whole
+  frontend. In our code it lives in `flexicare-kiosk.js` and is attached by passing
+  `{ kiosk: true }` to `FC.api()`.
 - **Content type:** JSON everywhere except the raw photo `PUT` (§5).
 - **Errors:** FastAPI shape `{ "detail": "<message>" }`.
   - `404` unknown `session_id`
   - `409` session-state conflict (answering/finishing a session that is not
     `IN_PROGRESS`, or finishing twice)
   - `422` validation (unknown question/option code, option not in question, empty
-    answers list, unsupported image type)
+    answers list, unsupported image type, malformed pairing code)
+  - `401` `X-Kiosk-Token` present but invalid or revoked (kiosk only — clear the token
+    and show the unpaired screen, §6.5)
+  - `403` kiosk is `DISABLED`, or a spin attempted from a different kiosk than the one
+    that started the session
+  - `429` rate-limited (pairing and spin). The response carries **`Retry-After` in
+    SECONDS** — read it, count down, don't retry early. `FC.api()` surfaces it as
+    `err.retryAfter`.
+  - `503` prize wheel not configured server-side (§7.4) — show fallback copy, never block
 - **CORS:** wide open during development; will be locked to the production origin before
   go-live. No cookies/credentials involved, so nothing changes on the frontend.
 
@@ -40,13 +56,30 @@
 | `AvatarRace` | `black`, `white`, `indian`, `asian`, `coloured` |
 | `AvatarGender` | `male`, `female` |
 | `AvatarAgeGroup` | `young_adult`, `middle_aged`, `elder` |
+| `SessionChannel` | `KIOSK`, `WEB` — how the session was started (§3.2); **only `KIOSK` sessions can spin** |
+| `KioskStatus` | `ACTIVE`, `DISABLED` (§6.4) |
+| `PrizeAwardStatus` | `AWARDED`, `REDEEMED`, `VOIDED`, `EXPIRED` (§7.3) |
+
+### Code formats (kiosk mode only)
+
+| Thing | Format | Example |
+|---|---|---|
+| Pairing code | 8 chars as `XXXX-XXXX`, alphabet `ABCDEFGHJKLMNPQRSTUVWXYZ23456789` (no `I O 0 1`) | `7K3M-9Q2A` |
+| Device token | `kt_` + 43 URL-safe chars (`A–Z a–z 0–9 - _`) | `kt_Q4v…` (46 chars) |
+| Claim code | `FLX-XXXX-XXXX`, same alphabet | `FLX-7K3M-9Q2A` |
+
+The alphabet is deliberately unambiguous — these codes get read aloud across a shop floor
+and typed on a tablet. Never render them in a font where `0/O` or `1/I/l` could be
+confused, and always show them upper-case.
 
 ---
 
 ## 2. The flow at a glance
 
 ```
+0. (kiosk only, once per device) pair -> device token -> heartbeat loop  (§6)
 1. POST /api/v1/sessions                        -> session id (status IN_PROGRESS)
+                                                   kiosk: send X-Kiosk-Token -> channel KIOSK
 2. GET  /api/v1/quiz?lang=en                    -> ALL questions + options (one fetch)
 3. (optional) photo — EITHER  presign -> PUT to storage -> confirm      (selfie)
                       OR      GET /avatars -> PATCH .../photo/avatar    (avatar picker)
@@ -60,6 +93,8 @@
 7. POST /api/v1/sessions/{id}/finish            -> final result (archetype, product, price)
 8. Poll GET /api/v1/sessions/{id}/images until READY -> show with/without-insurance images
 9. (optional) PATCH .../contact/phone and/or .../contact/email  -> where to send the images
+10. (kiosk only) phone captured -> POST /api/v1/sessions/{id}/spin -> show prize  (§7)
+                                   web sessions skip this step entirely
 
 Any time: GET /api/v1/sessions/{id}  -> full session state + stored answers (resume / re-fetch results)
 ```
@@ -68,6 +103,11 @@ Any time: GET /api/v1/sessions/{id}  -> full session state + stored answers (res
 endpoint. The frontend fetches the whole question set once and drives progression
 itself, persisting each answer as it is chosen. Server-side answer state is always
 current; the *UI position* is frontend state.
+
+**Kiosk vs web:** one build serves both. The only differences are step 0
+(pairing/heartbeat), the header on step 1, and step 10 (the spin). Decide "am I a kiosk?"
+from the presence of a stored device token, and confirm from the session's `channel` — a
+session that came back `WEB` must not be offered the spin even on a tablet.
 
 **Branching:** none server-side. `ROUTING` questions have `archetype: null` and everyone
 answers all of them. `FLEX` questions are tagged `A`/`B`/`C` — show **only** those
@@ -112,6 +152,21 @@ and filter client-side).
 ### 3.2 `POST /api/v1/sessions` — start a session
 
 Body (all optional; `{}` is valid): `{ "language": "en", "first_name": "Thandi", "gender": "female" }`
+
+`first_name` is capped at 60 chars and `gender` at 40 (`422` beyond); both are trimmed
+server-side.
+
+**Header (kiosk only):** a paired tablet sends `X-Kiosk-Token` (§6). This is what binds
+the session to the device and the store, and **the only way a session becomes eligible
+for the prize spin** — which is why the header goes on HERE, at the start of the funnel,
+not on the spin page. Web visitors send nothing.
+
+- `channel` is `"KIOSK"` when a valid token was sent, otherwise `"WEB"`.
+- `kiosk_id` / `location_id` are the device and store, snapshotted at creation (moving the
+  tablet to another store later does not change them). Both `null` for `WEB`.
+- Kiosk-only errors: `401` the token is invalid/revoked — clear it and show the unpaired
+  screen; **never silently retry without the header**, that creates a `WEB` session on a
+  tablet that can then never spin. `403` the kiosk is `DISABLED`.
 
 `201` — `SessionOut`:
 
@@ -235,9 +290,21 @@ resolved recommendation:
   "archetype": null,
   "archetype_label": null,
   "product": null,
-  "product_label": null
+  "product_label": null,
+  "channel": "KIOSK",
+  "kiosk_id": "c1a2b3d4-...",
+  "location_id": "9e8d7c6b-...",
+  "phone_number": null,
+  "email": null,
+  "location": { "id": "9e8d7c6b-...", "name": "Clicks Sandton City", "code": "clicks-sandton-city" },
+  "has_prize": false
 }
 ```
+
+- `location` is `{ id, name, code }` for `KIOSK` sessions and `null` for `WEB`. `name` is
+  display-ready store copy ("Collect at …"); `code` is a stable slug.
+- `has_prize` is `true` once `POST /spin` has succeeded. On resume: `true` → fetch
+  `GET /sessions/{id}/prize` (§7.3) and show the reward instead of offering another spin.
 
 After `/finish` the same call returns `status: "COMPLETED"` with `archetype`,
 `archetype_label`, `product`, `product_label` and `recommended_price_cents` populated.
@@ -456,7 +523,224 @@ backend copy needs to be editable without a Webflow publish.
 
 ---
 
-## 6. Implementation checklist
+## 6. Kiosk mode — device pairing & lifecycle
+
+Applies to the in-store tablets only. A web visitor's browser never calls any `/kiosks/*`
+endpoint and never holds a device token. Implemented in `src/flexicare-kiosk.js`; the
+Webflow build guide is `docs/kiosk-and-spin.md`.
+
+### 6.1 `POST /api/v1/kiosks/pair`
+
+No auth header. Body `{ "pairing_code": "7K3M-9Q2A" }`. The code is generated by an admin
+for a specific kiosk, is **single-use** and **expires after 15 minutes**. The server
+upper-cases and trims, so `7k3m 9q2a` pairs too.
+
+`200` — `KioskPairOut`:
+
+```json
+{
+  "device_token": "kt_Q4vX9bJ2LmN8pRtW6yZ1aC3eF5gH7iK0oU-sD_qA4wB",
+  "kiosk": { "id": "c1a2b3d4-...", "name": "Sandton City — entrance tablet", "status": "ACTIVE",
+             "location": { "id": "9e8d7c6b-...", "name": "Clicks Sandton City", "code": "clicks-sandton-city" } },
+  "config": { "heartbeat_seconds": 60, "idle_timeout_seconds": 90 }
+}
+```
+
+- **`device_token` is shown exactly once** — the server keeps only a hash and there is no
+  endpoint to read it back. Persist it immediately; if the write fails the admin has to
+  generate a new pairing code.
+- `config` is the effective per-device configuration (§6.4) — apply it right away.
+- Errors: `404` "Pairing code not found or expired." (wrong, used, or >15 min old);
+  `422` malformed; `429` more than **5 attempts per minute** — honour `Retry-After`.
+- Pairing does **not** invalidate another tablet's token for the same kiosk record until
+  an admin revokes it. That is what lets a tablet be swapped without downtime.
+
+**Deep link:** `…/kiosk?pair=7K3M-9Q2A` auto-submits, then the parameter must be stripped
+via `history.replaceState` — the code is single-use, so a reload with it still in the URL
+would `404` and read as a failed pairing.
+
+### 6.2 Storing the token
+
+`localStorage`, one key, alongside the cached `kiosk` and `config` so the attract screen
+renders before the first network call. **Never** in a URL, never logged, never rendered,
+and only ever sent as `X-Kiosk-Token` to the API base. Session ids stay in
+`sessionStorage` — the next shopper must not resume the previous one's session.
+
+### 6.3 `GET /api/v1/kiosks/me` — validate on boot
+
+Header required. Call once per full page load, before the attract screen.
+
+```json
+{ "kiosk": { "id": "…", "name": "…", "status": "ACTIVE", "location": { … } },
+  "config": { "heartbeat_seconds": 60, "idle_timeout_seconds": 90 },
+  "server_time": "2026-08-26T09:12:44Z" }
+```
+
+- `status: "DISABLED"` still returns `200` — that is how a disabled device learns its
+  state.
+- `401` → token revoked → clear it, show the unpaired screen.
+- **Network failure → keep the cached values and carry on.** Do not clear the token on a
+  network error; only on a `401`.
+
+### 6.4 `POST /api/v1/kiosks/heartbeat` — keep-alive & config pull
+
+Header required. Body `{ "app_version": "1.2.0", "screen": "attract" }` (`screen` is one
+of `attract, quiz, photo, results, spin, prize, unpaired, disabled`; max 40 chars).
+
+Send every `config.heartbeat_seconds` (default 60), **on every screen, for the life of the
+app** — the admin marks a kiosk offline after ~3 missed beats. Keep heartbeating while
+`DISABLED`: the next `ACTIVE` re-enables the device without a reload.
+
+```json
+{ "status": "ACTIVE", "config": { "heartbeat_seconds": 60, "idle_timeout_seconds": 90 },
+  "server_time": "2026-08-26T09:13:44Z" }
+```
+
+**Always apply the returned `config`** — admins tune these per device without a deploy, so
+the timers must re-arm when the values change. `idle_timeout_seconds` is how long without
+touch input before the kiosk drops the session (no server call — just discard the id) and
+returns to the attract screen. Use **at least double** on the prize screen, where the
+shopper is reading or photographing a claim code.
+
+`401` → clear the token, unpaired screen, stop the loop. Anything else → ignore and retry
+at the next tick.
+
+### 6.5 Screens
+
+| Situation | Show |
+|---|---|
+| No token (first boot, or after a `401`) | **Unpaired**: manual code entry (§6.1). Nothing else reachable. |
+| Any kiosk call returns `401` | Clear the token, drop the session, unpaired screen. |
+| `status: "DISABLED"`, or `POST /sessions` → `403` | **Disabled** (static). Keep heartbeating; return to attract when `ACTIVE`. |
+| `429` on pairing | Countdown from `Retry-After`; keep the form. |
+| Network down | Keep the current screen and cached config. **Not** unpaired. |
+
+### 6.6 Which calls carry the header
+
+`POST /sessions`, `POST /sessions/{id}/spin`, `GET /kiosks/me`,
+`POST /kiosks/heartbeat`. Everything else (quiz, answers, preview, finish, photo, images,
+contact, `/prizes/wheel`, `/sessions/{id}/prize`) is called **without** it, exactly as on
+the web.
+
+---
+
+## 7. The prize wheel — "Spin for your Clicks reward"
+
+Kiosk-only. Implemented in `src/flexicare-spin.js`.
+
+```
+finish (§3.5) -> results -> phone number captured (§3.10, required)
+   -> tap Spin -> POST /sessions/{id}/spin -> animate to segment_index -> prize screen
+```
+
+**The server decides the outcome.** Stock and pacing are enforced server-side; the
+frontend only animates to the segment it is told. No client-side randomness, ever.
+
+### 7.1 `GET /api/v1/prizes/wheel` — the layout
+
+Public, no header, no session.
+
+```json
+{ "segments": [
+  { "index": 0, "code": "PHONE_CARD_HOLDER", "label": "Phone card holder", "color": "#C6E84A", "is_consolation": false, "image_url": null },
+  { "index": 6, "code": "TRY_AGAIN", "label": "Try again", "color": "#9E9E9E", "is_consolation": true, "image_url": null }
+] }
+```
+
+- **Draw exactly these segments, in `index` order**, equal-sized, clockwise from the
+  pointer. `index` runs `0…n-1` with no gaps. **Do not hard-code seven** — count, order,
+  labels and colours are admin data.
+- The consolation segment (at most one) is an ordinary segment on the wheel.
+- `color` is `#RRGGBB`/`#RRGGBBAA`; `label` is short wheel copy (≤ 60 chars) — render as
+  text.
+- `image_url` is `null` unless an admin uploaded an icon; when present it is presigned and
+  **expires in ~10 minutes**, so fetch the wheel when the spin screen is shown rather than
+  at boot.
+- `503` / network failure → show the fallback copy (§7.4) and let the flow complete.
+
+### 7.2 `POST /api/v1/sessions/{session_id}/spin`
+
+Header required. No body. Preconditions, all server-enforced: the session is
+`channel: "KIOSK"`, was started on **this** kiosk, is `COMPLETED`, and has a
+`phone_number`.
+
+`200` — `PrizeAwardOut`:
+
+```json
+{
+  "award_id": "5d6e7f80-...",
+  "prize": { "code": "WATER_BOTTLE", "name": "Flexicare water bottle", "label": "Water bottle" },
+  "segment_index": 1,
+  "is_consolation": false,
+  "claim_code": "FLX-7K3M-9Q2A",
+  "status": "AWARDED",
+  "awarded_at": "2026-08-26T09:20:31Z",
+  "expires_at": "2026-09-25T09:20:31Z",
+  "instructions": "Show this code to a Clicks team member at the till to collect your prize.",
+  "location": { "id": "9e8d7c6b-...", "name": "Clicks Sandton City", "code": "clicks-sandton-city" },
+  "first_name": "Thandi"
+}
+```
+
+- Use `segment_index` (not `prize.code`) to position the wheel.
+- `claim_code` is present on **every** award including a consolation one, but a
+  consolation award must **not** emphasise it.
+- `expires_at` may be `null` (never expires). `instructions` may be `null` — fall back to
+  static copy. Both are text, never HTML.
+
+**Animation contract:** start spinning at constant speed on tap, *before* firing the
+request; decelerate onto `segment_index` when the `200` arrives (a few extra full
+rotations then an ease-out; ≥ ~3 s total feels right); keep spinning if the response is
+slow; on any error stop the wheel with **no landing** and show the fallback copy.
+
+**Idempotent:** exactly one award per session. Re-calling returns the **same** award —
+safe after a network drop, a double-tap or a reload mid-animation. A second `200` is never
+a second prize.
+
+**One spin per person:** the phone number is the identity. A number that already holds a
+non-voided award anywhere in the campaign cannot spin again (`409`). After a successful
+spin the phone number is **locked** — `PATCH …/contact/phone` returns `409`. (We capture
+the number at `/onboarding`, so this never bites us.)
+
+### 7.3 `GET /api/v1/sessions/{session_id}/prize` — resume / re-show
+
+No header (works from the web too). Same `PrizeAwardOut`, with `status` current:
+
+| `status` | Show |
+|---|---|
+| `AWARDED` | the prize screen as after the spin |
+| `REDEEMED` | "Collected" — the code is no longer needed |
+| `EXPIRED` | "This reward has expired" |
+| `VOIDED` | "This reward is no longer valid" |
+
+`404` "No prize for this session." → never spun. Pair with `has_prize` from §3.6 on
+resume.
+
+### 7.4 Spin errors — branch on the code, then on `detail`
+
+| Code | `detail` | UI |
+|---|---|---|
+| `401` | (any) | Clear token, drop session, unpaired screen |
+| `403` | `"Kiosk is disabled."` | Disabled screen |
+| `403` | (other) | Session started on a **different** kiosk — "spin on the tablet where you took the quiz" |
+| `404` | `"Session not found."` | Start over |
+| `409` | `"Spins are only available on in-store kiosks."` | `WEB` session — never show the wheel |
+| `409` | `"Session is not completed."` | Finish first, then retry |
+| `409` | `"Phone number required before spinning."` | Collect the number, then retry |
+| `409` | `"This phone number has already spun."` | "One reward per person." No wheel |
+| `429` | (any) | >10 spins/min from this kiosk — honour `Retry-After` |
+| `503` | (any) | Wheel not configured — fallback copy, **do not block the results** |
+
+**Fallback copy** (network, `503`, unexpected `409`/`5xx`): "We couldn't spin the wheel
+right now — please ask a Clicks team member." The shopper keeps their results and images;
+nothing else depends on the spin.
+
+**Not the frontend's job:** the backend later sends a WhatsApp copy of the reward to the
+captured number. No endpoint to trigger, nothing to render.
+
+---
+
+## 8. Implementation checklist
 
 1. Quiz start: `POST /sessions` (`language`, plus `first_name`/`gender` if collected) ->
    store `id`.
@@ -478,3 +762,27 @@ backend copy needs to be editable without a Webflow publish.
    `IN_PROGRESS` -> resume from the first unanswered question.
 10. `409` on answers/finish -> fetch `GET /sessions/{id}` and act on its actual `status`.
     `422` is a client bug (bad codes) — log and surface `detail`.
+
+**Kiosk (§6) — tablets only:**
+
+11. No token in `localStorage` -> unpaired screen; accept `?pair=XXXX-XXXX` (auto-submit,
+    then strip from the URL) or manual entry -> `POST /kiosks/pair` -> persist
+    `device_token`, `kiosk`, `config`.
+12. Every boot with a token: `GET /kiosks/me` -> refresh `kiosk`/`config`. `401` -> clear
+    -> unpaired. `DISABLED` -> disabled screen.
+13. Heartbeat every `config.heartbeat_seconds` on every screen, for the life of the app.
+    Apply the returned `config` (re-arm timers; `idle_timeout_seconds` drives the attract
+    reset). Keep beating while disabled.
+14. Send `X-Kiosk-Token` on `POST /sessions` and `POST /sessions/{id}/spin` only. On
+    `401` at session create -> unpaired screen; **never** fall back to a header-less call.
+
+**Spin (§7) — tablets only:**
+
+15. Fetch `GET /prizes/wheel` when the spin screen is shown; build the wheel from
+    `segments` in `index` order. `503`/failure -> fallback copy, don't block.
+16. On tap: start spinning, `POST /spin` with the header, land on `segment_index` when the
+    response arrives; keep spinning while waiting; stop with no landing on error.
+17. Prize screen: `claim_code` large + `instructions` + `prize.name` + store name +
+    `expires_at`. Consolation -> no claim-code emphasis.
+18. Resume: `has_prize: true` -> `GET /sessions/{id}/prize` -> render per `status`.
+    Re-calling `/spin` is safe (same award).

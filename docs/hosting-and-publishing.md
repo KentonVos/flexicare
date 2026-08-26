@@ -68,12 +68,15 @@ load-bearing (see ARCHITECTURE.md); GSAP and Barba are libraries and stay pinned
 <script src="https://flexicare.kenton-323.workers.dev/src/background-motion.js"></script>
 <script src="https://flexicare.kenton-323.workers.dev/src/orb-motion.js"></script>
 <script src="https://flexicare.kenton-323.workers.dev/src/flexicare-core.js"></script>
+<!-- kiosk mode: MUST come before onboarding (it owns the device token) -->
+<script src="https://flexicare.kenton-323.workers.dev/src/flexicare-kiosk.js"></script>
 <script src="https://flexicare.kenton-323.workers.dev/src/flexicare-selfie.js"></script>
 <script src="https://flexicare.kenton-323.workers.dev/src/flexicare-avatar.js"></script>
 <script src="https://flexicare.kenton-323.workers.dev/src/flexicare-onboarding.js"></script>
 <script src="https://flexicare.kenton-323.workers.dev/src/flexicare-quiz.js"></script>
 <script src="https://flexicare.kenton-323.workers.dev/src/flexicare-reveal.js"></script>
 <script src="https://flexicare.kenton-323.workers.dev/src/flexicare-product.js"></script>
+<script src="https://flexicare.kenton-323.workers.dev/src/flexicare-spin.js"></script>
 <!-- dev-only tuner, loaded last; gated behind ?tune in the URL -->
 <script src="https://flexicare.kenton-323.workers.dev/src/slider.js"></script>
 <!-- dev-only orb tuner; gated behind ?orbtune -->
