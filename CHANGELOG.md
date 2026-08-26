@@ -90,6 +90,23 @@ cleared the box with `innerHTML = ""`, destroying glass.js's injected `.lg-layer
 would never rebuild it and the glass silently lost its lighting layer on the first
 redraw. The controller now clears only what it owns, keeping any `data-lg-*` node.
 
+**Tuned defaults + per-pane glass.** The design's tuned values are now the script
+defaults: rim and studs off, no hard dividers, label size 5 at radius 87. Two new
+cues make each pane read as its own piece of glass, because `backdrop-filter` cannot
+be applied to an SVG shape (per-segment "real" glass would mean one clipped div with
+its own backdrop-filter per segment, all recompositing every frame while spinning):
+`data-spin-edge` draws a lit hairline down each pane's leading edge, fading toward
+the hub; `data-spin-sheen` lays a specular overlay across the disc that does **not**
+rotate with the wheel — light that turns with an object reads as paint, light that
+stays put reads as glass. The single real blur lives in CSS on the wheel canvas, and
+the dial gets a second gentler one.
+
+**The pointer angle now has one source of truth.** The landing maths reads
+`data-spin-pointer-angle`; the visible marker is CSS. Set in two places they drift,
+and the failure is silent — the wheel stops with the winning segment somewhere other
+than under the marker. The script now publishes the angle as `--fc-pointer-angle` on
+the `[data-spin]` wrapper for the CSS to rotate by.
+
 **Standalone playground — `demo/spin.html`.** A single self-contained page that
 loads the real `flexicare-spin.js`: full component markup, starter CSS, and a tuner
 that writes the `data-spin-*` attributes live (animation knobs apply to the next

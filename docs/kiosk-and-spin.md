@@ -405,10 +405,16 @@ restores the original behaviour outright.
 │   ├── span.g-indigo          #3D45E0
 │   ├── span.g-lime            #AADB1E
 │   └── span.g-teal            #1EBEAA
-├── [data-spin-wheel]          glass host; the script draws the SVG inside
-├── .spin-hub                  glass cap + floating hairline ring
-└── [data-spin-pointer]        the marker
+├── [data-spin-wheel]          backdrop-filter: blur() — the real glass;
+│                              the script draws the SVG inside
+├── .spin-hub                  glass dial: a second, gentler blur on top
+└── .spin-marker               rotated by --fc-pointer-angle
+    └── [data-spin-pointer]    the marker itself
 ```
+
+The dial gets its own `backdrop-filter: blur(10px)`. Its backdrop is the
+already-frosted wheel plus the colour behind it, so a second gentler blur reads as a
+thicker piece of glass resting on top.
 
 `.spin-glow` is a **sibling** of the wheel, never a parent. Its own `filter: blur()`
 would otherwise make it a backdrop root and kill the refraction above it (§ the trap,
@@ -420,6 +426,67 @@ itself: it refracts the colour layer behind it, while the SVG (its child) paints
 top undistorted. That was not true of the old solid wheel, which covered its own
 glass completely.
 
+### Making each pane read as glass
+
+**`backdrop-filter` cannot be applied to an SVG shape**, in any browser — it is a CSS
+box property. So there is no way to give each `<path>` its own real glass. Doing it
+"properly" would mean one clipped `<div>` with its own `backdrop-filter` per segment,
+all of them recompositing every frame while the wheel turns — the most expensive
+thing you could ask a store tablet to do, on the one animation that has to stay
+smooth.
+
+So the effect is split in two:
+
+1. **One real blur, in CSS, on the wheel canvas.** It frosts the colour layer behind
+   every pane at once. Cheap, static, and it works on iPad where refraction does not.
+
+   ```css
+   [data-spin-wheel] { backdrop-filter: blur(14px) saturate(1.25); }
+   ```
+
+2. **Two cues drawn by the script** that say "separate pieces of glass" at this scale:
+
+   | Attribute | Default | |
+   |---|---|---|
+   | `data-spin-edge` | `0.3` | a lit hairline down each pane's leading radial edge, brightest at the rim and fading to nothing near the hub — the way light catches a bevel. Rotates **with** the wheel. |
+   | `data-spin-edge-width` | `0.6` | |
+   | `data-spin-sheen` | `0.14` | a specular overlay across the whole disc that does **not** rotate. |
+   | `data-spin-light-angle` | `315` | where that light comes from. |
+   | `data-spin-hub-radius` | 24% of the segment radius | where the lit edges fade out — keep it under your hub cap. |
+
+**The fixed sheen is the important half.** Light that rotates with an object reads as
+paint; light that stays put while the object turns underneath it reads as glass. That
+one overlay does more for the effect than anything else in the renderer, which is why
+it is drawn outside the rotor.
+
+The rendered nodes are marked `[data-spin-edge-line]` and `[data-spin-sheen-layer]` —
+deliberately *not* the same names as the config attributes above, so your CSS can
+target one without also selecting the `[data-spin]` wrapper.
+
+### The pointer angle has ONE source of truth
+
+The landing maths uses `data-spin-pointer-angle`. The pointer you can *see* is
+positioned in CSS. If you set those in two places they drift, and the failure is
+silent and nasty: the wheel stops with the winning segment somewhere other than under
+the marker, and the prize on screen is not the one the pointer is touching.
+
+So the script publishes the angle back as a CSS custom property on the `[data-spin]`
+wrapper. Rotate a full-size wrapper by it and the marker always agrees with where the
+wheel stops:
+
+```html
+<div class="spin-marker"><div data-spin-pointer></div></div>
+```
+```css
+.spin-marker      { position: absolute; inset: 0;
+                    transform: rotate(var(--fc-pointer-angle, 0deg)); }
+[data-spin-pointer] { position: absolute; left: 50%; top: -3%;
+                      transform: translateX(-50%); }
+```
+
+Change `data-spin-pointer-angle` and the marker moves with it. **Do not hard-code the
+pointer position in CSS.**
+
 ### The rim and the studs
 
 The reference design has an outer ring band with a pearl stud at every segment
@@ -427,17 +494,44 @@ boundary. Those are count-dependent — seven segments means seven studs — so 
 script draws them, inside the rotor, so they turn with the wheel. They are the
 clearest read on how fast it is spinning.
 
-| Attribute | Default (glass) | |
+The rim and the studs are **off by default** — the tuned look drops them for a
+cleaner disc — but they are there when a design wants them.
+
+| Attribute | Default | |
 |---|---|---|
-| `data-spin-rim` | `12` | width of the band in viewBox units; the segments stop below it |
+| `data-spin-rim` | `0` | width of the band in viewBox units; the segments stop below it |
 | `data-spin-rim-stroke` | `rgba(255,255,255,.28)` | the two hairline circles |
 | `data-spin-rim-width` | `0.6` | their thickness |
-| `data-spin-studs` | `on` | one per segment boundary |
+| `data-spin-studs` | `off` | one per segment boundary |
 | `data-spin-stud-size` | `2.6` | |
-| `data-spin-stroke-width` | `0.5` | the segment dividers |
+| `data-spin-stroke-width` | `0` | hard segment dividers. The lit edges above usually read better. |
 
-Label radius defaults to just inside the band and is **clamped** there, so a label
-can never run out under the studs whatever you type.
+Label radius defaults to `87` (or just inside the band, whichever is smaller) and is
+**clamped**, so a label can never run out under the studs whatever you type.
+
+### The tuned starting point
+
+These are the values the design settled on. Put them on `[data-spin]`:
+
+```html
+<div data-spin
+  data-spin-turns="6"        data-spin-duration="4.5"
+  data-spin-min="2.5"        data-spin-idle-turn="1.6"
+  data-spin-pointer-angle="315"
+  data-spin-style="glass"    data-spin-tint="0"
+  data-spin-fill="rgba(255,255,255,0.06)"
+  data-spin-fill-alt="rgba(255,255,255,0.025)"
+  data-spin-rim="0"          data-spin-studs="off"
+  data-spin-stroke-width="0"
+  data-spin-label-mode="radial"  data-spin-label-size="5"
+  data-spin-label-radius="87"    data-spin-label-color="#ffffff"
+  data-spin-edge="0.3"       data-spin-sheen="0.14"
+  data-spin-light-angle="315">
+```
+
+Most of these are now the script's defaults too, so a bare `[data-spin]` lands close
+to this. The ones worth setting explicitly are `data-spin-pointer-angle` (it has to
+match your marker) and the fills.
 
 ### Everything else that is glass
 

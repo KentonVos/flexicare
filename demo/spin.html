@@ -165,6 +165,13 @@
     overflow: hidden;
     z-index: 1;
     background: rgba(255,255,255,.02);
+    /* THE real glass on the wheel: one backdrop blur over the colour layer.
+       backdrop-filter cannot go on an SVG shape, so this single element does
+       the frosting for every pane at once — cheap, static, and it works on
+       iPad where refraction does not. The per-pane lit edges and the fixed
+       sheen (both drawn by the script) do the rest. */
+    backdrop-filter: blur(14px) saturate(1.25);
+    -webkit-backdrop-filter: blur(14px) saturate(1.25);
     box-shadow:
       inset 0 0 0 1px rgba(255,255,255,.22),
       inset 0 12px 40px rgba(255,255,255,.06),
@@ -192,9 +199,15 @@
     font-weight: 700; font-size: clamp(10px, 2vmin, 16px);
     letter-spacing: .14em; text-transform: uppercase; color: var(--ink);
     background: rgba(255,255,255,.05);
+    /* The dial sits ON the wheel, so its backdrop is the already-frosted wheel
+       plus the colour behind it. A second, gentler blur here reads as a
+       thicker piece of glass resting on top. */
+    backdrop-filter: blur(10px) saturate(1.2);
+    -webkit-backdrop-filter: blur(10px) saturate(1.2);
     box-shadow:
       inset 0 0 0 1px rgba(255,255,255,.28),
       inset 0 6px 18px rgba(255,255,255,.07),
+      inset 0 -6px 16px rgba(0,0,0,.18),
       0 10px 30px rgba(0,0,0,.5);
   }
   /* The floating outer ring from the reference. */
@@ -209,11 +222,17 @@
   [data-glass-on] .spin-card { backdrop-filter: none; }
   /* Decorative only — the script never moves it. If you move it off 12
      o'clock, set data-spin-pointer-angle to match. */
+  /* Rotating this full-size wrapper swings the marker around the rim. The
+     angle comes from the script, so it always matches where the wheel stops. */
+  .spin-marker {
+    position: absolute; inset: 0; z-index: 4;
+    transform: rotate(var(--fc-pointer-angle, 0deg));
+    pointer-events: none;
+  }
   [data-spin-pointer] {
     position: absolute; left: 50%; top: -3%;
     width: 7%; height: 12%;
     transform: translateX(-50%);
-    z-index: 4;
     background: linear-gradient(180deg, #ffffff, rgba(255,255,255,.72));
     clip-path: polygon(50% 100%, 0 0, 100% 0);
     filter: drop-shadow(0 6px 14px rgba(0,0,0,.65));
@@ -305,18 +324,24 @@
        data-spin-duration="4.5"
        data-spin-min="2.5"
        data-spin-idle-turn="1.6"
-       data-spin-pointer-angle="0"
+       data-spin-pointer-angle="315"
        data-spin-style="glass"
        data-spin-tint="0"
        data-spin-fill="rgba(255,255,255,0.06)"
        data-spin-fill-alt="rgba(255,255,255,0.025)"
-       data-spin-rim="12"
-       data-spin-studs="on"
-       data-spin-stud-size="2.6"
-       data-spin-stroke-width="0.5"
+       data-spin-rim="0"
+       data-spin-studs="off"
+       data-spin-stud-size="0.9"
        data-spin-label-mode="radial"
-       data-spin-label-size="6.5"
+       data-spin-label-size="5"
+       data-spin-label-radius="87"
        data-spin-label-color="#ffffff"
+       data-spin-stroke-width="0"
+       data-spin-stroke="#000000"
+       data-spin-labels="on"
+       data-spin-edge="0.3"
+       data-spin-sheen="0.14"
+       data-spin-light-angle="315"
        data-spin-expires-format="Claim by {date}">
 
     <!-- LOADING -->
@@ -336,7 +361,11 @@
         </div>
         <div data-spin-wheel></div>
         <div class="spin-hub">Flex</div>
-        <div data-spin-pointer></div>
+        <!-- The marker rides a full-size wrapper that rotates by
+             --fc-pointer-angle, which the script publishes from
+             data-spin-pointer-angle. One source of truth: change the
+             attribute and the pointer moves with the landing maths. -->
+        <div class="spin-marker" aria-hidden="true"><div data-spin-pointer></div></div>
       </div>
       <button data-spin-go class="cta">Spin to win</button>
     </div>
@@ -416,7 +445,10 @@
     <div class="row"><label for="idleturn">Idle: seconds / turn</label><output id="idleturn-v"></output>
       <input type="range" id="idleturn" min="0.3" max="4" step="0.1" data-attr="data-spin-idle-turn" /></div>
     <div class="row"><label for="pointer">Pointer angle (°)</label><output id="pointer-v"></output>
-      <input type="range" id="pointer" min="0" max="359" step="1" data-attr="data-spin-pointer-angle" /></div>
+      <input type="range" id="pointer" min="0" max="359" step="1" data-attr="data-spin-pointer-angle" data-render />
+      <span class="val" style="grid-column:1/-1;font-size:11px;color:var(--muted);text-align:left">
+        moves the marker too — they share one source of truth
+      </span></div>
     <div class="btns">
       <button class="primary" data-act="respin">Respin</button>
       <button data-act="reset-anim">Reset</button>
@@ -448,6 +480,22 @@
       </select></div>
     <div class="row"><label for="studsize">Stud size</label><output id="studsize-v"></output>
       <input type="range" id="studsize" min="0.5" max="8" step="0.1" data-attr="data-spin-stud-size" data-render /></div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Pane glass</legend>
+    <p class="note" style="margin-top:0">
+      The blur itself is CSS on the wheel. These two are what make each pane
+      read as a separate piece of glass.
+    </p>
+    <div class="row"><label for="edge">Lit edge</label><output id="edge-v"></output>
+      <input type="range" id="edge" min="0" max="1" step="0.02" data-attr="data-spin-edge" data-render /></div>
+    <div class="row"><label for="edgewidth">Edge width</label><output id="edgewidth-v"></output>
+      <input type="range" id="edgewidth" min="0.1" max="4" step="0.1" data-attr="data-spin-edge-width" data-render /></div>
+    <div class="row"><label for="sheen">Sheen (stays put)</label><output id="sheen-v"></output>
+      <input type="range" id="sheen" min="0" max="0.6" step="0.01" data-attr="data-spin-sheen" data-render /></div>
+    <div class="row"><label for="lightangle">Light from (°)</label><output id="lightangle-v"></output>
+      <input type="range" id="lightangle" min="0" max="359" step="1" data-attr="data-spin-light-angle" data-render /></div>
   </fieldset>
 
   <fieldset>

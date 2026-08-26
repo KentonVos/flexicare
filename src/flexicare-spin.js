@@ -68,7 +68,18 @@
                                      spinning before landing may start, even if
                                      the API answers instantly
                                   data-spin-pointer-angle="0"  where the pointer
-                                     sits, in degrees clockwise from 12 o'clock
+                                     sits, in degrees clockwise from 12 o'clock.
+                                     The script publishes this back as the CSS
+                                     custom property --fc-pointer-angle on the
+                                     [data-spin] wrapper, so position the
+                                     VISIBLE pointer with
+                                       transform: rotate(var(--fc-pointer-angle))
+                                     on a full-size wrapper. Do that and the
+                                     marker and the landing maths can never
+                                     drift apart. Hard-code the pointer in CSS
+                                     instead and a mismatch is silent: the
+                                     wheel stops with the winning segment
+                                     somewhere other than under the marker.
                                   data-spin-style="glass|solid"  HOW THE WHEEL
                                      IS PAINTED. Default "glass": the segments
                                      are translucent, the only colour comes
@@ -93,6 +104,27 @@
                                      the rim — one per segment boundary.
                                   data-spin-stud-size="2.6"
                                   data-spin-stud-fill="#ffffff"
+                                  (the rendered nodes are marked
+                                   [data-spin-edge-line] and
+                                   [data-spin-sheen-layer], deliberately NOT
+                                   the same names as these config attributes,
+                                   so your CSS can target one without the other)
+                                  data-spin-edge="0.3"    brightness of the lit
+                                     edge down each pane's leading side — the
+                                     cue that makes a segment read as its own
+                                     piece of glass. 0 = off.
+                                  data-spin-edge-width="0.6"
+                                  data-spin-edge-color="#ffffff"
+                                  data-spin-sheen="0.14"  a specular overlay
+                                     that does NOT turn with the wheel. Light
+                                     that rotates with an object reads as
+                                     paint; light that stays put reads as
+                                     glass. 0 = off.
+                                  data-spin-light-angle="315"  where that light
+                                     comes from, degrees clockwise from 12.
+                                  data-spin-hub-radius     where the lit edges
+                                     fade out (default 24% of the segment
+                                     radius) — keep it under your hub cap.
                                   data-spin-labels="on|off"    draw segment text
                                   data-spin-label-mode="radial|tangential"
                                   data-spin-label-size="7"     viewBox units
@@ -212,6 +244,7 @@
   }
   var FC = window.Flexicare;
 
+  var gradSeq = 0; // unique gradient ids per render — see renderWheel
   var SVG_NS = "http://www.w3.org/2000/svg";
   var XLINK_NS = "http://www.w3.org/1999/xlink";
   var VIEW = 200; // viewBox units — the wheel is drawn in a 200x200 square
@@ -540,10 +573,10 @@
     var fillB = attr(w, "data-spin-fill-alt", "rgba(255,255,255,0.025)");
     var tint = num(w, "data-spin-tint", 0, 0, 1);
 
-    var rimBand = num(w, "data-spin-rim", glassStyle ? 12 : 0, 0, R - 10);
+    var rimBand = num(w, "data-spin-rim", 0, 0, R - 10);
     var rimStroke = attr(w, "data-spin-rim-stroke", "rgba(255,255,255,0.28)");
-    var rimWidth = num(w, "data-spin-rim-width", glassStyle ? 0.6 : 0, 0, 6);
-    var showStuds = attr(w, "data-spin-studs", glassStyle ? "on" : "off") === "on";
+    var rimWidth = num(w, "data-spin-rim-width", 0.6, 0, 6);
+    var showStuds = attr(w, "data-spin-studs", "off") === "on";
     var studSize = num(w, "data-spin-stud-size", 2.6, 0.5, 10);
     var studFill = attr(w, "data-spin-stud-fill", "#ffffff");
 
@@ -553,19 +586,38 @@
 
     var showLabels = attr(w, "data-spin-labels", "on") !== "off";
     var labelMode = attr(w, "data-spin-label-mode", "radial");
-    var labelSize = num(w, "data-spin-label-size", 7, 2, 30);
+    var labelSize = num(w, "data-spin-label-size", 5, 2, 30);
     var labelColor = attr(w, "data-spin-label-color", "#ffffff");
     // Default to just inside the segment edge, and clamp — a label must never
     // run out under the studs, whatever the author types.
     var labelRadius = Math.min(
-      num(w, "data-spin-label-radius", segR - 3, 10, R),
+      num(w, "data-spin-label-radius", Math.min(87, segR - 3), 10, R),
       segR - 1
     );
     var showIcons = attr(w, "data-spin-icons", "off") === "on";
     var iconSize = num(w, "data-spin-icon-size", 22, 4, 80);
     var iconRadius = num(w, "data-spin-icon-radius", 42, 0, segR);
     var strokeColor = attr(w, "data-spin-stroke", "rgba(255,255,255,0.4)");
-    var strokeWidth = num(w, "data-spin-stroke-width", glassStyle ? 0.5 : 0, 0, 10);
+    var strokeWidth = num(w, "data-spin-stroke-width", 0, 0, 10);
+
+    /* ---- what makes each pane read as its own piece of glass ----
+       backdrop-filter CANNOT be applied to an SVG shape, in any browser — it
+       is a CSS box property. So per-segment "real" glass would mean one
+       clipped <div> with its own backdrop-filter per segment, all of them
+       recompositing every frame while the wheel turns. That is the most
+       expensive thing you could ask a store tablet to do, on the one animation
+       that has to stay smooth.
+
+       Instead: ONE real blur lives on the wheel canvas in CSS (cheap, static
+       backdrop), and the panes get the two cues that actually say "glass" at
+       this scale — a lit edge, and a specular sheen that stays PUT while the
+       wheel spins underneath it. The fixed sheen is the important half: light
+       that rotated with the object would read as paint. */
+    var edge = num(w, "data-spin-edge", glassStyle ? 0.3 : 0, 0, 1);
+    var edgeWidth = num(w, "data-spin-edge-width", 0.6, 0.1, 4);
+    var edgeColor = attr(w, "data-spin-edge-color", "#ffffff");
+    var sheen = num(w, "data-spin-sheen", glassStyle ? 0.14 : 0, 0, 1);
+    var lightAngle = num(w, "data-spin-light-angle", 315);
 
     var svg = el("svg", {
       viewBox: "0 0 " + VIEW + " " + VIEW,
@@ -579,11 +631,19 @@
     svg.style.display = "block";
     svg.style.overflow = "visible";
 
+    var defs = el("defs", {});
+    svg.appendChild(defs);
+
     var rotor = el("g", { "data-spin-rotor": "" });
     svg.appendChild(rotor);
 
     var n = segments.length;
     var step = 360 / n;
+
+    // Edges fade out around the hub rather than converging on a bright dot.
+    var hubR = num(w, "data-spin-hub-radius", segR * 0.24, 0, segR);
+    // Unique per render: several wheels (or a redraw) must not share gradient ids.
+    var gradId = "fcspin-" + ++gradSeq;
 
     for (var i = 0; i < n; i++) {
       var seg = segments[i];
@@ -609,6 +669,35 @@
         shape.setAttribute("stroke-linejoin", "round");
       }
       rotor.appendChild(shape);
+
+      /* The lit edge. Each pane gets a hairline down its LEADING radial edge,
+         brightest at the rim and fading to nothing at the hub — the way light
+         catches the bevel of a real pane. Drawn per segment rather than as one
+         divider grid so a pane still reads as a discrete object when the
+         dividers themselves are turned off. */
+      if (edge > 0) {
+        var eOuter = polar(segR, a0);
+        var eInner = polar(hubR, a0);
+        var eg = el("linearGradient", {
+          id: gradId + "-e" + i,
+          gradientUnits: "userSpaceOnUse",
+          x1: round(eOuter.x), y1: round(eOuter.y),
+          x2: round(eInner.x), y2: round(eInner.y),
+        });
+        eg.appendChild(el("stop", { offset: "0", "stop-color": edgeColor, "stop-opacity": edge }));
+        eg.appendChild(el("stop", { offset: "1", "stop-color": edgeColor, "stop-opacity": 0 }));
+        defs.appendChild(eg);
+        rotor.appendChild(
+          el("line", {
+            x1: round(eOuter.x), y1: round(eOuter.y),
+            x2: round(eInner.x), y2: round(eInner.y),
+            stroke: "url(#" + gradId + "-e" + i + ")",
+            "stroke-width": edgeWidth,
+            "stroke-linecap": "round",
+            "data-spin-edge-line": String(i),
+          })
+        );
+      }
 
       if (showIcons && seg.image_url) {
         var p = polar(Math.min(iconRadius, segR - iconSize / 2), mid);
@@ -661,6 +750,42 @@
         );
       }
     }
+
+    /* The specular sheen. Deliberately OUTSIDE the rotor: it must NOT turn
+       with the wheel. Light that rotates with an object reads as painted-on;
+       light that stays put while the object turns underneath is what makes
+       the whole disc read as glass. This one overlay does more for the effect
+       than anything else in this function. */
+    if (sheen > 0) {
+      var lit = polar(segR, lightAngle);
+      var dark = polar(segR, lightAngle + 180);
+      var sg = el("linearGradient", {
+        id: gradId + "-sheen",
+        gradientUnits: "userSpaceOnUse",
+        x1: round(lit.x), y1: round(lit.y),
+        x2: round(dark.x), y2: round(dark.y),
+      });
+      sg.appendChild(el("stop", { offset: "0", "stop-color": "#ffffff", "stop-opacity": sheen }));
+      sg.appendChild(el("stop", { offset: "0.5", "stop-color": "#ffffff", "stop-opacity": sheen * 0.18 }));
+      sg.appendChild(el("stop", { offset: "1", "stop-color": "#ffffff", "stop-opacity": 0 }));
+      defs.appendChild(sg);
+      svg.appendChild(
+        el("circle", {
+          cx: CX, cy: CY, r: segR,
+          fill: "url(#" + gradId + "-sheen)",
+          "data-spin-sheen-layer": "",
+          "pointer-events": "none",
+        })
+      );
+    }
+
+    /* Single source of truth for where the pointer is. The landing maths uses
+       data-spin-pointer-angle; the pointer you can SEE is positioned in CSS.
+       Publishing the angle as a custom property means the two cannot drift
+       apart — the CSS just rotates by var(--fc-pointer-angle). Set the
+       attribute and the marker follows. */
+    if (state.wrap)
+      state.wrap.style.setProperty("--fc-pointer-angle", pointerAngle() + "deg");
 
     clearWheelBox(box);
     box.appendChild(svg);
