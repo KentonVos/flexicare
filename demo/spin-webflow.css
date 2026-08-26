@@ -49,6 +49,13 @@
 [data-spin-stage] {
   position: relative;
   aspect-ratio: 1 / 1;
+  /* A flex or grid PARENT stretches its children by default, and a stretched
+     height overrides aspect-ratio — you get a stage taller than it is wide,
+     the wheel letterboxed inside it, and the dial (which sits at top:50%)
+     parked somewhere near the bottom. These two stop the parent stretching it
+     without dictating anything about your layout. */
+  align-self: center;
+  justify-self: center;
 }
 
 /* ---------- 3. The wheel canvas ----------
@@ -121,6 +128,33 @@
     transition: none !important;
   }
 }
+
+/* ============================================================
+   OPTIONAL — a starter pointer.
+
+   The embed deliberately does NOT style your pointer graphic: it is a design
+   element and it is yours. But that means an empty [data-spin-pointer] div is
+   an INVISIBLE div, which is the single most common "the pointer isn't
+   showing" cause. (With data-spin-debug on, the script says so in the console
+   rather than leaving you to find it.)
+
+   Build it in the Designer, or uncomment this to get something on screen:
+     • sized in % so it scales with the stage
+     • at the TOP CENTRE — [data-spin-marker] rotates it to the right place
+   ============================================================ */
+/*
+[data-spin-pointer] {
+  position: absolute;
+  left: 50%;
+  top: -3%;
+  width: 7%;
+  height: 12%;
+  transform: translateX(-50%);
+  background: linear-gradient(180deg, #ffffff, rgba(255, 255, 255, 0.72));
+  clip-path: polygon(50% 100%, 0 0, 100% 0);
+  filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.65));
+}
+*/
 
 /* ============================================================
    OPTIONAL — the colour behind the glass.

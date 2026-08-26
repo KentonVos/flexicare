@@ -90,6 +90,23 @@ cleared the box with `innerHTML = ""`, destroying glass.js's injected `.lg-layer
 would never rebuild it and the glass silently lost its lighting layer on the first
 redraw. The controller now clears only what it owns, keeping any `data-lg-*` node.
 
+**Layout audit for hand-built pages.** Building this page means positioning five
+elements against one another, and when one is wrong the symptom is visual while the
+cause is not — a dial parked below the wheel and an invisible pointer both look like
+script bugs and are almost always a CSS box. With `data-spin-debug` (or `?spindemo`,
+which implies it) the script now measures the stage, wheel, dial, marker and pointer
+on every render, logs the boxes, and names the specific fault and its fix: a static
+stage, a stretched stage, a static dial, a static marker, a marker with nothing
+inside it, or a zero-size pointer.
+
+Two related hardenings: `[data-spin-stage]` gained `align-self/justify-self: center`,
+because a flex or grid parent stretches its children by default and a stretched
+height silently overrides `aspect-ratio` — which gives a stage taller than it is
+wide, a letterboxed wheel, and a dial at `top:50%` landing near the bottom. And the
+embed now carries a commented-out starter `[data-spin-pointer]`, since the embed
+deliberately doesn't style your pointer graphic and an unstyled div is an invisible
+one.
+
 **Fixed: a strong sheen washed out the labels.** The specular overlay is drawn
 after the rotor so it stays put while the wheel turns — which also put it *above*
 the label text. Invisible at the old 0.14 default, a heavy white veil over white

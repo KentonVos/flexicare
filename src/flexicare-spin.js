@@ -583,6 +583,7 @@
           "wheel will not line up with the pointer."
       );
     }
+    auditLayout(box);
 
     var w = state.wrap;
 
@@ -842,6 +843,103 @@
     if (window.gsap) window.gsap.set(state.rotors, { svgOrigin: CX + " " + CY });
     setRotation(0);
     return true;
+  }
+
+  /* ------------------------- layout audit -------------------------
+     Runs on every render when data-spin-debug is on. Building this page by
+     hand in Webflow means five elements have to be positioned relative to one
+     another, and when one of them is wrong the symptom is visual and the
+     cause is not — a dial parked at the bottom of the page and an invisible
+     pointer look like script bugs and are almost always a CSS box.
+
+     So rather than guess from a screenshot: measure the boxes, say which
+     ones are wrong, and name the fix. */
+  function auditLayout(box) {
+    if (!state.debug || !window.console) return;
+
+    var stage = box.parentNode;
+    var wrapEl = state.wrap;
+    var hub = wrapEl && wrapEl.querySelector("[data-spin-hub]");
+    var marker = wrapEl && wrapEl.querySelector("[data-spin-marker]");
+    var pointer = wrapEl && wrapEl.querySelector("[data-spin-pointer]");
+
+    function box2(el) {
+      if (!el) return null;
+      var r = el.getBoundingClientRect();
+      var cs = window.getComputedStyle(el);
+      return {
+        w: Math.round(r.width),
+        h: Math.round(r.height),
+        position: cs.position,
+        display: cs.display,
+        z: cs.zIndex,
+      };
+    }
+
+    var rows = {
+      "[data-spin-stage]": box2(stage),
+      "[data-spin-wheel]": box2(box),
+      "[data-spin-hub]": box2(hub),
+      "[data-spin-marker]": box2(marker),
+      "[data-spin-pointer]": box2(pointer),
+    };
+    dbg("layout", rows);
+
+    var problems = [];
+
+    // The stage must be a positioned, square box — everything else is
+    // absolutely positioned against it.
+    if (stage) {
+      var sc = window.getComputedStyle(stage);
+      if (sc.position === "static")
+        problems.push(
+          "[data-spin-stage] is position:static, so the dial, marker and " +
+            "wheel are positioning against the PAGE instead of the stage. " +
+            "It needs position:relative (the embed sets this — is " +
+            "spin-webflow-embed.html on the page?)."
+        );
+      var sr = stage.getBoundingClientRect();
+      if (sr.width && sr.height && Math.abs(sr.width - sr.height) / Math.max(sr.width, sr.height) > 0.02)
+        problems.push(
+          "[data-spin-stage] is " + Math.round(sr.width) + "x" + Math.round(sr.height) +
+            " — not square. A parent using flex/grid can stretch it and " +
+            "override aspect-ratio; try align-self:center on the stage, or " +
+            "set an explicit height."
+        );
+    }
+
+    // A dial that is not absolutely positioned falls into normal flow and
+    // ends up below the wheel instead of on top of it.
+    if (hub && window.getComputedStyle(hub).position === "static")
+      problems.push(
+        "[data-spin-hub] is position:static, so it sits BELOW the wheel in " +
+          "normal flow instead of on top of it. Give it position:absolute, " +
+          "left:50%, top:50%, transform:translate(-50%,-50%)."
+      );
+
+    // The single most common Webflow miss: an empty pointer div.
+    if (pointer) {
+      var pr = pointer.getBoundingClientRect();
+      if (!pr.width || !pr.height)
+        problems.push(
+          "[data-spin-pointer] has no size (" + Math.round(pr.width) + "x" +
+            Math.round(pr.height) + "), so there is nothing to see. The embed " +
+            "deliberately does NOT style your pointer graphic — give it a " +
+            "width, a height and a background in the Designer."
+        );
+    } else if (marker) {
+      problems.push("[data-spin-marker] has no [data-spin-pointer] inside it.");
+    }
+
+    if (marker && window.getComputedStyle(marker).position === "static")
+      problems.push(
+        "[data-spin-marker] is position:static — it must be a FULL-SIZE " +
+          "absolutely positioned box (position:absolute; inset:0) or " +
+          "rotating it will not swing the pointer around the rim."
+      );
+
+    for (var i = 0; i < problems.length; i++)
+      console.warn("[spin] layout: " + problems[i]);
   }
 
   /* Clear the wheel box of everything WE put there — and nothing else.
