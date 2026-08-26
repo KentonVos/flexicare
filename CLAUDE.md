@@ -116,6 +116,11 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
   for). Affine deforms (`scale`, `skew`) are fine: they transform the finished rendering,
   rim and map as one unit. So warp glass with scale + skew, and put any true silhouette
   morph on a non-glass sibling or the soft glow layers. See ARCHITECTURE.md § orb-motion.js.
+- **Glass does NOT own `position` any more — but it did, and that mattered.** A glass
+  host needs a non-static position to contain its overlay; `absolute`/`fixed`/`sticky`
+  all qualify, so glass.js now only forces `relative` on hosts that were `static`
+  (marking them `data-lg-static`). If you see an element jump into normal flow when
+  glass is added, that's the old behaviour and it's a bug, not a constraint.
 - **Glass owns `transform`.** On any element with `data-liquid-glass` that also needs
   to animate in, use `data-anim-fade` (opacity only), never `data-anim` (which moves
   it). And never put `data-lg-press`/`data-lg-tilt` on the same element as a Webflow

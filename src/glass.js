@@ -31,6 +31,10 @@
      data-lg-press       press-spring depth 0-2    (default 1, 0 = off)
      data-lg-tilt        press tilt max, degrees   (default 7, 0 = off)
 
+   POSITIONING: glass needs a non-static host so its overlay is contained.
+         If your element is already absolute / fixed / sticky it is LEFT
+         ALONE; only a static one is made relative (marked data-lg-static).
+
    API: LiquidGlass.scan(), LiquidGlass.refresh(el)
    NOTE: refraction is Chrome/Edge only; lighting, surface,
          press and tilt work in every browser.
@@ -71,10 +75,29 @@
   var isSafari = /^((?!chrome|chromium|crios|edg|android).)*safari/i.test(ua);
   var REFRACT = !isFirefox && !isSafari;
 
+  /* The host has to CONTAIN .lg-layer (position:absolute; inset:0), which
+     means it needs a non-static position — but `absolute`, `fixed`, `sticky`
+     and `relative` all do that job equally well.
+
+     This used to read `[data-liquid-glass]{position:relative}`, which forced
+     relative onto every host. That quietly broke any element the author had
+     positioned themselves: this stylesheet is appended at script-execution
+     time, and these scripts load in Webflow's FOOTER, so it lands after the
+     site stylesheet and wins at equal specificity ([data-liquid-glass] and
+     .some-class are both 0,1,0). An absolutely-positioned card would snap
+     back into normal flow the moment glass was added to it, with nothing in
+     the console to say why.
+
+     So relative is now applied ONLY to hosts that were actually static, via
+     a marker attach() sets after reading the author's true computed position.
+     It has to be a marker rather than a blanket rule: a blanket rule would
+     already have made every host `relative` by the time we looked, so we
+     could never tell what the author intended. */
   var css = document.createElement("style");
   css.textContent =
     SELECTOR +
-    "{position:relative;isolation:isolate}" +
+    "{isolation:isolate}" +
+    "[data-lg-static]{position:relative}" +
     ".lg-layer{position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:-1}";
   document.head.appendChild(css);
 
@@ -544,6 +567,19 @@
 
   function attach(el) {
     if (states.has(el)) return;
+
+    /* Read the author's position BEFORE anything of ours affects it, and only
+       step in when the element is static. A host the author placed
+       (absolute / fixed / sticky) keeps its own positioning — see the note on
+       the stylesheet above.
+
+       Caveat: this is decided once, at attach. An element that only becomes
+       static at another breakpoint would keep the marker (harmless) or lack
+       it (its overlay would escape). Neither has come up; if it ever does,
+       re-check inside the ResizeObserver. */
+    if (window.getComputedStyle(el).position === "static")
+      el.setAttribute("data-lg-static", "");
+
     var st = {
       p: 0,
       v: 0,

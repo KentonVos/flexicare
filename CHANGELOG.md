@@ -90,6 +90,21 @@ cleared the box with `innerHTML = ""`, destroying glass.js's injected `.lg-layer
 would never rebuild it and the glass silently lost its lighting layer on the first
 redraw. The controller now clears only what it owns, keeping any `data-lg-*` node.
 
+**Fixed in `glass.js`: `data-liquid-glass` clobbered author positioning.** The hook's
+stylesheet set `position:relative` on every host. It is appended at
+script-execution time, and these scripts load in Webflow's FOOTER, so it landed after
+the site stylesheet and won at equal specificity (`[data-liquid-glass]` and
+`.some-class` are both 0,1,0) — an absolutely-positioned element snapped back into
+normal flow the moment glass was added to it, silently. This is what put the spin
+dial below the wheel instead of at its centre.
+
+Glass only needs the host to CONTAIN its overlay, and `absolute`, `fixed`, `sticky`
+and `relative` all do that. `attach()` now reads the author's true computed position
+and marks `data-lg-static` only when it is actually static; the stylesheet scopes
+`position:relative` to that marker. A marker rather than a blanket rule on purpose:
+a blanket rule would already have made every host relative by the time we looked.
+Static hosts behave exactly as before, so this only ever relaxes the old behaviour.
+
 **Layout audit for hand-built pages.** Building this page means positioning five
 elements against one another, and when one is wrong the symptom is visual while the
 cause is not — a dial parked below the wheel and an invisible pointer both look like

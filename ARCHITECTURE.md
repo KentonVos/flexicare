@@ -143,6 +143,20 @@ surface, interaction) — see the header comment in the file for the full list a
   top of the built-in `PRESETS`. `exportPresets()` prints them ready to paste into the
   `PRESETS` object so they become permanent.
 
+
+**Positioning.** A glass host must CONTAIN the injected `.lg-layer`
+(`position:absolute; inset:0`), so it needs a non-static position — but `absolute`,
+`fixed`, `sticky` and `relative` all satisfy that. glass.js therefore reads the
+author's computed position at `attach()` and only steps in when it is `static`,
+marking it `data-lg-static` (the stylesheet scopes `position:relative` to that
+marker). **It used to force `relative` on every host**, which silently broke any
+element the author had positioned: the stylesheet is appended at script-execution
+time and these scripts load in Webflow's FOOTER, so it landed after the site CSS and
+won at equal specificity (`[data-liquid-glass]` and `.some-class` are both 0,1,0). An
+absolutely-positioned card snapped into normal flow the moment glass was added, with
+nothing in the console. It has to be a marker rather than a blanket rule — a blanket
+rule would already have made every host relative by the time we looked, so the
+author's intent would be unreadable.
 ### transition.js → `window.PageTransition`
 Barba + GSAP page transitions. **Calls `barba.init()` — the only place.** Markup contract:
 - `data-barba="wrapper"` once around the shell; `data-barba="container"` on the one div
