@@ -21,10 +21,9 @@
      data-spin-onboarding="/onboarding"       
      data-spin-debug                          
 
-     data-spin-turns="1"
-     data-spin-duration="1.5"
-     data-spin-min="2"
-     data-spin-idle-turn="1"
+     data-spin-turns="3"
+     data-spin-duration="3"
+     data-spin-ease="power2.inOut"
      data-spin-pointer-angle="0"
 
      data-spin-style="glass"
@@ -103,7 +102,11 @@
       </div>
     </div>
 
-    <!-- REQUIRED. No button, no spin. Anywhere inside [data-spin]. -->
+    <!-- REQUIRED. No button, no spin.
+       It does NOT have to be here: clicks are delegated from `document`, so
+       this can live in a nav bar anywhere on the page — including the
+       persistent shell OUTSIDE data-barba="container". It still gets its
+       enabled/disabled state wherever it is. -->
     <a href="#" data-spin-go>Spin to win</a>
   </div>
 

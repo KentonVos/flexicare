@@ -163,6 +163,11 @@
      [data-spin-go]             REQUIRED. The spin button. Disabled by the
                                 script until the wheel is ready, and for good
                                 once a prize exists.
+                                It does NOT have to sit inside the stage, or
+                                even inside [data-spin] — clicks are delegated
+                                from `document`, so a button in a nav bar works
+                                anywhere on the page, including the persistent
+                                shell outside data-barba="container".
      [data-spin-pointer]        Optional. Purely decorative here — the script
                                 never moves it; it reads WHERE it is from
                                 data-spin-pointer-angle instead.
@@ -274,6 +279,7 @@
     idleTween: null,
     landTween: null,
     spinStartedAt: 0,
+    waitTimer: null, // fires only if the API is slow — see onSpin
     busy: false, // a spin request is in flight
     mode: null, // current data-spin-state
     wheelReq: null, // in-flight GET /prizes/wheel
@@ -371,11 +377,12 @@
     var out = [];
     var seen = [];
     var roots = [];
+    var container = null;
     if (state.wrap) {
       roots.push(state.wrap);
-      var c =
+      container =
         state.wrap.closest && state.wrap.closest('[data-barba="container"]');
-      if (c && c !== state.wrap) roots.push(c);
+      if (container && container !== state.wrap) roots.push(container);
     }
     if (!roots.length) roots.push(document);
     for (var i = 0; i < roots.length; i++) {
@@ -385,6 +392,25 @@
         if (!attached(el) || seen.indexOf(el) !== -1) continue;
         seen.push(el);
         out.push(el);
+      }
+    }
+
+    /* Last resort: the PERSISTENT SHELL. A spin button living in a nav bar is
+       a perfectly reasonable place for it, and a nav bar is often outside
+       data-barba="container" — in which case nothing above would ever find it
+       and it would never get its disabled state.
+
+       Anything matched here is filtered to nodes outside EVERY barba
+       container, which is what keeps the old bug away: during a swap both
+       containers are in the DOM, and a bare document-wide lookup can return
+       the outgoing page's copy. Shell elements are not duplicated that way. */
+    if (!out.length && state.wrap) {
+      var strays = document.querySelectorAll(sel);
+      for (var k = 0; k < strays.length; k++) {
+        var st = strays[k];
+        if (!attached(st)) continue;
+        if (st.closest && st.closest('[data-barba="container"]')) continue;
+        out.push(st);
       }
     }
     return out;
@@ -1091,6 +1117,7 @@
   }
 
   function stopTweens() {
+    clearWait();
     if (state.idleTween) {
       state.idleTween.kill();
       state.idleTween = null;
@@ -1102,9 +1129,26 @@
   }
 
   function land(index, count, done) {
-    var turns = num(state.wrap, "data-spin-turns", 1, 0);
-    var duration = num(state.wrap, "data-spin-duration", 1.5, 0.3);
+    var w = state.wrap;
+    var turns = num(w, "data-spin-turns", 3, 0);
+    var duration = num(w, "data-spin-duration", 3, 0.3);
     var target = landingRotation(index, count);
+
+    /* ONE motion, or a deceleration — decided by whether the wheel is already
+       turning.
+
+       Normally it is not: we wait for the server's answer (a few hundred ms)
+       and then run a single ease-in-out that winds up and settles in one
+       gesture. That is the whole animation.
+
+       If the request was slow enough that we fell back to spinning while we
+       waited (see onSpin), starting an ease-IN-out from a moving wheel would
+       brake it to a stop and then accelerate again — a visible hitch. So in
+       that case we only decelerate, which is the physically correct
+       continuation of a wheel already in motion. */
+    var ease = state.idleTween
+      ? attr(w, "data-spin-ease-out", "power4.out")
+      : attr(w, "data-spin-ease", "power2.inOut");
 
     if (!state.rotors || !state.rotors.length || !window.gsap || reduced()) {
       stopTweens();
@@ -1126,7 +1170,7 @@
     state.landTween = window.gsap.to(state.rotors, {
       rotation: to,
       duration: duration,
-      ease: "power4.out",
+      ease: ease,
       svgOrigin: CX + " " + CY,
       onComplete: function () {
         state.landTween = null;
@@ -1145,20 +1189,44 @@
     state.spinStartedAt = now();
     write("[data-spin-error]", "");
     setState("spinning");
-    startIdleSpin();
 
     var token = state.token;
-    var minSpin = num(state.wrap, "data-spin-min", 2, 0) * 1000;
+
+    /* We deliberately do NOT start the wheel here.
+
+       A single speed-up-and-slow-down has to know where it ends before it
+       begins, so the good case is: ask the server, get an answer in a few
+       hundred milliseconds, then run one uninterrupted 3s gesture. Starting
+       first and retargeting later is what produces the two-part motion this
+       replaced — a flat spin, then a separate braking phase.
+
+       The exception is a slow answer. After data-spin-wait we start turning
+       anyway rather than leave the shopper looking at a frozen wheel, and
+       land() then decelerates instead of easing in. On store wifi that is
+       worth having; it just should not be the shape of the normal case. */
+    var waitMs = num(state.wrap, "data-spin-wait", 0.4, 0) * 1000;
+    state.waitTimer = setTimeout(function () {
+      state.waitTimer = null;
+      if (!alive(token) || !state.busy) return;
+      dbg("slow response — spinning while we wait");
+      startIdleSpin();
+    }, waitMs);
 
     /* The header is what proves this spin is happening on the tablet that
        started the session. Without it the server cannot tell, and answers 403. */
     FC.api("/sessions/" + id + "/spin", { method: "POST", kiosk: true })
       .then(function (award) {
         if (!alive(token)) return;
-        var waited = now() - state.spinStartedAt;
-        var hold = Math.max(0, minSpin - waited);
-        // Keep spinning until the minimum has elapsed. The response landing in
-        // 200ms should still feel like a spin, not a flicker.
+        clearWait();
+        /* data-spin-min only matters on the fallback path: once the wheel IS
+           turning, cutting straight to the landing would read as a stutter.
+           On the normal path the single tween is the whole animation and
+           there is nothing to hold for. */
+        var hold = 0;
+        if (state.idleTween) {
+          var minSpin = num(state.wrap, "data-spin-min", 2, 0) * 1000;
+          hold = Math.max(0, minSpin - (now() - state.spinStartedAt));
+        }
         setTimeout(function () {
           if (!alive(token)) return;
           state.busy = false;
@@ -1180,11 +1248,17 @@
         }, hold);
       })
       .catch(function (err) {
+        clearWait();
         if (!alive(token)) return;
         state.busy = false;
         stopTweens(); // stop the wheel where it is — never land on an error
         handleSpinError(err);
       });
+  }
+
+  function clearWait() {
+    if (state.waitTimer) clearTimeout(state.waitTimer);
+    state.waitTimer = null;
   }
 
   /* The §7.4 table, in order: branch on the status code first, then on the
@@ -1411,15 +1485,13 @@
       a.prize = { code: seg.code, name: seg.label, label: seg.label };
       a.is_consolation = !!seg.is_consolation;
     }
+    // No API to wait for, so this is always the single-motion case — which
+    // is exactly what you want when tuning the curve.
     setState("spinning");
-    startIdleSpin();
     var token = state.token;
-    setTimeout(function () {
-      if (!alive(token)) return;
-      land(index, count, function () {
-        if (alive(token)) paintAward(a);
-      });
-    }, num(state.wrap, "data-spin-min", 2, 0) * 1000);
+    land(index, count, function () {
+      if (alive(token)) paintAward(a);
+    });
   }
 
   /* ------------------------------- loading ------------------------------- */

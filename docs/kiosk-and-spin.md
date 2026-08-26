@@ -681,7 +681,7 @@ attributes. Build one, style it, duplicate it for the rest.
 | Panel | `data-spin-when` | Must contain |
 |---|---|---|
 | Loading | `loading` | your skeleton/spinner |
-| The wheel | `ready spinning` | the stage + `[data-spin-go]` |
+| The wheel | `ready spinning` | the stage. `[data-spin-go]` may live here or anywhere else on the page |
 | Won a prize | `prize` | `[data-spin-claim]` **large and high-contrast**, `[data-spin-prize-name]`, `[data-spin-instructions]`, `[data-spin-expires-wrap]`, `[data-spin-store]` |
 | Consolation | `consolation` | `[data-spin-prize-name]`, `[data-spin-instructions]`. **No claim code** |
 | Already collected | `redeemed` | "you've picked this up" |
@@ -705,8 +705,8 @@ The tuned values. Most are already the script's defaults, so a bare `[data-spin]
 lands close to this; set them explicitly if you want to be sure.
 
 ```
-data-spin-turns="1"          data-spin-duration="1.5"
-data-spin-min="2"            data-spin-idle-turn="1"
+data-spin-turns="3"          data-spin-duration="3"
+data-spin-ease="power2.inOut"
 data-spin-pointer-angle="0"
 data-spin-style="glass"      data-spin-tint="0"
 data-spin-fill="rgba(255,255,255,0.06)"

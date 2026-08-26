@@ -90,6 +90,25 @@ cleared the box with `innerHTML = ""`, destroying glass.js's injected `.lg-layer
 would never rebuild it and the glass silently lost its lighting layer on the first
 redraw. The controller now clears only what it owns, keeping any `data-lg-*` node.
 
+**The spin is one gesture now.** It used to be two visibly separate phases — a flat
+constant-speed spin while the request was in flight, then a separate braking phase —
+because the wheel started before it knew where to stop. It now waits for the server's
+answer (a few hundred ms) and runs a single ease-in-out: `data-spin-duration="3"`,
+`data-spin-ease="power2.inOut"`, `data-spin-turns="3"`, all tunable.
+
+The old behaviour survives as a slow-response fallback: after `data-spin-wait`
+(default 0.4s) the wheel starts turning anyway rather than sitting frozen on flaky
+store wifi, and the landing then *decelerates* (`data-spin-ease-out`) instead of
+easing in again — easing in from a moving wheel would brake it to a stop first, a
+visible hitch. `data-spin-min` now applies only to that path.
+
+**`[data-spin-go]` can live anywhere**, including a nav bar in the persistent shell
+outside `data-barba="container"`. Clicks were always document-delegated so they
+worked already; what didn't was the enabled/disabled state, because element lookups
+are scoped to the incoming container. `slots()` now falls back to the shell — filtered
+to nodes outside EVERY barba container, which is what keeps the outgoing-container
+bug away, since shell elements are never duplicated during a swap.
+
 **`docs/spin-attributes.md`** — the complete attribute reference for the spin page:
 every config attribute with its default and range, every structural hook, every panel
 state and reason code, every content slot, and the attributes the script writes onto

@@ -32,17 +32,36 @@ Everything in §2–§5 goes **on this element**.
 
 ## 3. The spin animation
 
+**One gesture.** Tap → the server is asked where to land → the wheel winds up and
+settles in a single ease-in-out. That's the whole animation.
+
 | Attribute | Default | Range | |
 |---|---|---|---|
-| `data-spin-min` | `2` | ≥ 0 | Seconds of spinning before the landing may start, even if the API answers instantly. Stops a fast response reading as a flicker. |
-| `data-spin-idle-turn` | `1` | ≥ 0.4 | Seconds per rotation while waiting for the response. Lower = faster. |
-| `data-spin-turns` | `1` | ≥ 0 | Extra full rotations before landing. |
-| `data-spin-duration` | `1.5` | ≥ 0.3 | Seconds of the deceleration onto the winning segment. |
+| `data-spin-duration` | `3` | ≥ 0.3 | Seconds of the **whole motion**, wind-up and settle together. |
+| `data-spin-ease` | `power2.inOut` | any GSAP ease | The curve of that motion. `power1.inOut` is gentler, `power3.inOut` snappier. |
+| `data-spin-turns` | `3` | ≥ 0 | Full rotations before landing. More turns over the same duration = faster peak. |
 | `data-spin-pointer-angle` | `0` | 0–359 | Where the marker sits, **degrees clockwise from 12 o'clock**. Published back as the CSS variable `--fc-pointer-angle` — position the visible marker with that, never by hand. |
 
-Total felt duration ≈ `min` + `duration`. The API contract asks for ≥ ~3s.
-
 `prefers-reduced-motion` is respected automatically: the wheel snaps instead of spinning.
+
+### The slow-response fallback
+
+A single speed-up-and-slow-down has to know where it ends before it starts, so the
+wheel doesn't move until the server answers. That's a few hundred milliseconds
+normally — but not always, on store wifi.
+
+So after `data-spin-wait` the wheel starts turning anyway rather than sitting frozen,
+and the landing then *decelerates* instead of easing in again (easing in from a
+moving wheel would brake it to a stop first — a visible hitch).
+
+| Attribute | Default | Range | |
+|---|---|---|---|
+| `data-spin-wait` | `0.4` | ≥ 0 | Seconds to wait for the API before spinning anyway. Raise it to make the fallback rarer, lower it to make a frozen wheel less likely. |
+| `data-spin-idle-turn` | `1` | ≥ 0.4 | Seconds per rotation during that fallback spin. |
+| `data-spin-min` | `2` | ≥ 0 | **Fallback only.** Once the wheel is turning, keep it turning at least this long before decelerating, so a late answer doesn't cut it short. Ignored on the normal path. |
+| `data-spin-ease-out` | `power4.out` | any GSAP ease | The deceleration curve used on that path. |
+
+None of these fire when the API is quick, which is the normal case.
 
 ---
 
@@ -172,7 +191,7 @@ Written as **text**, never HTML — every string comes from the API.
 
 | Attribute | |
 |---|---|
-| `[data-spin-go]` | **REQUIRED.** The spin button. The script sets `disabled` / `aria-disabled`. |
+| `[data-spin-go]` | **REQUIRED.** The spin button. The script sets `disabled` / `aria-disabled`. It does **not** have to be inside the stage, or even inside `[data-spin]` — clicks are delegated from `document`, so a button in a nav bar works, including one in the persistent shell outside `data-barba="container"`. |
 | `[data-spin-done]` | A "finish" link. Its own value or `href` is the target; falls back to `/`. |
 | `[data-spin-back]` | A "go back" link. Its own value or `href`; falls back to `history.back()`. |
 
@@ -216,10 +235,9 @@ Note these are deliberately **not** the same names as the config attributes, so
 <div data-spin
   data-spin-product="/flexicare-product"
   data-spin-onboarding="/onboarding"
-  data-spin-turns="1"
-  data-spin-duration="1.5"
-  data-spin-min="2"
-  data-spin-idle-turn="1"
+  data-spin-turns="3"
+  data-spin-duration="3"
+  data-spin-ease="power2.inOut"
   data-spin-pointer-angle="0"
   data-spin-style="glass"
   data-spin-tint="0"

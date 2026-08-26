@@ -130,7 +130,7 @@
     cta: { press: 1.5, tilt: 12, glow: 0.4, specular: 0.85 },
     nav: { press: 0, tilt: 0, strength: 30, blur: 1.5 },
     panel: { press: 0.6, tilt: 4, frost: 0.1, glow: 0.3, strength: 34 },
-    pill: { press: 1, tilt: 8, glow: 0.35 },
+    pill: { press: 1, tilt: 8, glow: 0.35, ca: 0 },
   };
   var STORE_KEY = "lgTunerPresets";
   function loadStoredPresets() {

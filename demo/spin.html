@@ -302,10 +302,9 @@
        ============================================================ -->
   <div data-spin
        data-spin-debug
-       data-spin-turns="1"
-       data-spin-duration="1.5"
-       data-spin-min="2"
-       data-spin-idle-turn="1"
+       data-spin-turns="3"
+       data-spin-duration="3"
+       data-spin-ease="power2.inOut"
        data-spin-pointer-angle="0"
        data-spin-style="glass"
        data-spin-tint="0"
@@ -419,14 +418,19 @@
   <fieldset>
     <legend>Animation</legend>
     <p class="note" style="margin-top:0">Applies to the next spin — no reload.</p>
-    <div class="row"><label for="turns">Extra full turns</label><output id="turns-v"></output>
+    <div class="row"><label for="turns">Full turns</label><output id="turns-v"></output>
       <input type="range" id="turns" min="0" max="14" step="1" data-attr="data-spin-turns" /></div>
-    <div class="row"><label for="duration">Landing duration (s)</label><output id="duration-v"></output>
+    <div class="row"><label for="duration">Whole motion (s)</label><output id="duration-v"></output>
       <input type="range" id="duration" min="0.5" max="10" step="0.1" data-attr="data-spin-duration" /></div>
-    <div class="row"><label for="min">Minimum spin (s)</label><output id="min-v"></output>
-      <input type="range" id="min" min="0" max="8" step="0.1" data-attr="data-spin-min" /></div>
-    <div class="row"><label for="idleturn">Idle: seconds / turn</label><output id="idleturn-v"></output>
-      <input type="range" id="idleturn" min="0.3" max="4" step="0.1" data-attr="data-spin-idle-turn" /></div>
+    <div class="row"><label for="ease">Curve</label><span class="val"></span>
+      <select id="ease" data-attr="data-spin-ease">
+        <option value="power2.inOut">power2.inOut (default)</option>
+        <option value="power1.inOut">power1.inOut (gentler)</option>
+        <option value="power3.inOut">power3.inOut (snappier)</option>
+        <option value="power4.inOut">power4.inOut (sharpest)</option>
+        <option value="sine.inOut">sine.inOut (softest)</option>
+        <option value="back.inOut(1.2)">back.inOut (overshoots)</option>
+      </select></div>
     <div class="row"><label for="pointer">Pointer angle (°)</label><output id="pointer-v"></output>
       <input type="range" id="pointer" min="0" max="359" step="1" data-attr="data-spin-pointer-angle" data-render />
       <span class="val" style="grid-column:1/-1;font-size:11px;color:var(--muted);text-align:left">
