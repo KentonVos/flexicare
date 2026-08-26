@@ -143,6 +143,38 @@
    Plus data-spin-reason on the wrapper for granular copy inside a state:
      "web" | "wheel" | "already-spun" | "other-kiosk" | "disabled"
      | "rate-limit" | "network" | "unknown"
+
+   ------------------------------------------------------------
+   DEV-ONLY DEMO MODE  —  ?spindemo   (gated exactly like ?tune / ?orbtune)
+
+   The real page needs a COMPLETED session on a PAIRED tablet, which needs a
+   pairing code from the admin UI. That is the right gate for production and a
+   miserable one for building the page: until a tablet is paired there is
+   nothing on screen to style.
+
+   ?spindemo skips the session entirely so the wheel, the spin animation and
+   every panel can be built and tuned in the Designer's published preview.
+
+     ?spindemo                → draw the wheel, spin to a random segment,
+                                show a FAKE prize screen
+     ?spindemo=consolation    → jump straight to the consolation panel
+     ?spindemo=redeemed       → …the redeemed panel   (also: expired, voided)
+     ?spindemo=nophone        → …the no-phone panel
+     ?spindemo=unavailable    → …the fallback panel
+
+   What it does NOT do, and must never do:
+     • it never calls POST /spin — no award is created, no stock is consumed
+     • it never writes Flexicare.award, so a demo prize cannot leak into a real
+       session's state
+     • it is unreachable without the query parameter
+
+   The segments still come from the real GET /prizes/wheel (that endpoint is
+   public and needs no session), so the colours and labels you style against
+   are the live ones. If it is unreachable it falls back to a placeholder set
+   so the page is still buildable offline.
+
+   REMOVE THE PARAMETER BEFORE ANY REAL TESTING. A demo spin proves the
+   animation works; it proves nothing about the backend.
    ============================================================ */
 (function () {
   "use strict";
@@ -176,7 +208,22 @@
     cooldownTimer: null,
     cooldownUntil: 0,
     debug: false,
+    demo: null, // ?spindemo — dev only; see the header comment
   };
+
+  /* Used only when ?spindemo is on AND GET /prizes/wheel is unreachable, so
+     the page can still be built with no backend at all. Never used in
+     production: the real segment list is admin data and always comes from
+     the API. */
+  var DEMO_SEGMENTS = [
+    { index: 0, code: "PHONE_CARD_HOLDER", label: "Phone card holder", color: "#C6E84A", is_consolation: false },
+    { index: 1, code: "WATER_BOTTLE", label: "Water bottle", color: "#2E7D32", is_consolation: false },
+    { index: 2, code: "FIRST_AID_KIT", label: "First aid kit", color: "#C6E84A", is_consolation: false },
+    { index: 3, code: "PILL_BOX", label: "Pill box", color: "#2E7D32", is_consolation: false },
+    { index: 4, code: "GYM_BALL", label: "Gym ball", color: "#C6E84A", is_consolation: false },
+    { index: 5, code: "CLICKS_VOUCHER", label: "Clicks voucher", color: "#2E7D32", is_consolation: false },
+    { index: 6, code: "TRY_AGAIN", label: "Try again", color: "#9E9E9E", is_consolation: true },
+  ];
 
   function dbg() {
     if (window.console && (window.FLEXICARE_DEBUG || state.debug))
@@ -674,6 +721,7 @@
 
   function onSpin() {
     if (state.busy || state.mode !== "ready" || cooling()) return;
+    if (state.demo) return demoSpin(); // dev only — never touches the API
     var id = FC.getSessionId();
     if (!id) return;
 
@@ -794,7 +842,9 @@
   function paintAward(award) {
     if (!award) return;
     state.award = award;
-    FC.award = award;
+    // A demo award is never persisted — it must not survive a Barba swap and
+    // be mistaken for a real one on a later, genuine visit.
+    if (!state.demo) FC.award = award;
 
     var prize = award.prize || {};
     var status = award.status || "AWARDED";
@@ -855,6 +905,105 @@
     }
     var fmt = attr(state.wrap, "data-spin-expires-format", "Claim by {date}");
     return fmt.replace("{date}", pretty);
+  }
+
+  /* ------------------------------ demo mode ------------------------------
+     Everything below is dev-only and unreachable without ?spindemo. See the
+     header comment for the rules it holds to. */
+
+  function readDemoParam() {
+    var raw = null;
+    try {
+      raw = new URL(location.href).searchParams.get("spindemo");
+    } catch (e) {
+      var m = /[?&]spindemo(?:=([^&]*))?/.exec(location.search || "");
+      if (m) raw = m[1] == null ? "" : decodeURIComponent(m[1]);
+    }
+    if (raw === null) return null; // parameter absent → normal operation
+    return (raw || "prize").toLowerCase();
+  }
+
+  function demoAward(kind) {
+    var consolation = kind === "consolation";
+    var status =
+      kind === "redeemed"
+        ? "REDEEMED"
+        : kind === "expired"
+        ? "EXPIRED"
+        : kind === "voided"
+        ? "VOIDED"
+        : "AWARDED";
+    return {
+      award_id: "demo",
+      prize: consolation
+        ? { code: "TRY_AGAIN", name: "Try again next time", label: "Try again" }
+        : { code: "WATER_BOTTLE", name: "Flexicare water bottle", label: "Water bottle" },
+      segment_index: consolation ? 6 : 1,
+      is_consolation: consolation,
+      claim_code: "FLX-DEMO-CODE",
+      status: status,
+      expires_at: "2026-09-25T09:20:31Z",
+      instructions: null, // exercise the authored-copy fallback
+      location: { id: "demo", name: "Clicks Sandton City", code: "demo" },
+      first_name: FC.firstName || "Thandi",
+    };
+  }
+
+  function startDemo(token) {
+    var kind = state.demo;
+    state.wrap.setAttribute("data-spin-demo", kind);
+    if (window.console)
+      console.warn(
+        "[spin] ?spindemo is ON (" +
+          kind +
+          "). The session is skipped, POST /spin is NEVER called and no award " +
+          "is created. Remove the parameter for real testing."
+      );
+
+    // Panels that don't involve the wheel at all — jump straight there.
+    if (kind === "nophone") return setState("nophone");
+    if (kind === "unavailable" || kind === "error")
+      return showError(null, "wheel");
+    if (kind === "consolation" || kind === "redeemed" || kind === "expired" || kind === "voided")
+      return paintAward(demoAward(kind));
+
+    loadWheel()
+      .catch(function () {
+        if (window.console)
+          console.warn("[spin] demo: /prizes/wheel unreachable — placeholder segments.");
+        return DEMO_SEGMENTS;
+      })
+      .then(function (segments) {
+        if (!alive(token)) return;
+        state.segments = segments && segments.length ? segments : DEMO_SEGMENTS;
+        if (!renderWheel(state.segments)) return showError(null, "wheel");
+        setState("ready");
+      });
+  }
+
+  // The ONLY place a segment is ever chosen client-side, and it exists purely
+  // so the deceleration can be watched without a backend. The real spin takes
+  // segment_index from the server and nothing else.
+  function demoSpin() {
+    var count = (state.segments && state.segments.length) || 0;
+    if (!count) return;
+    var index = Math.floor(Math.random() * count);
+    var seg = state.segments[index];
+    var a = demoAward(seg && seg.is_consolation ? "consolation" : "prize");
+    a.segment_index = index;
+    if (seg) {
+      a.prize = { code: seg.code, name: seg.label, label: seg.label };
+      a.is_consolation = !!seg.is_consolation;
+    }
+    setState("spinning");
+    startIdleSpin();
+    var token = state.token;
+    setTimeout(function () {
+      if (!alive(token)) return;
+      land(index, count, function () {
+        if (alive(token)) paintAward(a);
+      });
+    }, num(state.wrap, "data-spin-min", 2.5, 0) * 1000);
   }
 
   /* ------------------------------- loading ------------------------------- */
@@ -1009,7 +1158,8 @@
 
     var token = ++state.token;
     state.wrap = wrap;
-    state.debug = wrap.hasAttribute("data-spin-debug");
+    state.demo = readDemoParam();
+    state.debug = wrap.hasAttribute("data-spin-debug") || !!state.demo;
     state.segments = null;
     state.session = null;
     state.award = null;
@@ -1020,6 +1170,8 @@
 
     captureDefaults(); // BEFORE anything can blank the authored copy
     setState("loading");
+
+    if (state.demo) return startDemo(token);
 
     /* Re-entering after a spin (back, then forward again): FC.award survives
        the swap, so re-show it without another round trip. The server would
@@ -1038,7 +1190,9 @@
     if (state.wrap) {
       state.wrap.removeAttribute("data-spin-state");
       state.wrap.removeAttribute("data-spin-reason");
+      state.wrap.removeAttribute("data-spin-demo");
     }
+    state.demo = null;
     var root = document.documentElement;
     if (root) root.removeAttribute("data-spin-state");
     state.wrap = null;

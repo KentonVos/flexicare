@@ -63,6 +63,14 @@ updated (load order, two new module sections, four new gotchas).
 - `data-kiosk-idle-factor="2"` on the spin page so a claim code isn't yanked away.
 - Optionally `data-product-next-web` on `[data-product]`.
 
+**Dev gate — `?spindemo`.** The spin page can't render anything until a tablet is
+paired, which makes it impossible to build in the Designer. `?spindemo` skips the
+session and draws the real wheel with a fake prize screen (`=consolation`,
+`=redeemed`, `=expired`, `=voided`, `=nophone`, `=unavailable` jump to a specific
+panel). It never calls `POST /spin`, never creates an award and never writes
+`Flexicare.award`. Gated exactly like `?tune`/`?orbtune`. Remove the parameter for
+real testing.
+
 **The thing to remember:** the spin is decided at `/onboarding`, not at
 `/spin-to-win`. If the spin page says "unavailable", the session was started on an
 unpaired browser — fix it there.

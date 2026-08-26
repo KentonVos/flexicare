@@ -327,7 +327,37 @@ the site is web-only.
 
 ---
 
-## 6. Testing checklist
+## 6. Building the page before a tablet exists — `?spindemo`
+
+The real page needs a `COMPLETED` session on a **paired** tablet, and pairing needs
+a code from the admin UI. That is the right gate for production and a miserable one
+for building the page: until a tablet is paired there is nothing on screen to style.
+
+`?spindemo` skips the session entirely. Gated exactly like `?tune` and `?orbtune`.
+
+| URL | What you get |
+|---|---|
+| `/spin-to-win?spindemo` | the real wheel, a real spin animation, a fake prize screen |
+| `?spindemo=consolation` | straight to the consolation panel |
+| `?spindemo=redeemed` | …the redeemed panel (also `expired`, `voided`) |
+| `?spindemo=nophone` | …the no-phone panel |
+| `?spindemo=unavailable` | …the fallback panel |
+
+The segments still come from the real `GET /prizes/wheel` (public, no session), so
+you are styling against live colours and labels. If that endpoint is unreachable it
+falls back to a placeholder set, so the page is buildable with no backend at all.
+
+What it never does: it never calls `POST /spin`, never creates an award, never
+consumes stock, and never writes `Flexicare.award` — so a demo prize cannot leak
+into a real session's state. Without the parameter the page behaves exactly as it
+does in production.
+
+**A demo spin proves the animation works. It proves nothing about the backend** —
+drop the parameter before any real testing.
+
+---
+
+## 7. Testing checklist
 
 Test on the **published or preview URL**, never the Designer.
 
