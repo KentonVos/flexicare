@@ -118,7 +118,12 @@
     width: min(74vmin, 520px);
     aspect-ratio: 1 / 1;
     margin: 0 auto;
-    filter: drop-shadow(0 26px 60px rgba(0,0,0,.55));
+    /* NO `filter` HERE. A filter makes an element a backdrop root for its
+       DESCENDANTS, which would leave the glass hub below with nothing behind
+       it to refract — the exact thing that switched refraction off on the
+       landing orb (see CLAUDE.md). The drop-shadow lives on the wheel canvas
+       instead, which is the hub's SIBLING, so it still contributes to the
+       hub's backdrop normally. */
   }
   /* The script clears and fills this. Leave it empty in the Designer. */
   [data-spin-wheel] {
@@ -126,24 +131,39 @@
     inset: 0;
     border-radius: 50%;
     overflow: hidden;
+    filter: drop-shadow(0 26px 60px rgba(0,0,0,.55));
     box-shadow:
       inset 0 0 0 6px rgba(255,255,255,.9),
       inset 0 0 0 12px rgba(46,125,50,.9),
       0 0 0 1px rgba(0,0,0,.35);
   }
   /* The hub covers the point where every segment meets. */
+  /* The hub covers the point where every segment meets — and it is the ONE
+     place on this component where glass genuinely belongs. It is small
+     (cheap), it sits on top of the spinning wheel (so it has something
+     interesting to refract), and there is no text underneath it to distort.
+     A glass hub over a turning wheel is the effect worth having.
+
+     `transform: translate(-50%,-50%)` is fine alongside glass — glass only
+     owns transform when press/tilt are ON, which is why the preset below
+     sets both to 0. */
   .spin-hub {
     position: absolute; left: 50%; top: 50%;
-    width: 20%; aspect-ratio: 1/1;
+    width: 22%; aspect-ratio: 1/1;
     transform: translate(-50%, -50%);
     border-radius: 50%;
-    background: radial-gradient(circle at 35% 30%, #fff, #dfe9d6 60%, #b9c9ab);
-    box-shadow: 0 6px 18px rgba(0,0,0,.45), inset 0 -2px 6px rgba(0,0,0,.18);
+    box-shadow: 0 6px 18px rgba(0,0,0,.45);
     z-index: 3;
     display: grid; place-items: center;
     font-weight: 800; font-size: clamp(9px, 1.7vmin, 14px);
-    letter-spacing: .12em; color: var(--accent-deep);
+    letter-spacing: .12em; color: #fff;
+    /* Opaque by default. The glass build overrides this — see [data-glass-on]. */
+    background: radial-gradient(circle at 35% 30%, #fff, #dfe9d6 60%, #b9c9ab);
+    color: var(--accent-deep);
   }
+  /* Glass mode: let the wheel show through so there is something to refract. */
+  [data-glass-on] .spin-hub { background: rgba(255,255,255,.06); color: #fff; }
+  [data-glass-on] .spin-card { background: rgba(255,255,255,.03); backdrop-filter: none; }
   /* Decorative only — the script never moves it. If you move it off 12
      o'clock, set data-spin-pointer-angle to match. */
   [data-spin-pointer] {
@@ -343,6 +363,19 @@
   </fieldset>
 
   <fieldset>
+    <legend>Liquid glass</legend>
+    <p class="note" style="margin-top:0">
+      Applied to the cards, the CTA and the hub. Reloads, because glass.js
+      attaches one-way.
+    </p>
+    <div class="btns">
+      <button data-glass="1">Glass on</button>
+      <button data-glass="0">Glass off</button>
+    </div>
+    <p class="note" id="glass-note"></p>
+  </fieldset>
+
+  <fieldset>
     <legend>Jump to a panel</legend>
     <div class="btns">
       <button data-panel="">wheel</button>
@@ -376,6 +409,29 @@
      Load order matches the Webflow footer exactly.
      ============================================================ -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script>
+  /* Glass is opt-in here so you can A/B it. ?glass=1 turns it on; the toggle
+     in the panel reloads with the flag, because glass.js attaches one-way —
+     there is no detach, so "off" has to mean "never attached". */
+  (function () {
+    if (!/[?&]glass=1/.test(location.search)) return;
+    document.documentElement.setAttribute("data-glass-on", "");
+    var pairs = [
+      [".spin-card", "panel"],
+      [".cta", "cta"],
+      [".spin-hub", "nav"], // nav = press:0, tilt:0 — the hub must not move
+    ];
+    pairs.forEach(function (pair) {
+      document.querySelectorAll(pair[0]).forEach(function (el) {
+        el.setAttribute("data-liquid-glass", "");
+        el.setAttribute("data-lg-preset", pair[1]);
+      });
+    });
+  })();
+</script>
+<!-- glass.js loads FIRST of the Flexicare scripts, exactly as in the Webflow
+     footer. It scans on DOMContentLoaded and picks up the attributes set above. -->
+<script src="../src/glass.js"></script>
 <script>
   /* Apply any settings carried in the URL BEFORE the controller boots, so the
      first render already reflects them (and a shared link reproduces a look). */
@@ -449,6 +505,15 @@
     var b = e.target.closest("[data-act], [data-panel]");
     if (!b) return;
 
+    if (b.dataset.glass !== undefined) {
+      var gu = new URL(location.href);
+      if (b.dataset.glass === "1") gu.searchParams.set("glass", "1");
+      else gu.searchParams.delete("glass");
+      inputs.forEach(function (el) { gu.searchParams.set(el.dataset.attr, el.value); });
+      location.href = gu.toString();
+      return;
+    }
+
     if (b.dataset.panel !== undefined) {
       var url = new URL(location.href);
       url.searchParams.set("spindemo", b.dataset.panel || "prize");
@@ -491,6 +556,23 @@
       });
     }
   });
+
+  /* Refraction is Chrome/Edge only — glass.js falls back to blur+saturate in
+     Safari and Firefox. Worth knowing which one you are looking at, because
+     the kiosk tablets decide this for you. */
+  (function () {
+    var note = document.getElementById("glass-note");
+    var ua = navigator.userAgent;
+    var ff = /firefox/i.test(ua);
+    var sa = /^((?!chrome|chromium|crios|edg|android).)*safari/i.test(ua);
+    var on = document.documentElement.hasAttribute("data-glass-on");
+    note.innerHTML = on
+      ? (ff || sa
+          ? "Glass is ON, but this browser gets the <code>blur + saturate</code> " +
+            "fallback — refraction is Chrome/Edge only. Lighting, tint and press still work."
+          : "Glass is ON with full refraction (Chrome/Edge).")
+      : "Glass is off.";
+  })();
 
   syncFromDom();
 })();

@@ -367,7 +367,109 @@ structure in Webflow as proper classes.
 
 ---
 
-## 7. Building the page in Webflow before a tablet exists — `?spindemo`
+## 7. Applying liquid glass to the wheel
+
+Glass and a spinning wheel interact in ways that are not obvious. Two facts from
+`glass.js` decide everything below:
+
+1. **Glass refracts what is painted BEHIND the host element.** `backdrop-filter`
+   goes on the host itself; the `.lg-layer` overlay it injects sits at `z-index:-1`,
+   *behind* the host's own children. So the host's content is never distorted — only
+   what is behind it.
+2. **The displacement map is baked from the layout box plus ONE corner radius**, and
+   cached. It is rebuilt on resize, not per frame.
+
+### Where glass belongs — and where it does not
+
+| Element | Verdict |
+|---|---|
+| `.spin-card` (every panel) | **Yes.** Static rounded rectangles — the easy win. `data-lg-preset="panel"`. |
+| `[data-spin-go]` (the CTA) | **Yes.** `data-lg-preset="cta"` for press + tilt. The script never transforms this button, so there is no tug of war. |
+| `.spin-hub` | **Yes — and this is the good one.** See below. |
+| `[data-spin-wheel]` (the canvas) | **No.** Its child SVG is opaque and covers the whole circle, so it would paint straight over the glass. You would see nothing. |
+| `.spin-stage` | **No.** Same reason, plus it must not carry a `filter` (see the trap below). |
+| `[data-spin-pointer]` | **No, if it is `clip-path`'d.** Glass bakes its rim from the layout *box*, so a triangular pointer would get a rectangular refraction rim. Use a rounded square if you want glass here. |
+| A full glass dome over the wheel | **Tempting, but don't.** It would refract the spinning wheel, which looks spectacular for about a second — then you notice it also distorts every prize label into illegibility, and it re-samples a large moving backdrop every frame on a tablet, which is exactly the wrong place to spend GPU. |
+
+### The glass hub
+
+The hub is the one place on this component where glass genuinely earns its keep: it
+is small (cheap to composite), it sits **on top of** the spinning wheel so it has
+something interesting to refract, and there is no text underneath it to distort.
+
+```
+Wheel Canvas  [data-spin-wheel]   ← the SVG; drop-shadow lives here
+Hub           .spin-hub           ← data-liquid-glass, border-radius: 50%
+                                    data-lg-preset="nav"   (press:0, tilt:0)
+```
+
+Two requirements:
+
+- **The hub needs a see-through background.** With an opaque fill there is nothing
+  to refract. `background: rgba(255,255,255,.06)` or similar.
+- **Use a preset with `press:0` and `tilt:0`** (`nav` does this). The hub is
+  positioned with `transform: translate(-50%,-50%)`, and glass owns `transform`
+  the moment press or tilt is on — they would fight and the hub would jump off
+  centre on tap.
+
+### The trap: a `filter` on an ancestor kills refraction
+
+**This is the one that will bite you.** A CSS `filter` makes an element a *backdrop
+root for its descendants* — so a filtered ancestor leaves a glass child with nothing
+behind it to refract. It is the exact mechanism that switched refraction off on the
+landing-page orb (`data-orb-warp` on `orb-wrapper`; see CLAUDE.md).
+
+A `drop-shadow` on the stage is the natural thing to write, and it silently disables
+the hub's glass:
+
+```css
+/* WRONG — .spin-stage is an ancestor of the glass hub */
+.spin-stage    { filter: drop-shadow(0 26px 60px rgba(0,0,0,.55)); }
+
+/* RIGHT — the wheel canvas is the hub's SIBLING, so it still contributes
+   to the hub's backdrop normally */
+.spin-stage        { /* no filter */ }
+[data-spin-wheel]  { filter: drop-shadow(0 26px 60px rgba(0,0,0,.55)); }
+```
+
+Same applies to `backdrop-filter`, `opacity < 1`, `will-change: filter` and
+`mix-blend-mode` on any ancestor.
+
+### Entrance animations on a glass panel
+
+Glass owns `transform`, so use **`data-anim-fade`** (opacity only) on a glass
+element, never `data-anim` (which moves it). And if a glass panel animates its
+*size*, wrap the tween in `LiquidGlass.freeze()` / `unfreeze()` so the displacement
+map is rebuilt once at the end instead of every frame.
+
+Nothing on this page animates a glass element's size or border-radius, so no
+`freeze()` call is needed as built.
+
+### Refraction is Chrome/Edge only
+
+`glass.js` detects Safari and Firefox and falls back to `blur + saturate`. Lighting,
+tint, frost and press still work everywhere — only the refraction is gone.
+
+**This matters for the kiosk build**: if the in-store tablets are iPads, every
+shopper sees the fallback. Design the wheel so it reads well without refraction and
+treat the refraction as a bonus on Chrome. The playground prints which one you are
+looking at.
+
+### Try it
+
+The playground has a glass toggle:
+
+```
+/demo/spin?spindemo&glass=1
+```
+
+It applies glass to the cards, the CTA and the hub, and reports whether your browser
+is getting real refraction or the fallback. It reloads on toggle, because `glass.js`
+attaches one-way — there is no detach, so "off" has to mean "never attached".
+
+---
+
+## 8. Building the page in Webflow before a tablet exists — `?spindemo`
 
 The real page needs a `COMPLETED` session on a **paired** tablet, and pairing needs
 a code from the admin UI. That is the right gate for production and a miserable one
@@ -397,7 +499,7 @@ drop the parameter before any real testing.
 
 ---
 
-## 8. Testing checklist
+## 9. Testing checklist
 
 Test on the **published or preview URL**, never the Designer.
 
