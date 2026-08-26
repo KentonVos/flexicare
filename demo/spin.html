@@ -38,21 +38,24 @@
 <style>
   /* ---------- the page chrome (playground only — do not port to Webflow) ---------- */
   :root {
-    --bg: #0d1512;
-    --ink: #eaf3ee;
-    --muted: #8fa79b;
-    --line: rgba(198, 232, 74, .18);
-    --accent: #C6E84A;
-    --accent-deep: #2E7D32;
+    /* The ONLY three colours in the system. They never appear as flat fills —
+       they exist as blurred light BEHIND glass. The single exception is a
+       primary button, which is allowed to be solid. */
+    --lime:   #AADB1E;
+    --indigo: #3D45E0;
+    --teal:   #1EBEAA;
+
+    --bg: #05070c;
+    --ink: #f2f5f8;
+    --muted: rgba(242, 245, 248, .58);
+    --line: rgba(255, 255, 255, .14);
+    --glass: rgba(255, 255, 255, .055);
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; }
   body {
     margin: 0;
-    background:
-      radial-gradient(120vmax 90vmax at 18% -10%, rgba(46,125,50,.35), transparent 60%),
-      radial-gradient(90vmax 70vmax at 100% 110%, rgba(198,232,74,.14), transparent 60%),
-      var(--bg);
+    background: var(--bg);
     color: var(--ink);
     font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
@@ -81,10 +84,10 @@
   .panel h1 { font-size: 15px; margin: 0 0 4px; letter-spacing: .01em; }
   .panel .sub { color: var(--muted); font-size: 12.5px; margin: 0 0 18px; }
   .panel fieldset { border: 0; border-top: 1px solid var(--line); margin: 0 0 6px; padding: 14px 0 4px; }
-  .panel legend { font-size: 11px; text-transform: uppercase; letter-spacing: .09em; color: var(--accent); padding-right: 8px; }
+  .panel legend { font-size: 11px; text-transform: uppercase; letter-spacing: .09em; color: var(--lime); padding-right: 8px; }
   .row { display: grid; grid-template-columns: 1fr 74px; gap: 10px; align-items: center; margin-bottom: 9px; }
   .row label { font-size: 13px; color: var(--muted); }
-  .row input[type=range] { grid-column: 1 / -1; width: 100%; accent-color: var(--accent); margin: -4px 0 2px; }
+  .row input[type=range] { grid-column: 1 / -1; width: 100%; accent-color: var(--lime); margin: -4px 0 2px; }
   .row output, .row .val { font-variant-numeric: tabular-nums; font-size: 12.5px; text-align: right; color: var(--ink); }
   .row select, .row input[type=color], .row input[type=text] {
     grid-column: 1 / -1; width: 100%; background: rgba(255,255,255,.06);
@@ -97,15 +100,15 @@
     background: rgba(255,255,255,.07); color: var(--ink);
     border: 1px solid var(--line); border-radius: 999px; padding: 7px 13px;
   }
-  button:hover { background: rgba(198,232,74,.16); }
-  button.primary { background: var(--accent); color: #10240f; border-color: transparent; font-weight: 600; }
+  button:hover { background: rgba(170,219,30,.16); }
+  button.primary { background: var(--lime); color: #0b1402; border-color: transparent; font-weight: 600; }
   pre.export {
     white-space: pre-wrap; word-break: break-all; font-size: 11.5px; line-height: 1.55;
     background: rgba(0,0,0,.4); border: 1px solid var(--line); border-radius: 10px;
     padding: 11px; margin: 8px 0 0; color: var(--muted); max-height: 220px; overflow: auto;
   }
   .note { font-size: 11.5px; color: var(--muted); margin: 10px 0 0; }
-  .note code { color: var(--accent); }
+  .note code { color: var(--lime); }
 
   /* ============================================================
      FROM HERE DOWN IS THE ACTUAL COMPONENT STYLING.
@@ -119,23 +122,53 @@
     aspect-ratio: 1 / 1;
     margin: 0 auto;
     /* NO `filter` HERE. A filter makes an element a backdrop root for its
-       DESCENDANTS, which would leave the glass hub below with nothing behind
-       it to refract — the exact thing that switched refraction off on the
-       landing orb (see CLAUDE.md). The drop-shadow lives on the wheel canvas
-       instead, which is the hub's SIBLING, so it still contributes to the
-       hub's backdrop normally. */
+       DESCENDANTS, which would leave the glass below with nothing behind it
+       to refract — the exact thing that switched refraction off on the
+       landing orb (see CLAUDE.md). Shadows go on the layers themselves. */
   }
-  /* The script clears and fills this. Leave it empty in the Designer. */
+
+  /* ===== THE COLOUR LAYER =====
+     This is where ALL the colour in the component lives: three soft blurred
+     lights, sitting BEHIND the glass wheel. Nothing else is coloured. Move
+     these blobs around and the whole wheel changes character without a single
+     segment fill changing.
+
+     It is a SIBLING of the wheel, never an ancestor — its own blur would
+     otherwise make it a backdrop root and kill the refraction above it. */
+  .spin-glow {
+    position: absolute;
+    inset: -14%;
+    border-radius: 50%;
+    z-index: 0;
+    filter: blur(46px);
+    opacity: .9;
+    pointer-events: none;
+  }
+  .spin-glow span {
+    position: absolute;
+    display: block;
+    border-radius: 50%;
+  }
+  .spin-glow .g-indigo { width: 62%; height: 62%; left: -4%;  top: 2%;    background: var(--indigo); opacity: .85; }
+  .spin-glow .g-lime   { width: 58%; height: 58%; right: 2%;  bottom: 6%; background: var(--lime);   opacity: .70; }
+  .spin-glow .g-teal   { width: 46%; height: 46%; right: 8%;  top: 10%;   background: var(--teal);   opacity: .55; }
+
+  /* ===== THE GLASS WHEEL =====
+     The script clears and fills this. Leave it empty in the Designer.
+     Because the segments are now translucent, this element can itself be a
+     glass host: it refracts the colour layer behind it, while the SVG (its
+     child) paints on top, undistorted. */
   [data-spin-wheel] {
     position: absolute;
     inset: 0;
     border-radius: 50%;
     overflow: hidden;
-    filter: drop-shadow(0 26px 60px rgba(0,0,0,.55));
+    z-index: 1;
+    background: rgba(255,255,255,.02);
     box-shadow:
-      inset 0 0 0 6px rgba(255,255,255,.9),
-      inset 0 0 0 12px rgba(46,125,50,.9),
-      0 0 0 1px rgba(0,0,0,.35);
+      inset 0 0 0 1px rgba(255,255,255,.22),
+      inset 0 12px 40px rgba(255,255,255,.06),
+      0 30px 70px rgba(0,0,0,.6);
   }
   /* The hub covers the point where every segment meets. */
   /* The hub covers the point where every segment meets — and it is the ONE
@@ -147,33 +180,43 @@
      `transform: translate(-50%,-50%)` is fine alongside glass — glass only
      owns transform when press/tilt are ON, which is why the preset below
      sets both to 0. */
+  /* The hub caps the point where every segment meets. Translucent, with a
+     hairline ring floating just outside it. */
   .spin-hub {
     position: absolute; left: 50%; top: 50%;
-    width: 22%; aspect-ratio: 1/1;
+    width: 26%; aspect-ratio: 1/1;
     transform: translate(-50%, -50%);
     border-radius: 50%;
-    box-shadow: 0 6px 18px rgba(0,0,0,.45);
     z-index: 3;
     display: grid; place-items: center;
-    font-weight: 800; font-size: clamp(9px, 1.7vmin, 14px);
-    letter-spacing: .12em; color: #fff;
-    /* Opaque by default. The glass build overrides this — see [data-glass-on]. */
-    background: radial-gradient(circle at 35% 30%, #fff, #dfe9d6 60%, #b9c9ab);
-    color: var(--accent-deep);
+    font-weight: 700; font-size: clamp(10px, 2vmin, 16px);
+    letter-spacing: .14em; text-transform: uppercase; color: var(--ink);
+    background: rgba(255,255,255,.05);
+    box-shadow:
+      inset 0 0 0 1px rgba(255,255,255,.28),
+      inset 0 6px 18px rgba(255,255,255,.07),
+      0 10px 30px rgba(0,0,0,.5);
   }
-  /* Glass mode: let the wheel show through so there is something to refract. */
-  [data-glass-on] .spin-hub { background: rgba(255,255,255,.06); color: #fff; }
-  [data-glass-on] .spin-card { background: rgba(255,255,255,.03); backdrop-filter: none; }
+  /* The floating outer ring from the reference. */
+  .spin-hub::after {
+    content: "";
+    position: absolute;
+    inset: -13%;
+    border-radius: 50%;
+    border: 1px solid rgba(255,255,255,.2);
+    pointer-events: none;
+  }
+  [data-glass-on] .spin-card { backdrop-filter: none; }
   /* Decorative only — the script never moves it. If you move it off 12
      o'clock, set data-spin-pointer-angle to match. */
   [data-spin-pointer] {
-    position: absolute; left: 50%; top: -1.5%;
-    width: 9%; height: 13%;
+    position: absolute; left: 50%; top: -3%;
+    width: 7%; height: 12%;
     transform: translateX(-50%);
     z-index: 4;
-    background: linear-gradient(180deg, #fff, #e6efdc);
+    background: linear-gradient(180deg, #ffffff, rgba(255,255,255,.72));
     clip-path: polygon(50% 100%, 0 0, 100% 0);
-    filter: drop-shadow(0 4px 8px rgba(0,0,0,.5));
+    filter: drop-shadow(0 6px 14px rgba(0,0,0,.65));
   }
   /* Segment label typography. The script sets fill/size; everything else
      is yours. */
@@ -181,40 +224,68 @@
 
   /* --- panels --- */
   .spin-card {
+    position: relative;
     width: min(92vw, 520px);
     text-align: center;
-    background: rgba(255,255,255,.05);
+    background: var(--glass);
     border: 1px solid var(--line);
-    border-radius: 22px;
-    padding: 34px 28px;
-    backdrop-filter: blur(10px);
+    border-radius: 26px;
+    padding: 38px 30px;
+    backdrop-filter: blur(18px) saturate(1.3);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.16), 0 30px 70px rgba(0,0,0,.55);
+  }
+  /* Cards get the same colour treatment: light behind glass, never a fill. */
+  .spin-card::before {
+    content: "";
+    position: absolute; inset: -40% -20%;
+    z-index: -1;
+    border-radius: 50%;
+    background:
+      radial-gradient(closest-side, var(--indigo), transparent) 8% 20% / 55% 70% no-repeat,
+      radial-gradient(closest-side, var(--lime),   transparent) 92% 84% / 50% 65% no-repeat,
+      radial-gradient(closest-side, var(--teal),   transparent) 78% 8%  / 40% 50% no-repeat;
+    filter: blur(52px);
+    opacity: .55;
+    pointer-events: none;
   }
   .spin-card h2 { margin: 0 0 6px; font-size: clamp(22px, 3.4vmin, 30px); }
   .spin-card p { margin: 6px 0; color: var(--muted); }
-  .spin-eyebrow { color: var(--accent); font-size: 13px; letter-spacing: .1em; text-transform: uppercase; margin-bottom: 10px; }
+  .spin-eyebrow { color: var(--lime); font-size: 13px; letter-spacing: .12em; text-transform: uppercase; margin-bottom: 10px; }
 
   /* THE CLAIM CODE. Staff read this off the tablet from a step away, or the
      shopper photographs it. Make it big and high-contrast. */
+  /* The claim code is the one thing on the page that must be readable from a
+     step away, so it gets glass with a bright hairline rather than a tint —
+     contrast from luminance, not from a fill. */
   [data-spin-claim] {
     font: 800 clamp(26px, 6.2vmin, 52px)/1.1 ui-monospace, "SF Mono", Menlo, monospace;
-    letter-spacing: .06em;
-    color: #10240f;
-    background: var(--accent);
-    border-radius: 14px;
-    padding: 16px 18px;
-    margin: 16px 0 6px;
+    letter-spacing: .08em;
+    color: #fff;
+    background: rgba(255,255,255,.07);
+    border: 1px solid rgba(255,255,255,.32);
+    border-radius: 16px;
+    padding: 18px 18px;
+    margin: 18px 0 6px;
     word-break: break-word;
+    text-shadow: 0 2px 20px rgba(0,0,0,.5);
   }
 
+  /* THE ONE PLACE A FLAT COLOUR IS ALLOWED: the primary button. */
   .cta {
-    display: inline-block; margin-top: 20px;
-    background: var(--accent); color: #10240f;
-    font-weight: 700; font-size: 17px;
-    border-radius: 999px; padding: 15px 42px;
+    display: inline-block; margin-top: 22px;
+    background: var(--lime); color: #0b1402;
+    font-weight: 700; font-size: 17px; letter-spacing: .01em;
+    border-radius: 999px; padding: 16px 44px;
     text-decoration: none; border: 0; cursor: pointer;
+    box-shadow: 0 12px 34px rgba(170,219,30,.28);
   }
-  .cta[aria-disabled="true"] { opacity: .4; pointer-events: none; }
-  .cta.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); font-size: 14px; padding: 11px 24px; }
+  .cta[aria-disabled="true"] { opacity: .35; pointer-events: none; box-shadow: none; }
+  /* Secondary actions are glass, never colour. */
+  .cta.ghost {
+    background: var(--glass); color: var(--ink);
+    border: 1px solid var(--line); font-size: 14px; padding: 12px 28px;
+    box-shadow: none; backdrop-filter: blur(12px);
+  }
 
   .wheel-wrap { display: grid; justify-items: center; gap: 26px; }
 
@@ -235,9 +306,16 @@
        data-spin-min="2.5"
        data-spin-idle-turn="1.6"
        data-spin-pointer-angle="0"
+       data-spin-style="glass"
+       data-spin-tint="0"
+       data-spin-fill="rgba(255,255,255,0.06)"
+       data-spin-fill-alt="rgba(255,255,255,0.025)"
+       data-spin-rim="12"
+       data-spin-studs="on"
+       data-spin-stud-size="2.6"
+       data-spin-stroke-width="0.5"
        data-spin-label-mode="radial"
-       data-spin-label-size="7"
-       data-spin-label-radius="92"
+       data-spin-label-size="6.5"
        data-spin-label-color="#ffffff"
        data-spin-expires-format="Claim by {date}">
 
@@ -249,8 +327,15 @@
     <!-- THE WHEEL -->
     <div data-spin-when="ready spinning" class="wheel-wrap">
       <div class="spin-stage">
+        <!-- ALL the colour in the component. Sibling of the wheel, never a
+             parent — its blur would otherwise kill the refraction above it. -->
+        <div class="spin-glow" aria-hidden="true">
+          <span class="g-indigo"></span>
+          <span class="g-lime"></span>
+          <span class="g-teal"></span>
+        </div>
         <div data-spin-wheel></div>
-        <div class="spin-hub">FLEX</div>
+        <div class="spin-hub">Flex</div>
         <div data-spin-pointer></div>
       </div>
       <button data-spin-go class="cta">Spin to win</button>
@@ -339,7 +424,34 @@
   </fieldset>
 
   <fieldset>
-    <legend>Wheel rendering</legend>
+    <legend>Glass wheel</legend>
+    <p class="note" style="margin-top:0">
+      All colour comes from the blurred layer <em>behind</em> the wheel.
+      The segments are glass.
+    </p>
+    <div class="row"><label for="style">Style</label><span class="val"></span>
+      <select id="style" data-attr="data-spin-style" data-render>
+        <option value="glass">glass (translucent panes)</option>
+        <option value="solid">solid (the admin's colours)</option>
+      </select></div>
+    <div class="row"><label for="tint">API colour tint</label><output id="tint-v"></output>
+      <input type="range" id="tint" min="0" max="1" step="0.02" data-attr="data-spin-tint" data-render /></div>
+    <div class="row"><label for="fill">Pane fill</label><span class="val"></span>
+      <input type="text" id="fill" data-attr="data-spin-fill" data-render /></div>
+    <div class="row"><label for="fillalt">Alternate pane</label><span class="val"></span>
+      <input type="text" id="fillalt" data-attr="data-spin-fill-alt" data-render /></div>
+    <div class="row"><label for="rim">Rim band width</label><output id="rim-v"></output>
+      <input type="range" id="rim" min="0" max="30" step="1" data-attr="data-spin-rim" data-render /></div>
+    <div class="row"><label for="studs">Rim studs</label><span class="val"></span>
+      <select id="studs" data-attr="data-spin-studs" data-render>
+        <option value="on">on</option><option value="off">off</option>
+      </select></div>
+    <div class="row"><label for="studsize">Stud size</label><output id="studsize-v"></output>
+      <input type="range" id="studsize" min="0.5" max="8" step="0.1" data-attr="data-spin-stud-size" data-render /></div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Labels &amp; dividers</legend>
     <p class="note" style="margin-top:0">Redraws the wheel each change.</p>
     <div class="row"><label for="labelmode">Label mode</label><span class="val"></span>
       <select id="labelmode" data-attr="data-spin-label-mode" data-render>
@@ -349,7 +461,10 @@
     <div class="row"><label for="labelsize">Label size</label><output id="labelsize-v"></output>
       <input type="range" id="labelsize" min="3" max="16" step="0.5" data-attr="data-spin-label-size" data-render /></div>
     <div class="row"><label for="labelradius">Label radius</label><output id="labelradius-v"></output>
-      <input type="range" id="labelradius" min="20" max="96" step="1" data-attr="data-spin-label-radius" data-render /></div>
+      <input type="range" id="labelradius" min="20" max="96" step="1" data-attr="data-spin-label-radius" data-render />
+      <span class="val" style="grid-column:1/-1;font-size:11px;color:var(--muted);text-align:left">
+        clamped inside the rim band, so labels never run under the studs
+      </span></div>
     <div class="row"><label for="labelcolor">Label colour</label><span class="val"></span>
       <input type="color" id="labelcolor" data-attr="data-spin-label-color" data-render /></div>
     <div class="row"><label for="strokewidth">Divider width</label><output id="strokewidth-v"></output>
@@ -419,7 +534,9 @@
     var pairs = [
       [".spin-card", "panel"],
       [".cta", "cta"],
-      [".spin-hub", "nav"], // nav = press:0, tilt:0 — the hub must not move
+      [".spin-hub", "nav"],       // nav = press:0, tilt:0 — the hub must not move
+      ["[data-spin-wheel]", "nav"], // the segments are translucent now, so the
+                                    // wheel itself can refract the colour layer
     ];
     pairs.forEach(function (pair) {
       document.querySelectorAll(pair[0]).forEach(function (el) {

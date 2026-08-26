@@ -69,17 +69,44 @@
                                      the API answers instantly
                                   data-spin-pointer-angle="0"  where the pointer
                                      sits, in degrees clockwise from 12 o'clock
+                                  data-spin-style="glass|solid"  HOW THE WHEEL
+                                     IS PAINTED. Default "glass": the segments
+                                     are translucent, the only colour comes
+                                     from whatever you put BEHIND the wheel,
+                                     and the admin's per-segment `color` is
+                                     used only as a faint tint (see
+                                     data-spin-tint). "solid" fills each
+                                     segment with its `color` outright.
+                                  data-spin-fill / -fill-alt   the two
+                                     alternating segment fills in glass style
+                                     (default rgba white .06 / .025). Any CSS
+                                     colour.
+                                  data-spin-tint="0"      0–1. How much of the
+                                     admin's per-segment `color` to blend in.
+                                     0 = pure glass (the default).
+                                  data-spin-rim="12"      width of the outer
+                                     ring band, in viewBox units (0 = none).
+                                     The segments stop below it.
+                                  data-spin-rim-stroke / -rim-width  the two
+                                     hairline circles bounding that band.
+                                  data-spin-studs="on|off"  the pearl studs on
+                                     the rim — one per segment boundary.
+                                  data-spin-stud-size="2.6"
+                                  data-spin-stud-fill="#ffffff"
                                   data-spin-labels="on|off"    draw segment text
                                   data-spin-label-mode="radial|tangential"
                                   data-spin-label-size="7"     viewBox units
                                   data-spin-label-color="#ffffff"
-                                  data-spin-label-radius="92"  outer edge the
-                                     radial labels start from (0–96)
+                                  data-spin-label-radius        outer edge the
+                                     radial labels reach to. Defaults to just
+                                     inside the rim band; clamped so a label
+                                     can never overlap the studs.
                                   data-spin-icons="on"    draw segment image_url
                                   data-spin-icon-size="22"
                                   data-spin-icon-radius="42"
                                   data-spin-stroke="#ffffff"   segment divider
-                                  data-spin-stroke-width="0"   0 = no dividers
+                                  data-spin-stroke-width       hairline dividers.
+                                     Defaults to 0.5 in glass style, 0 in solid.
                                   data-spin-expires-format="Claim by {date}"
                                   data-spin-debug         console logging
 
@@ -497,16 +524,48 @@
     if (!segments || !segments.length) return false;
 
     var w = state.wrap;
+
+    /* GLASS is the default style, because the rest of the funnel is glass and
+       a wheel of flat brand colours reads as a different product. In glass
+       style the segments are barely-there translucent panes with hairline
+       dividers, and ALL the colour is expected to come from a blurred layer
+       BEHIND the wheel (see docs/kiosk-and-spin.md § the glass wheel).
+
+       The admin's per-segment `color` still arrives from the API; it is simply
+       not painted at full strength. data-spin-tint dials it back in if you
+       ever want the segments to carry a hint of it. */
+    var glassStyle = attr(w, "data-spin-style", "glass") !== "solid";
+
+    var fillA = attr(w, "data-spin-fill", "rgba(255,255,255,0.06)");
+    var fillB = attr(w, "data-spin-fill-alt", "rgba(255,255,255,0.025)");
+    var tint = num(w, "data-spin-tint", 0, 0, 1);
+
+    var rimBand = num(w, "data-spin-rim", glassStyle ? 12 : 0, 0, R - 10);
+    var rimStroke = attr(w, "data-spin-rim-stroke", "rgba(255,255,255,0.28)");
+    var rimWidth = num(w, "data-spin-rim-width", glassStyle ? 0.6 : 0, 0, 6);
+    var showStuds = attr(w, "data-spin-studs", glassStyle ? "on" : "off") === "on";
+    var studSize = num(w, "data-spin-stud-size", 2.6, 0.5, 10);
+    var studFill = attr(w, "data-spin-stud-fill", "#ffffff");
+
+    // Segments stop below the rim band; the studs live in the middle of it.
+    var segR = Math.max(10, R - rimBand);
+    var studR = R - rimBand / 2;
+
     var showLabels = attr(w, "data-spin-labels", "on") !== "off";
     var labelMode = attr(w, "data-spin-label-mode", "radial");
     var labelSize = num(w, "data-spin-label-size", 7, 2, 30);
     var labelColor = attr(w, "data-spin-label-color", "#ffffff");
-    var labelRadius = num(w, "data-spin-label-radius", 92, 10, R);
+    // Default to just inside the segment edge, and clamp — a label must never
+    // run out under the studs, whatever the author types.
+    var labelRadius = Math.min(
+      num(w, "data-spin-label-radius", segR - 3, 10, R),
+      segR - 1
+    );
     var showIcons = attr(w, "data-spin-icons", "off") === "on";
     var iconSize = num(w, "data-spin-icon-size", 22, 4, 80);
-    var iconRadius = num(w, "data-spin-icon-radius", 42, 0, R);
-    var strokeColor = attr(w, "data-spin-stroke", null);
-    var strokeWidth = num(w, "data-spin-stroke-width", 0, 0, 10);
+    var iconRadius = num(w, "data-spin-icon-radius", 42, 0, segR);
+    var strokeColor = attr(w, "data-spin-stroke", "rgba(255,255,255,0.4)");
+    var strokeWidth = num(w, "data-spin-stroke-width", glassStyle ? 0.5 : 0, 0, 10);
 
     var svg = el("svg", {
       viewBox: "0 0 " + VIEW + " " + VIEW,
@@ -536,9 +595,12 @@
          path collapse. The segment count is admin data, so handle it. */
       var shape =
         n === 1
-          ? el("circle", { cx: CX, cy: CY, r: R })
-          : el("path", { d: sectorPath(R, a0, a1) });
-      shape.setAttribute("fill", validColor(seg.color) || "#2E7D32");
+          ? el("circle", { cx: CX, cy: CY, r: segR })
+          : el("path", { d: sectorPath(segR, a0, a1) });
+      shape.setAttribute(
+        "fill",
+        segmentFill(seg, i, n, glassStyle, fillA, fillB, tint)
+      );
       shape.setAttribute("data-spin-segment", String(seg.index));
       if (seg.is_consolation) shape.setAttribute("data-spin-consolation", "");
       if (strokeColor && strokeWidth > 0) {
@@ -549,7 +611,7 @@
       rotor.appendChild(shape);
 
       if (showIcons && seg.image_url) {
-        var p = polar(iconRadius, mid);
+        var p = polar(Math.min(iconRadius, segR - iconSize / 2), mid);
         var img = el("image", {
           x: round(p.x - iconSize / 2),
           y: round(p.y - iconSize / 2),
@@ -572,7 +634,35 @@
       }
     }
 
-    box.innerHTML = "";
+    /* The rim band and its studs. Drawn last so they sit over the segment
+       edges, and INSIDE the rotor so they turn with the wheel — the studs are
+       the clearest read on how fast it is spinning. */
+    if (rimBand > 0 && rimWidth > 0) {
+      [segR, R].forEach(function (r) {
+        var ring = el("circle", {
+          cx: CX, cy: CY, r: r,
+          fill: "none",
+          stroke: rimStroke,
+          "stroke-width": rimWidth,
+          "data-spin-ring": "",
+        });
+        rotor.appendChild(ring);
+      });
+    }
+    if (showStuds && rimBand > 0) {
+      for (var k = 0; k < n; k++) {
+        var sp = polar(studR, k * step);
+        rotor.appendChild(
+          el("circle", {
+            cx: round(sp.x), cy: round(sp.y), r: studSize,
+            fill: studFill,
+            "data-spin-stud": String(k),
+          })
+        );
+      }
+    }
+
+    clearWheelBox(box);
     box.appendChild(svg);
     state.rotor = rotor;
 
@@ -583,12 +673,68 @@
     return true;
   }
 
+  /* Clear the wheel box of everything WE put there — and nothing else.
+
+     `innerHTML = ""` would be the obvious way and it is wrong: when the canvas
+     is a glass host, glass.js has parked its `.lg-layer` overlay inside it, and
+     glass.js's attach() is ONE-WAY (it guards on an internal states map). Blow
+     that node away and it is gone for good — a later LiquidGlass.scan() will
+     look at the element, see it is already "attached", and return without
+     rebuilding anything. The glass would silently lose its lighting layer on
+     the first re-render.
+
+     So: keep anything carrying a data-lg-* marker, drop the rest (which is our
+     own previous <svg>). This is the same "mark what you inject" contract
+     transition.js relies on — see CLAUDE.md. */
+  function clearWheelBox(box) {
+    var kids = Array.prototype.slice.call(box.childNodes);
+    for (var i = 0; i < kids.length; i++) {
+      var kid = kids[i];
+      if (kid.nodeType === 1 && hasGlassMarker(kid)) continue;
+      box.removeChild(kid);
+    }
+  }
+  function hasGlassMarker(node) {
+    var a = node.attributes;
+    if (!a) return false;
+    for (var i = 0; i < a.length; i++)
+      if (a[i].name.indexOf("data-lg-") === 0) return true;
+    return false;
+  }
+
   // Colours come from the admin. Anything that isn't a plain hex is refused
   // rather than written into the DOM.
   function validColor(c) {
     return /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(c || "")
       ? c
       : null;
+  }
+
+  // #abc / #aabbcc -> "r,g,b". Only ever called on a validColor() result.
+  function hexRGB(hex) {
+    var h = hex.replace("#", "").slice(0, 6);
+    if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+    return [
+      parseInt(h.slice(0, 2), 16),
+      parseInt(h.slice(2, 4), 16),
+      parseInt(h.slice(4, 6), 16),
+    ].join(",");
+  }
+
+  /* Solid style: the admin's colour, as authored.
+     Glass style: two alternating translucent panes so neighbouring segments
+     are still tellable apart, optionally tinted towards the admin's colour by
+     data-spin-tint. An odd segment count would put two "A" panes side by side
+     at the wrap-around, so the last one is forced to B. */
+  function segmentFill(seg, i, n, glassStyle, fillA, fillB, tint) {
+    var own = validColor(seg.color);
+    if (!glassStyle) return own || "#2E7D32";
+    if (tint > 0 && own) return "rgba(" + hexRGB(own) + "," + tint + ")";
+    /* An ODD segment count makes the last pane and the first pane both "A",
+       so they meet at the wrap-around as one undivided shape. The seven-slice
+       wheel in the brief is exactly that case. Force the last one to B. */
+    if (n % 2 === 1 && i === n - 1) return fillB;
+    return i % 2 === 0 ? fillA : fillB;
   }
 
   /* Radial labels read from the hub outward and get the whole radius to play

@@ -367,105 +367,158 @@ structure in Webflow as proper classes.
 
 ---
 
-## 7. Applying liquid glass to the wheel
+## 7. The glass wheel — colour behind, never in front
 
-Glass and a spinning wheel interact in ways that are not obvious. Two facts from
-`glass.js` decide everything below:
+**The design rule for this whole funnel: nothing is a flat colour except a primary
+button. Colour is light sitting *behind* glass.** The wheel follows it.
 
-1. **Glass refracts what is painted BEHIND the host element.** `backdrop-filter`
-   goes on the host itself; the `.lg-layer` overlay it injects sits at `z-index:-1`,
-   *behind* the host's own children. So the host's content is never distorted — only
-   what is behind it.
-2. **The displacement map is baked from the layout box plus ONE corner radius**, and
-   cached. It is rebuilt on resize, not per frame.
+The palette is three colours and no others:
 
-### Where glass belongs — and where it does not
+| | |
+|---|---|
+| `#AADB1E` | lime |
+| `#3D45E0` | indigo |
+| `#1EBEAA` | teal |
+
+### How that works on a wheel whose colours come from an API
+
+`GET /prizes/wheel` hands over a `color` per segment, chosen by an admin. Painting
+those as flat fills gives you a stock prize wheel that looks like a different
+product from the rest of the journey. So the default style — `data-spin-style="glass"`
+— **does not paint them**. Segments become two alternating translucent panes
+(`rgba(255,255,255,.06)` / `.025`) separated by hairlines, and every bit of colour
+you see is a blurred layer *behind* the wheel showing through.
+
+The admin's colours are not lost, just not used as fills. `data-spin-tint="0.25"`
+blends them back in at whatever strength you want, and `data-spin-style="solid"`
+restores the original behaviour outright.
+
+> **Tell your backend dev.** The per-segment `color` is currently decorative on the
+> frontend. If the admin UI implies those colours drive the look, that expectation
+> needs correcting — or set a small `data-spin-tint` so they visibly do something.
+
+### The layer stack
+
+```
+.spin-stage                    position: relative; aspect-ratio: 1/1;  NO filter
+├── .spin-glow                 the three blurred lights — ALL the colour
+│   ├── span.g-indigo          #3D45E0
+│   ├── span.g-lime            #AADB1E
+│   └── span.g-teal            #1EBEAA
+├── [data-spin-wheel]          glass host; the script draws the SVG inside
+├── .spin-hub                  glass cap + floating hairline ring
+└── [data-spin-pointer]        the marker
+```
+
+`.spin-glow` is a **sibling** of the wheel, never a parent. Its own `filter: blur()`
+would otherwise make it a backdrop root and kill the refraction above it (§ the trap,
+below). Move those three blobs around and the whole wheel changes character without
+a single segment fill changing — that is the point of the arrangement.
+
+Because the segments are translucent now, `[data-spin-wheel]` **can** be a glass host
+itself: it refracts the colour layer behind it, while the SVG (its child) paints on
+top undistorted. That was not true of the old solid wheel, which covered its own
+glass completely.
+
+### The rim and the studs
+
+The reference design has an outer ring band with a pearl stud at every segment
+boundary. Those are count-dependent — seven segments means seven studs — so the
+script draws them, inside the rotor, so they turn with the wheel. They are the
+clearest read on how fast it is spinning.
+
+| Attribute | Default (glass) | |
+|---|---|---|
+| `data-spin-rim` | `12` | width of the band in viewBox units; the segments stop below it |
+| `data-spin-rim-stroke` | `rgba(255,255,255,.28)` | the two hairline circles |
+| `data-spin-rim-width` | `0.6` | their thickness |
+| `data-spin-studs` | `on` | one per segment boundary |
+| `data-spin-stud-size` | `2.6` | |
+| `data-spin-stroke-width` | `0.5` | the segment dividers |
+
+Label radius defaults to just inside the band and is **clamped** there, so a label
+can never run out under the studs whatever you type.
+
+### Everything else that is glass
+
+| Element | |
+|---|---|
+| `.spin-card` (every panel) | `backdrop-filter: blur(18px)`, hairline border, and a blurred three-colour `::before` behind it — same idea as the wheel. |
+| `[data-spin-claim]` | Glass with a **bright** hairline. It has to read from a step away, and that contrast comes from luminance, not a fill. |
+| `.cta` (primary) | **The one flat colour on the page.** Solid lime. |
+| `.cta.ghost` (secondary) | Glass. Never colour. |
+| `.spin-hub` | Glass, `data-lg-preset="nav"`. |
+
+### Applying `glass.js` itself
+
+Two facts from `glass.js` decide where its `data-liquid-glass` hook belongs:
+
+1. **It refracts what is painted BEHIND the host.** `backdrop-filter` goes on the
+   host; the injected `.lg-layer` sits at `z-index:-1`, behind the host's own
+   children. A host's content is never distorted — only what is behind it.
+2. **The displacement map is baked from the layout box plus ONE corner radius**, then
+   cached. Rebuilt on resize, not per frame.
+
+Which gives:
 
 | Element | Verdict |
 |---|---|
-| `.spin-card` (every panel) | **Yes.** Static rounded rectangles — the easy win. `data-lg-preset="panel"`. |
-| `[data-spin-go]` (the CTA) | **Yes.** `data-lg-preset="cta"` for press + tilt. The script never transforms this button, so there is no tug of war. |
-| `.spin-hub` | **Yes — and this is the good one.** See below. |
-| `[data-spin-wheel]` (the canvas) | **No.** Its child SVG is opaque and covers the whole circle, so it would paint straight over the glass. You would see nothing. |
-| `.spin-stage` | **No.** Same reason, plus it must not carry a `filter` (see the trap below). |
-| `[data-spin-pointer]` | **No, if it is `clip-path`'d.** Glass bakes its rim from the layout *box*, so a triangular pointer would get a rectangular refraction rim. Use a rounded square if you want glass here. |
-| A full glass dome over the wheel | **Tempting, but don't.** It would refract the spinning wheel, which looks spectacular for about a second — then you notice it also distorts every prize label into illegibility, and it re-samples a large moving backdrop every frame on a tablet, which is exactly the wrong place to spend GPU. |
+| `.spin-card`, `.cta`, `.spin-hub`, `[data-spin-wheel]` | **Yes.** |
+| `.spin-stage` | **No** — and it must never carry a `filter`. |
+| `[data-spin-pointer]` | **No** if it is `clip-path`'d: glass bakes its rim from the layout *box*, so a triangular pointer gets a rectangular refraction rim. |
+| A separate dome over the wheel | **No.** It would distort every prize label into illegibility, and re-sample a large moving backdrop every frame — on the one animation that most needs to be smooth. |
 
-### The glass hub
-
-The hub is the one place on this component where glass genuinely earns its keep: it
-is small (cheap to composite), it sits **on top of** the spinning wheel so it has
-something interesting to refract, and there is no text underneath it to distort.
-
-```
-Wheel Canvas  [data-spin-wheel]   ← the SVG; drop-shadow lives here
-Hub           .spin-hub           ← data-liquid-glass, border-radius: 50%
-                                    data-lg-preset="nav"   (press:0, tilt:0)
-```
-
-Two requirements:
-
-- **The hub needs a see-through background.** With an opaque fill there is nothing
-  to refract. `background: rgba(255,255,255,.06)` or similar.
-- **Use a preset with `press:0` and `tilt:0`** (`nav` does this). The hub is
-  positioned with `transform: translate(-50%,-50%)`, and glass owns `transform`
-  the moment press or tilt is on — they would fight and the hub would jump off
-  centre on tap.
+The hub and the wheel canvas both use `data-lg-preset="nav"` (`press:0, tilt:0`).
+Glass owns `transform` the moment press or tilt is on, and the hub is positioned
+with `translate(-50%,-50%)` — they would fight and it would jump off centre on tap.
 
 ### The trap: a `filter` on an ancestor kills refraction
 
 **This is the one that will bite you.** A CSS `filter` makes an element a *backdrop
-root for its descendants* — so a filtered ancestor leaves a glass child with nothing
-behind it to refract. It is the exact mechanism that switched refraction off on the
-landing-page orb (`data-orb-warp` on `orb-wrapper`; see CLAUDE.md).
+root for its descendants*, so a filtered ancestor leaves a glass child with nothing
+behind it to refract. Same mechanism that switched refraction off on the landing orb
+(`data-orb-warp` on `orb-wrapper`; see CLAUDE.md).
 
 A `drop-shadow` on the stage is the natural thing to write, and it silently disables
-the hub's glass:
+everything below it:
 
 ```css
-/* WRONG — .spin-stage is an ancestor of the glass hub */
-.spin-stage    { filter: drop-shadow(0 26px 60px rgba(0,0,0,.55)); }
+/* WRONG — .spin-stage is an ancestor of the glass wheel and hub */
+.spin-stage { filter: drop-shadow(0 26px 60px rgba(0,0,0,.55)); }
 
-/* RIGHT — the wheel canvas is the hub's SIBLING, so it still contributes
-   to the hub's backdrop normally */
-.spin-stage        { /* no filter */ }
-[data-spin-wheel]  { filter: drop-shadow(0 26px 60px rgba(0,0,0,.55)); }
+/* RIGHT — box-shadow gives the same depth without creating a backdrop root */
+.spin-stage       { /* no filter */ }
+[data-spin-wheel] { box-shadow: 0 30px 70px rgba(0,0,0,.6); }
 ```
 
 Same applies to `backdrop-filter`, `opacity < 1`, `will-change: filter` and
 `mix-blend-mode` on any ancestor.
 
-### Entrance animations on a glass panel
+### Entrance animations
 
 Glass owns `transform`, so use **`data-anim-fade`** (opacity only) on a glass
-element, never `data-anim` (which moves it). And if a glass panel animates its
-*size*, wrap the tween in `LiquidGlass.freeze()` / `unfreeze()` so the displacement
-map is rebuilt once at the end instead of every frame.
-
-Nothing on this page animates a glass element's size or border-radius, so no
-`freeze()` call is needed as built.
+element, never `data-anim`. If a glass panel animates its *size*, wrap the tween in
+`LiquidGlass.freeze()` / `unfreeze()` so the map rebuilds once at the end rather than
+every frame. Nothing on this page does, so no `freeze()` call is needed as built.
 
 ### Refraction is Chrome/Edge only
 
 `glass.js` detects Safari and Firefox and falls back to `blur + saturate`. Lighting,
-tint, frost and press still work everywhere — only the refraction is gone.
+tint, frost and press still work — only refraction is gone.
 
-**This matters for the kiosk build**: if the in-store tablets are iPads, every
-shopper sees the fallback. Design the wheel so it reads well without refraction and
-treat the refraction as a bonus on Chrome. The playground prints which one you are
-looking at.
+**This matters for the kiosk build**: if the in-store tablets are iPads, every shopper
+sees the fallback. The design above survives it (the colour layer, the hairlines and
+the studs are all plain CSS/SVG), but check it on the real device. The playground
+prints which one you are looking at.
 
 ### Try it
-
-The playground has a glass toggle:
 
 ```
 /demo/spin?spindemo&glass=1
 ```
 
-It applies glass to the cards, the CTA and the hub, and reports whether your browser
-is getting real refraction or the fallback. It reloads on toggle, because `glass.js`
-attaches one-way — there is no detach, so "off" has to mean "never attached".
+The tuner has a **Glass wheel** section: style, tint, pane fills, rim width, studs.
+All of it redraws live.
 
 ---
 

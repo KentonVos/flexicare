@@ -71,6 +71,25 @@ panel). It never calls `POST /spin`, never creates an award and never writes
 `Flexicare.award`. Gated exactly like `?tune`/`?orbtune`. Remove the parameter for
 real testing.
 
+**The wheel is GLASS, not brand colours.** `data-spin-style` now defaults to
+`"glass"`: segments are two alternating translucent panes with hairline dividers,
+an outer rim band, and a pearl stud at every segment boundary (count-dependent, so
+the script draws them; they sit inside the rotor and turn with the wheel). All the
+colour comes from a blurred three-blob layer BEHIND the wheel — `#AADB1E`,
+`#3D45E0`, `#1EBEAA` — and the only flat colour on the page is the primary button.
+
+The API's per-segment `color` is therefore **not painted as a fill** any more.
+`data-spin-tint` (0–1) blends it back in, and `data-spin-style="solid"` restores the
+old behaviour outright. Worth telling the backend dev, since the admin UI implies
+those colours drive the look.
+
+Because the segments are translucent, `[data-spin-wheel]` can now itself be a glass
+host and refract the colour layer — which exposed a **real bug**: `renderWheel()`
+cleared the box with `innerHTML = ""`, destroying glass.js's injected `.lg-layer`.
+`attach()` is one-way (it guards on an internal states map), so a later `scan()`
+would never rebuild it and the glass silently lost its lighting layer on the first
+redraw. The controller now clears only what it owns, keeping any `data-lg-*` node.
+
 **Standalone playground — `demo/spin.html`.** A single self-contained page that
 loads the real `flexicare-spin.js`: full component markup, starter CSS, and a tuner
 that writes the `data-spin-*` attributes live (animation knobs apply to the next
