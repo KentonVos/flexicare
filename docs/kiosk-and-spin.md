@@ -327,7 +327,47 @@ the site is web-only.
 
 ---
 
-## 6. Building the page before a tablet exists — `?spindemo`
+## 6. The standalone playground — `demo/spin.html`
+
+Before you touch Webflow at all, craft the wheel here. It is a single
+self-contained page that loads the **real** `src/flexicare-spin.js`, so whatever
+you tune is exactly what the live page will do.
+
+**Locally:**
+
+```bash
+cd <this repo>
+python3 -m http.server 8080
+open http://localhost:8080/demo/spin.html
+```
+
+**Or on the deployed preview** — no local server needed:
+`https://<branch>-flexicare.kenton-323.workers.dev/demo/spin.html`
+
+It gives you:
+
+- The full component markup, ready to rebuild in the Designer, with starter CSS
+  for the stage, hub, pointer, claim code and every panel.
+- A tuner panel writing the `data-spin-*` attributes live. **Animation** knobs
+  (turns, landing duration, minimum spin, idle speed, pointer angle) apply to the
+  next spin with no reload; **rendering** knobs (label mode/size/radius/colour,
+  dividers, labels on/off) redraw the wheel immediately.
+- Buttons to jump to any panel — consolation, redeemed, expired, voided, no-phone,
+  fallback — so you can style the states you would otherwise never see.
+- A **paste-ready attribute block** for the `[data-spin]` element, and a "copy this
+  setup as a link" button so a look can be shared or bookmarked (the settings ride
+  in the query string and are applied before the controller boots).
+
+The segments come from the live `GET /prizes/wheel`; if it is unreachable you get a
+placeholder set, so the page works with no backend and no network.
+
+The CSS in that file is a **starting point, not a spec**. The script only cares
+about the `data-*` attributes — restyle everything else freely, then rebuild the
+structure in Webflow as proper classes.
+
+---
+
+## 7. Building the page in Webflow before a tablet exists — `?spindemo`
 
 The real page needs a `COMPLETED` session on a **paired** tablet, and pairing needs
 a code from the admin UI. That is the right gate for production and a miserable one
@@ -357,7 +397,7 @@ drop the parameter before any real testing.
 
 ---
 
-## 7. Testing checklist
+## 8. Testing checklist
 
 Test on the **published or preview URL**, never the Designer.
 

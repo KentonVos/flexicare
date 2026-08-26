@@ -1,0 +1,499 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Flexicare — spin wheel playground</title>
+
+<!-- ============================================================
+     STANDALONE PLAYGROUND for the spin-to-win wheel.
+     No Webflow, no Barba, no backend required.
+
+     Run it locally:
+         cd <this repo>
+         python3 -m http.server 8080
+         open http://localhost:8080/demo/spin.html
+
+     It loads the REAL src/flexicare-spin.js, so whatever you tune here is
+     exactly what the live page will do. The panel on the right writes the
+     data-spin-* attributes live and hands you a paste-ready block for the
+     Webflow Designer.
+
+     Everything below <div data-spin> is the markup you will rebuild in
+     Webflow. The CSS is a STARTING POINT, not a spec — restyle it freely,
+     the script only cares about the data-* attributes.
+     ============================================================ -->
+
+<script>
+  /* The controller's demo gate is the query parameter, so make sure it is
+     there. Done before anything else loads, so there is no flash. */
+  (function () {
+    if (!/[?&]spindemo(=|&|$)/.test(location.search)) {
+      var sep = location.search ? "&" : "?";
+      location.replace(location.pathname + location.search + sep + "spindemo" + location.hash);
+    }
+  })();
+</script>
+
+<style>
+  /* ---------- the page chrome (playground only — do not port to Webflow) ---------- */
+  :root {
+    --bg: #0d1512;
+    --ink: #eaf3ee;
+    --muted: #8fa79b;
+    --line: rgba(198, 232, 74, .18);
+    --accent: #C6E84A;
+    --accent-deep: #2E7D32;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background:
+      radial-gradient(120vmax 90vmax at 18% -10%, rgba(46,125,50,.35), transparent 60%),
+      radial-gradient(90vmax 70vmax at 100% 110%, rgba(198,232,74,.14), transparent 60%),
+      var(--bg);
+    color: var(--ink);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    display: grid;
+    grid-template-columns: 1fr minmax(300px, 340px);
+    min-height: 100dvh;
+  }
+  @media (max-width: 900px) { body { grid-template-columns: 1fr; } }
+
+  .stage-col {
+    display: grid;
+    place-items: center;
+    padding: 32px 24px;
+    min-width: 0;
+  }
+
+  /* ---------- the panel ---------- */
+  .panel {
+    border-left: 1px solid var(--line);
+    background: rgba(0,0,0,.28);
+    backdrop-filter: blur(14px);
+    padding: 20px 20px 60px;
+    overflow-y: auto;
+    max-height: 100dvh;
+  }
+  .panel h1 { font-size: 15px; margin: 0 0 4px; letter-spacing: .01em; }
+  .panel .sub { color: var(--muted); font-size: 12.5px; margin: 0 0 18px; }
+  .panel fieldset { border: 0; border-top: 1px solid var(--line); margin: 0 0 6px; padding: 14px 0 4px; }
+  .panel legend { font-size: 11px; text-transform: uppercase; letter-spacing: .09em; color: var(--accent); padding-right: 8px; }
+  .row { display: grid; grid-template-columns: 1fr 74px; gap: 10px; align-items: center; margin-bottom: 9px; }
+  .row label { font-size: 13px; color: var(--muted); }
+  .row input[type=range] { grid-column: 1 / -1; width: 100%; accent-color: var(--accent); margin: -4px 0 2px; }
+  .row output, .row .val { font-variant-numeric: tabular-nums; font-size: 12.5px; text-align: right; color: var(--ink); }
+  .row select, .row input[type=color], .row input[type=text] {
+    grid-column: 1 / -1; width: 100%; background: rgba(255,255,255,.06);
+    color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; font: inherit; font-size: 13px;
+  }
+  .row input[type=color] { padding: 3px; height: 34px; }
+  .btns { display: flex; flex-wrap: wrap; gap: 7px; }
+  button {
+    font: inherit; font-size: 12.5px; cursor: pointer;
+    background: rgba(255,255,255,.07); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 999px; padding: 7px 13px;
+  }
+  button:hover { background: rgba(198,232,74,.16); }
+  button.primary { background: var(--accent); color: #10240f; border-color: transparent; font-weight: 600; }
+  pre.export {
+    white-space: pre-wrap; word-break: break-all; font-size: 11.5px; line-height: 1.55;
+    background: rgba(0,0,0,.4); border: 1px solid var(--line); border-radius: 10px;
+    padding: 11px; margin: 8px 0 0; color: var(--muted); max-height: 220px; overflow: auto;
+  }
+  .note { font-size: 11.5px; color: var(--muted); margin: 10px 0 0; }
+  .note code { color: var(--accent); }
+
+  /* ============================================================
+     FROM HERE DOWN IS THE ACTUAL COMPONENT STYLING.
+     This is the part worth porting to Webflow (as classes, not this CSS).
+     ============================================================ */
+
+  /* --- the wheel stage: MUST be square. The SVG fills it. --- */
+  .spin-stage {
+    position: relative;
+    width: min(74vmin, 520px);
+    aspect-ratio: 1 / 1;
+    margin: 0 auto;
+    filter: drop-shadow(0 26px 60px rgba(0,0,0,.55));
+  }
+  /* The script clears and fills this. Leave it empty in the Designer. */
+  [data-spin-wheel] {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    overflow: hidden;
+    box-shadow:
+      inset 0 0 0 6px rgba(255,255,255,.9),
+      inset 0 0 0 12px rgba(46,125,50,.9),
+      0 0 0 1px rgba(0,0,0,.35);
+  }
+  /* The hub covers the point where every segment meets. */
+  .spin-hub {
+    position: absolute; left: 50%; top: 50%;
+    width: 20%; aspect-ratio: 1/1;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #fff, #dfe9d6 60%, #b9c9ab);
+    box-shadow: 0 6px 18px rgba(0,0,0,.45), inset 0 -2px 6px rgba(0,0,0,.18);
+    z-index: 3;
+    display: grid; place-items: center;
+    font-weight: 800; font-size: clamp(9px, 1.7vmin, 14px);
+    letter-spacing: .12em; color: var(--accent-deep);
+  }
+  /* Decorative only — the script never moves it. If you move it off 12
+     o'clock, set data-spin-pointer-angle to match. */
+  [data-spin-pointer] {
+    position: absolute; left: 50%; top: -1.5%;
+    width: 9%; height: 13%;
+    transform: translateX(-50%);
+    z-index: 4;
+    background: linear-gradient(180deg, #fff, #e6efdc);
+    clip-path: polygon(50% 100%, 0 0, 100% 0);
+    filter: drop-shadow(0 4px 8px rgba(0,0,0,.5));
+  }
+  /* Segment label typography. The script sets fill/size; everything else
+     is yours. */
+  [data-spin-label] { font-family: inherit; font-weight: 700; letter-spacing: .01em; }
+
+  /* --- panels --- */
+  .spin-card {
+    width: min(92vw, 520px);
+    text-align: center;
+    background: rgba(255,255,255,.05);
+    border: 1px solid var(--line);
+    border-radius: 22px;
+    padding: 34px 28px;
+    backdrop-filter: blur(10px);
+  }
+  .spin-card h2 { margin: 0 0 6px; font-size: clamp(22px, 3.4vmin, 30px); }
+  .spin-card p { margin: 6px 0; color: var(--muted); }
+  .spin-eyebrow { color: var(--accent); font-size: 13px; letter-spacing: .1em; text-transform: uppercase; margin-bottom: 10px; }
+
+  /* THE CLAIM CODE. Staff read this off the tablet from a step away, or the
+     shopper photographs it. Make it big and high-contrast. */
+  [data-spin-claim] {
+    font: 800 clamp(26px, 6.2vmin, 52px)/1.1 ui-monospace, "SF Mono", Menlo, monospace;
+    letter-spacing: .06em;
+    color: #10240f;
+    background: var(--accent);
+    border-radius: 14px;
+    padding: 16px 18px;
+    margin: 16px 0 6px;
+    word-break: break-word;
+  }
+
+  .cta {
+    display: inline-block; margin-top: 20px;
+    background: var(--accent); color: #10240f;
+    font-weight: 700; font-size: 17px;
+    border-radius: 999px; padding: 15px 42px;
+    text-decoration: none; border: 0; cursor: pointer;
+  }
+  .cta[aria-disabled="true"] { opacity: .4; pointer-events: none; }
+  .cta.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); font-size: 14px; padding: 11px 24px; }
+
+  .wheel-wrap { display: grid; justify-items: center; gap: 26px; }
+
+  /* Reduced motion is handled by the script (it snaps instead of spinning). */
+</style>
+</head>
+<body>
+
+<main class="stage-col">
+
+  <!-- ============================================================
+       THE COMPONENT. Rebuild this structure in Webflow.
+       ============================================================ -->
+  <div data-spin
+       data-spin-debug
+       data-spin-turns="6"
+       data-spin-duration="4.5"
+       data-spin-min="2.5"
+       data-spin-idle-turn="1.6"
+       data-spin-pointer-angle="0"
+       data-spin-label-mode="radial"
+       data-spin-label-size="7"
+       data-spin-label-radius="92"
+       data-spin-label-color="#ffffff"
+       data-spin-expires-format="Claim by {date}">
+
+    <!-- LOADING -->
+    <div data-spin-when="loading" class="spin-card">
+      <p>Loading your wheel…</p>
+    </div>
+
+    <!-- THE WHEEL -->
+    <div data-spin-when="ready spinning" class="wheel-wrap">
+      <div class="spin-stage">
+        <div data-spin-wheel></div>
+        <div class="spin-hub">FLEX</div>
+        <div data-spin-pointer></div>
+      </div>
+      <button data-spin-go class="cta">Spin to win</button>
+    </div>
+
+    <!-- THE REWARD -->
+    <div data-spin-when="prize" class="spin-card">
+      <div class="spin-eyebrow">You won</div>
+      <h2 data-spin-prize-name></h2>
+      <p><span data-spin-name-wrap>Nice one, <span data-spin-name></span>.</span></p>
+      <div data-spin-claim-wrap>
+        <div data-spin-claim></div>
+      </div>
+      <p data-spin-instructions>Show this code to a Clicks team member at the till to collect your prize.</p>
+      <p data-spin-expires-wrap><span data-spin-expires></span></p>
+      <p>Collect at <strong data-spin-store></strong></p>
+      <a href="#" data-spin-done class="cta ghost">Done</a>
+    </div>
+
+    <!-- CONSOLATION — deliberately no claim code -->
+    <div data-spin-when="consolation" class="spin-card">
+      <div class="spin-eyebrow">So close</div>
+      <h2 data-spin-prize-name></h2>
+      <p data-spin-instructions>Thanks for playing — your Flexicare results are still yours to keep.</p>
+      <a href="#" data-spin-done class="cta ghost">Done</a>
+    </div>
+
+    <!-- ALREADY COLLECTED / LAPSED / CANCELLED -->
+    <div data-spin-when="redeemed" class="spin-card">
+      <div class="spin-eyebrow">Collected</div>
+      <h2 data-spin-prize-name></h2>
+      <p>You've already picked this up. Nothing more to do.</p>
+      <a href="#" data-spin-done class="cta ghost">Done</a>
+    </div>
+    <div data-spin-when="expired" class="spin-card">
+      <h2>This reward has expired</h2>
+      <p>Sorry — the claim window for <span data-spin-prize-name></span> has closed.</p>
+      <a href="#" data-spin-done class="cta ghost">Done</a>
+    </div>
+    <div data-spin-when="voided" class="spin-card">
+      <h2>This reward is no longer valid</h2>
+      <p>Please speak to a Clicks team member.</p>
+      <a href="#" data-spin-done class="cta ghost">Done</a>
+    </div>
+
+    <!-- NO PHONE NUMBER ON THE SESSION -->
+    <div data-spin-when="nophone" class="spin-card">
+      <h2>One more thing</h2>
+      <p>We need a mobile number before you can spin — it's how we send your reward.</p>
+      <a href="/onboarding" data-spin-back class="cta">Add my number</a>
+    </div>
+
+    <!-- FALLBACK — every failure lands here -->
+    <div data-spin-when="unavailable error" class="spin-card">
+      <h2>The wheel is taking a break</h2>
+      <p data-spin-error>We couldn't spin the wheel right now — please ask a Clicks team member.</p>
+      <a href="#" data-spin-done class="cta ghost">Done</a>
+    </div>
+  </div>
+</main>
+
+<!-- ============================================================
+     THE TUNER. Playground only — none of this ships.
+     ============================================================ -->
+<aside class="panel">
+  <h1>Spin wheel playground</h1>
+  <p class="sub">Tuning the real <code>flexicare-spin.js</code>. No backend, no Webflow.</p>
+
+  <fieldset>
+    <legend>Animation</legend>
+    <p class="note" style="margin-top:0">Applies to the next spin — no reload.</p>
+    <div class="row"><label for="turns">Extra full turns</label><output id="turns-v"></output>
+      <input type="range" id="turns" min="0" max="14" step="1" data-attr="data-spin-turns" /></div>
+    <div class="row"><label for="duration">Landing duration (s)</label><output id="duration-v"></output>
+      <input type="range" id="duration" min="0.5" max="10" step="0.1" data-attr="data-spin-duration" /></div>
+    <div class="row"><label for="min">Minimum spin (s)</label><output id="min-v"></output>
+      <input type="range" id="min" min="0" max="8" step="0.1" data-attr="data-spin-min" /></div>
+    <div class="row"><label for="idleturn">Idle: seconds / turn</label><output id="idleturn-v"></output>
+      <input type="range" id="idleturn" min="0.3" max="4" step="0.1" data-attr="data-spin-idle-turn" /></div>
+    <div class="row"><label for="pointer">Pointer angle (°)</label><output id="pointer-v"></output>
+      <input type="range" id="pointer" min="0" max="359" step="1" data-attr="data-spin-pointer-angle" /></div>
+    <div class="btns">
+      <button class="primary" data-act="respin">Respin</button>
+      <button data-act="reset-anim">Reset</button>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Wheel rendering</legend>
+    <p class="note" style="margin-top:0">Redraws the wheel each change.</p>
+    <div class="row"><label for="labelmode">Label mode</label><span class="val"></span>
+      <select id="labelmode" data-attr="data-spin-label-mode" data-render>
+        <option value="radial">radial (reads outward)</option>
+        <option value="tangential">tangential (along the arc)</option>
+      </select></div>
+    <div class="row"><label for="labelsize">Label size</label><output id="labelsize-v"></output>
+      <input type="range" id="labelsize" min="3" max="16" step="0.5" data-attr="data-spin-label-size" data-render /></div>
+    <div class="row"><label for="labelradius">Label radius</label><output id="labelradius-v"></output>
+      <input type="range" id="labelradius" min="20" max="96" step="1" data-attr="data-spin-label-radius" data-render /></div>
+    <div class="row"><label for="labelcolor">Label colour</label><span class="val"></span>
+      <input type="color" id="labelcolor" data-attr="data-spin-label-color" data-render /></div>
+    <div class="row"><label for="strokewidth">Divider width</label><output id="strokewidth-v"></output>
+      <input type="range" id="strokewidth" min="0" max="6" step="0.25" data-attr="data-spin-stroke-width" data-render /></div>
+    <div class="row"><label for="stroke">Divider colour</label><span class="val"></span>
+      <input type="color" id="stroke" data-attr="data-spin-stroke" data-render /></div>
+    <div class="row"><label for="labels">Labels</label><span class="val"></span>
+      <select id="labels" data-attr="data-spin-labels" data-render>
+        <option value="on">on</option><option value="off">off</option>
+      </select></div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Jump to a panel</legend>
+    <div class="btns">
+      <button data-panel="">wheel</button>
+      <button data-panel="consolation">consolation</button>
+      <button data-panel="redeemed">redeemed</button>
+      <button data-panel="expired">expired</button>
+      <button data-panel="voided">voided</button>
+      <button data-panel="nophone">no phone</button>
+      <button data-panel="unavailable">fallback</button>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Paste into Webflow</legend>
+    <p class="note" style="margin-top:0">Put these on the <code>[data-spin]</code> element.</p>
+    <pre class="export" id="export"></pre>
+    <div class="btns" style="margin-top:8px">
+      <button data-act="copy">Copy attributes</button>
+      <button data-act="copy-link">Copy this setup as a link</button>
+    </div>
+  </fieldset>
+
+  <p class="note">
+    Segments come from the live <code>GET /prizes/wheel</code>. If it's
+    unreachable you get a placeholder set, so this page works offline.
+    Nothing here ever calls <code>POST /spin</code>.
+  </p>
+</aside>
+
+<!-- ============================================================
+     Load order matches the Webflow footer exactly.
+     ============================================================ -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script>
+  /* Apply any settings carried in the URL BEFORE the controller boots, so the
+     first render already reflects them (and a shared link reproduces a look). */
+  (function () {
+    var wrap = document.querySelector("[data-spin]");
+    var params = new URL(location.href).searchParams;
+    params.forEach(function (value, key) {
+      if (key.indexOf("data-spin-") === 0 && value !== "") wrap.setAttribute(key, value);
+    });
+  })();
+</script>
+<script src="../src/flexicare-core.js"></script>
+<script src="../src/flexicare-kiosk.js"></script>
+<script src="../src/flexicare-spin.js"></script>
+
+<script>
+/* ---------------- the tuner (playground only) ---------------- */
+(function () {
+  "use strict";
+  var wrap = document.querySelector("[data-spin]");
+  var inputs = Array.prototype.slice.call(document.querySelectorAll("[data-attr]"));
+  var exportBox = document.getElementById("export");
+
+  // Remember what the markup shipped with, so "Reset" means something.
+  var defaults = {};
+  inputs.forEach(function (el) {
+    defaults[el.dataset.attr] = wrap.getAttribute(el.dataset.attr) || el.value;
+  });
+
+  function syncFromDom() {
+    inputs.forEach(function (el) {
+      var v = wrap.getAttribute(el.dataset.attr);
+      if (v != null && v !== "") el.value = v;
+      var out = document.getElementById(el.id + "-v");
+      if (out) out.textContent = el.value;
+    });
+    writeExport();
+  }
+
+  function apply(el) {
+    var name = el.dataset.attr;
+    wrap.setAttribute(name, el.value);
+    var out = document.getElementById(el.id + "-v");
+    if (out) out.textContent = el.value;
+    writeExport();
+    // Rendering attributes are read when the SVG is built, so the wheel has
+    // to be redrawn. Animation attributes are read at spin time — nothing to do.
+    if (el.hasAttribute("data-render") && window.Flexicare.spin)
+      window.Flexicare.spin.reinit();
+  }
+
+  inputs.forEach(function (el) {
+    el.addEventListener("input", function () { apply(el); });
+    el.addEventListener("change", function () { apply(el); });
+  });
+
+  function writeExport() {
+    var lines = inputs.map(function (el) {
+      return "  " + el.dataset.attr + '="' + el.value + '"';
+    });
+    exportBox.textContent = "<div data-spin\n" + lines.join("\n") + ">";
+  }
+
+  function currentLink() {
+    var url = new URL(location.href);
+    inputs.forEach(function (el) { url.searchParams.set(el.dataset.attr, el.value); });
+    return url.toString();
+  }
+
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest("[data-act], [data-panel]");
+    if (!b) return;
+
+    if (b.dataset.panel !== undefined) {
+      var url = new URL(location.href);
+      url.searchParams.set("spindemo", b.dataset.panel || "prize");
+      // A panel jump needs a fresh boot; keep the tuning in the URL.
+      inputs.forEach(function (el) { url.searchParams.set(el.dataset.attr, el.value); });
+      location.href = url.toString();
+      return;
+    }
+
+    var act = b.dataset.act;
+    if (act === "respin") {
+      /* reinit() re-renders the wheel, which is asynchronous (it re-fetches
+         the segments), so wait for the controller to actually reach "ready"
+         rather than guessing at a delay. Gives up after ~3s so a dead API
+         can't leave the button hanging. */
+      if (window.Flexicare.spin) window.Flexicare.spin.reinit();
+      var waited = 0;
+      var poll = setInterval(function () {
+        waited += 50;
+        var ready = wrap.getAttribute("data-spin-state") === "ready";
+        if (!ready && waited < 3000) return;
+        clearInterval(poll);
+        if (!ready) return;
+        var go = document.querySelector("[data-spin-go]");
+        if (go) go.click();
+      }, 50);
+    } else if (act === "reset-anim") {
+      inputs.forEach(function (el) {
+        if (el.hasAttribute("data-render")) return;
+        wrap.setAttribute(el.dataset.attr, defaults[el.dataset.attr]);
+      });
+      syncFromDom();
+    } else if (act === "copy") {
+      navigator.clipboard.writeText(exportBox.textContent).then(function () {
+        b.textContent = "Copied"; setTimeout(function () { b.textContent = "Copy attributes"; }, 1200);
+      });
+    } else if (act === "copy-link") {
+      navigator.clipboard.writeText(currentLink()).then(function () {
+        b.textContent = "Copied"; setTimeout(function () { b.textContent = "Copy this setup as a link"; }, 1200);
+      });
+    }
+  });
+
+  syncFromDom();
+})();
+</script>
+</body>
+</html>

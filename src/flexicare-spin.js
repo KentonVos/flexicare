@@ -1203,6 +1203,21 @@
     state.mode = null;
   }
 
+  /* ------------------------------ dev hook ------------------------------
+     Tear down and re-initialise in place. Used by demo/spin.html so the
+     tuner can re-render the wheel after changing a rendering attribute
+     (labels, stroke, icons) without a page reload, and to get back to
+     "ready" for another demo spin.
+
+     Public for the same reason LiquidGlass.scan() is: it is the honest way
+     to say "the DOM changed under you, look again". Nothing in the funnel
+     calls it — the Barba hooks below do that job in production. */
+  FC.spin = FC.spin || {};
+  FC.spin.reinit = function () {
+    teardown();
+    init(document);
+  };
+
   /* ------------------------------ lifecycle ------------------------------ */
 
   if (window.barba && window.barba.hooks) {

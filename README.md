@@ -45,6 +45,9 @@ flexicare/
 │   ├── kiosk-and-spin.md         ← kiosk pairing + the prize wheel (Webflow build guide)
 │   ├── webflow-head-snippet.md   ← the head snippet that lives in Webflow (site head)
 │   └── hosting-and-publishing.md ← hosting + publish + rollback workflow
+├── demo/
+│   └── spin.html      ← standalone spin-wheel playground (no Webflow, no backend):
+│                        `python3 -m http.server 8080` then /demo/spin.html
 └── src/               ← the sixteen scripts (served by Cloudflare from /src/)
     ├── glass.js
     ├── transition.js

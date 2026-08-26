@@ -71,6 +71,15 @@ panel). It never calls `POST /spin`, never creates an award and never writes
 `Flexicare.award`. Gated exactly like `?tune`/`?orbtune`. Remove the parameter for
 real testing.
 
+**Standalone playground — `demo/spin.html`.** A single self-contained page that
+loads the real `flexicare-spin.js`: full component markup, starter CSS, and a tuner
+that writes the `data-spin-*` attributes live (animation knobs apply to the next
+spin; rendering knobs redraw the wheel via a new `Flexicare.spin.reinit()` dev hook).
+Buttons jump to any panel, and it exports a paste-ready attribute block. Works
+offline with placeholder segments. Run it with `python3 -m http.server 8080`, or
+open `/demo/spin.html` on the deployed preview. Craft the look here first — Webflow
+adds nothing while the component is still being designed.
+
 **The thing to remember:** the spin is decided at `/onboarding`, not at
 `/spin-to-win`. If the spin page says "unavailable", the session was started on an
 unpaired browser — fix it there.
