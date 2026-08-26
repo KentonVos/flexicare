@@ -40,9 +40,11 @@ flexicare/
 │   ├── api-contract.md           ← the backend API contract (endpoints, payloads)
 │   ├── avatar-loading-state.md   ← the avatar-grid skeleton/shimmer
 │   ├── quiz-loading-state.md     ← the quiz-options skeleton/shimmer
+│   ├── reveal-loading-state.md   ← the reveal-page skeleton/shimmer
+│   ├── product-copy-embed.html   ← PASTE-READY: the /flexicare-product copy database
 │   ├── webflow-head-snippet.md   ← the head snippet that lives in Webflow (site head)
 │   └── hosting-and-publishing.md ← hosting + publish + rollback workflow
-└── src/               ← the thirteen scripts (served by Cloudflare from /src/)
+└── src/               ← the fourteen scripts (served by Cloudflare from /src/)
     ├── glass.js
     ├── transition.js
     ├── text-reveal.js
@@ -54,6 +56,7 @@ flexicare/
     ├── flexicare-avatar.js
     ├── flexicare-quiz.js
     ├── flexicare-reveal.js
+    ├── flexicare-product.js
     ├── slider.js       ← liquid-glass tuner (dev-only, ?tune)
     └── orb-tuner.js    ← orb-motion tuner (dev-only, ?orbtune)
 ```
