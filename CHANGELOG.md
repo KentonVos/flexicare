@@ -90,6 +90,28 @@ cleared the box with `innerHTML = ""`, destroying glass.js's injected `.lg-layer
 would never rebuild it and the glass silently lost its lighting layer on the first
 redraw. The controller now clears only what it owns, keeping any `data-lg-*` node.
 
+**Webflow handover.** Two new files:
+- `demo/spin-webflow.css` — the only CSS the wheel needs. Entirely
+  attribute-driven (no class names, so Webflow classes can be named freely), and
+  limited to what the Designer cannot express: `backdrop-filter`, the pointer's
+  `rotate(var(--fc-pointer-angle))`, the injected SVG labels, `[aria-disabled]`,
+  and a rule that stops every panel flashing on screen at once before the
+  footer-loaded script boots. That last one is scoped as
+  `[data-spin]:not([data-spin-state]) [data-spin-when]` on purpose — a blanket
+  `[data-spin-when]{display:none}` would break "show", because the script reveals a
+  panel by CLEARING its inline display.
+- `demo/spin-webflow-embed.html` — that same CSS wrapped in `<style>`, paste-ready.
+  Generated from the `.css`, and a test asserts the two cannot drift apart.
+
+New structural hooks the script does not read but the CSS keys off:
+`[data-spin-stage]`, `[data-spin-hub]`, `[data-spin-marker]`, `[data-spin-glow]`.
+The playground now uses those instead of classes, links the same stylesheet (so it
+proves the embed), and its panels and buttons are stripped to a plain **template** —
+they are rebuilt in Webflow, along with the background gradient.
+
+The script also warns when `[data-spin-wheel]` is not square, which letterboxes the
+wheel inside itself and silently stops the marker lining up with the winning segment.
+
 **Tuned defaults + per-pane glass.** The design's tuned values are now the script
 defaults: rim and studs off, no hard dividers, label size 5 at radius 87. Two new
 cues make each pane read as its own piece of glass, because `backdrop-filter` cannot

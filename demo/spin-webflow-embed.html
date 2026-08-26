@@ -1,0 +1,160 @@
+<!-- ============================================================
+     PASTE-READY WEBFLOW EMBED — the spin wheel's required CSS.
+
+     Where to put it: on the /spin-to-win page, either
+       • an HTML Embed dropped anywhere inside the Barba container, or
+       • Page Settings -> Custom Code -> Inside <head> tag   (preferred:
+         it applies before first paint, so nothing flashes)
+
+     GENERATED from demo/spin-webflow.css — edit that file, not this one.
+     The playground at demo/spin.html loads the same stylesheet, so whatever
+     you see there is exactly what this embed gives you.
+     ============================================================ -->
+<style>
+/* ============================================================
+   Flexicare — spin wheel: the CSS Webflow cannot express
+   ------------------------------------------------------------
+   This is the ONLY styling the wheel actually needs from you. Everything
+   else — cards, buttons, the claim code, the background gradient, colours,
+   type — you build in the Designer however you like.
+
+   It is entirely ATTRIBUTE-DRIVEN. No class names appear anywhere, so you
+   can name your Webflow classes whatever you want; just put the data
+   attributes on the right elements.
+
+   WHY THESE RULES CANNOT BE DONE IN THE DESIGNER
+     • backdrop-filter        not in Webflow's style panel at all
+     • transform: rotate(var(--fc-pointer-angle))
+                              the Designer can't put a CSS variable in a
+                              transform, and this one has to come from the
+                              script or the marker drifts out of sync with
+                              where the wheel stops
+     • [data-spin-label]      the labels are SVG text the script injects;
+                              the Designer can't see or style them
+     • [aria-disabled]        the script sets it; Webflow can't style off it
+     • the pre-boot rule      stops every panel flashing on screen at once
+                              before the script has picked a state
+
+   DO NOT paste this into a page as a Webflow "class". Paste the embed
+   version (spin-webflow-embed.html) into an HTML Embed on the spin page,
+   or into Page Settings → Custom Code → Head.
+   ============================================================ */
+
+/* ---------- 1. Stop every panel appearing at once before boot ----------
+   Webflow loads the scripts in the FOOTER, so between the page painting and
+   the controller running, all your panels are visible simultaneously — the
+   wheel, the prize screen, the error screen, stacked.
+
+   Once the script has picked a state it sets data-spin-state on the wrapper,
+   this rule stops matching, and the script's own inline display styles take
+   over. (Which is also why this must be a :not() on the wrapper and NOT a
+   blanket `[data-spin-when]{display:none}` — the script shows a panel by
+   CLEARING its inline display, which would fall straight back through to a
+   blanket rule and hide it again.) */
+[data-spin]:not([data-spin-state]) [data-spin-when] {
+  display: none;
+}
+
+/* ---------- 2. The stage: MUST be square ----------
+   The SVG's viewBox is square and fills the box, so a non-square stage
+   letterboxes the wheel inside itself and the marker stops lining up with
+   the segment that won. The script warns in the console if it catches this. */
+[data-spin-stage] {
+  position: relative;
+  aspect-ratio: 1 / 1;
+}
+
+/* ---------- 3. The wheel canvas ----------
+   Leave this element EMPTY in the Designer — the script clears it on every
+   render. Size and position come from the stage.
+
+   The backdrop-filter is the real glass: one blur over whatever you put
+   behind the wheel, frosting every segment at once. It has to live here
+   because backdrop-filter cannot be applied to an SVG shape, so the panes
+   themselves can never carry it. */
+[data-spin-wheel] {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  -webkit-backdrop-filter: blur(14px) saturate(1.25);
+  backdrop-filter: blur(14px) saturate(1.25);
+}
+
+/* ---------- 4. The dial ----------
+   Its backdrop is the already-frosted wheel plus your colour behind it, so a
+   second gentler blur reads as a thicker piece of glass resting on top.
+   Position, size and border-radius: do those in the Designer. */
+[data-spin-hub] {
+  -webkit-backdrop-filter: blur(10px) saturate(1.2);
+  backdrop-filter: blur(10px) saturate(1.2);
+}
+
+/* ---------- 5. The pointer ----------
+   ONE SOURCE OF TRUTH. The landing maths reads data-spin-pointer-angle; the
+   marker you can see is CSS. Set those in two places and they drift, and the
+   failure is silent and nasty — the wheel stops with the winning segment
+   somewhere other than under the marker.
+
+   So the script publishes the angle back as --fc-pointer-angle, and this
+   full-size wrapper simply rotates by it. Change the attribute, the marker
+   follows. Put your actual pointer graphic INSIDE this element, positioned
+   at the top centre. */
+[data-spin-marker] {
+  position: absolute;
+  inset: 0;
+  transform: rotate(var(--fc-pointer-angle, 0deg));
+  pointer-events: none;
+}
+
+/* ---------- 6. The segment labels ----------
+   These are SVG <text> nodes the script injects, so the Designer cannot
+   reach them. Colour and size come from data-spin-label-color and
+   data-spin-label-size; everything else is yours. */
+[data-spin-label] {
+  font-family: inherit;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  pointer-events: none;
+}
+
+/* ---------- 7. The spin button while it is not available ----------
+   The script sets aria-disabled (and .disabled on a real <button>). Style
+   the look of it in Webflow if you want; this just makes sure a disabled
+   CTA cannot be tapped. */
+[data-spin-go][aria-disabled="true"] {
+  pointer-events: none;
+}
+
+/* ---------- 8. Reduced motion ----------
+   The script already skips the spin animation. This stops any transition you
+   add in the Designer from re-animating it. */
+@media (prefers-reduced-motion: reduce) {
+  [data-spin-wheel] * {
+    transition: none !important;
+  }
+}
+
+/* ============================================================
+   OPTIONAL — the colour behind the glass.
+
+   Delete this whole block if you are building the background in Webflow,
+   which is the expectation. It is here only so the wheel has something to
+   refract if you want a quick starting point.
+
+   The rule that matters, whatever you build: the colour layer must be a
+   SIBLING of the wheel, never a parent. Its own blur would otherwise make
+   it a backdrop root and there would be nothing left for the wheel to
+   frost. Same reason .spin-stage must never carry a `filter`.
+   ============================================================ */
+/*
+[data-spin-glow] {
+  position: absolute;
+  inset: -14%;
+  z-index: 0;
+  border-radius: 50%;
+  filter: blur(46px);
+  pointer-events: none;
+}
+*/
+</style>

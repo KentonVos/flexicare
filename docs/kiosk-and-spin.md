@@ -344,6 +344,10 @@ open http://localhost:8080/demo/spin.html
 **Or on the deployed preview** — no local server needed:
 `https://<branch>-flexicare.kenton-323.workers.dev/demo/spin.html`
 
+It also carries the **structural attributes** the required CSS keys off — none of
+which the script reads; they exist so you can name your Webflow classes freely:
+`[data-spin-stage]`, `[data-spin-hub]`, `[data-spin-marker]`, `[data-spin-glow]`.
+
 It gives you:
 
 - The full component markup, ready to rebuild in the Designer, with starter CSS
@@ -616,7 +620,133 @@ All of it redraws live.
 
 ---
 
-## 8. Building the page in Webflow before a tablet exists — `?spindemo`
+## 8. Building it in Webflow
+
+You build everything. The script only ever fills one empty box.
+
+### What is yours vs what is the script's
+
+| Yours, in the Designer | The script's |
+|---|---|
+| The background and its gradient | The `<svg>` inside `[data-spin-wheel]` |
+| Every panel: prize, consolation, redeemed, expired, voided, no-phone, fallback | Which panel is visible |
+| Every button, every piece of copy | The text written into the API slots |
+| The dial, the pointer graphic, the stage | The wheel's rotation and where it lands |
+| All colour, type and spacing | — |
+
+### Step 1 — paste the embed
+
+`demo/spin-webflow-embed.html` is paste-ready. Put it in **Page Settings → Custom
+Code → Inside `<head>` tag** on `/spin-to-win` (preferred — it applies before first
+paint), or an HTML Embed inside the Barba container.
+
+It is ~40 lines and it is entirely attribute-driven: **no class names**, so name your
+Webflow classes whatever you like. It contains only the five things the Designer
+cannot express — `backdrop-filter`, the pointer's `rotate(var(--fc-pointer-angle))`,
+the injected SVG labels, `[aria-disabled]` styling, and the rule that stops every
+panel flashing on screen at once before the script boots.
+
+That last one matters more than it sounds: Webflow loads the scripts in the **footer**,
+so without it there is a moment where the wheel, the prize screen and every error
+screen are all visible stacked on top of each other.
+
+### Step 2 — the wheel
+
+```
+Stage                  [data-spin-stage]     ← MUST be square
+├── Glow               [data-spin-glow]      ← your background gradient (optional)
+├── Wheel Canvas       [data-spin-wheel]     ← LEAVE EMPTY
+├── Dial               [data-spin-hub]       ← your centre cap
+└── Marker             [data-spin-marker]    ← full-size; rotates itself
+    └── Pointer        [data-spin-pointer]   ← your graphic, at top centre
+```
+
+- **The stage must be square.** `aspect-ratio: 1/1` comes from the embed; just give
+  it a width. A non-square stage letterboxes the wheel inside itself and the marker
+  stops lining up with the segment that won — the script warns in the console if it
+  catches it, and it is the single most common way a hand-built stage goes wrong.
+- **Leave `[data-spin-wheel]` empty.** It is cleared on every render.
+- **Never put a `filter` on the stage** (a `drop-shadow` is the tempting one). A
+  filter makes an element a backdrop root for its descendants and the wheel would have
+  nothing left to frost. Use `box-shadow` on the canvas instead.
+- **The glow must be a sibling of the wheel, not a parent** — same reason.
+- **Do not position the pointer with a hard-coded rotation.** Put it at top centre
+  inside `[data-spin-marker]` and let `data-spin-pointer-angle` drive it.
+
+### Step 3 — the panels
+
+Every panel is an ordinary Webflow div. The only thing that has to survive is the
+attributes. Build one, style it, duplicate it for the rest.
+
+| Panel | `data-spin-when` | Must contain |
+|---|---|---|
+| Loading | `loading` | your skeleton/spinner |
+| The wheel | `ready spinning` | the stage + `[data-spin-go]` |
+| Won a prize | `prize` | `[data-spin-claim]` **large and high-contrast**, `[data-spin-prize-name]`, `[data-spin-instructions]`, `[data-spin-expires-wrap]`, `[data-spin-store]` |
+| Consolation | `consolation` | `[data-spin-prize-name]`, `[data-spin-instructions]`. **No claim code** |
+| Already collected | `redeemed` | "you've picked this up" |
+| Lapsed | `expired` | "this reward has expired" |
+| Cancelled | `voided` | "no longer valid" |
+| No phone number | `nophone` | a link back to `/onboarding` |
+| Anything went wrong | `unavailable error` | `[data-spin-error]` |
+
+Space-separated values mean "show in any of these states", which is how the wheel
+panel covers both `ready` and `spinning`.
+
+**Write real copy in `[data-spin-instructions]` and `[data-spin-error]`.** The API is
+allowed to send `null`, and the script falls back to whatever you authored — so
+lorem ipsum will ship.
+
+### Step 4 — the attributes on `[data-spin]`
+
+The tuned values. Most are already the script's defaults, so a bare `[data-spin]`
+lands close to this; set them explicitly if you want to be sure.
+
+```
+data-spin-turns="1"          data-spin-duration="1.5"
+data-spin-min="2"            data-spin-idle-turn="1"
+data-spin-pointer-angle="0"
+data-spin-style="glass"      data-spin-tint="0"
+data-spin-fill="rgba(255,255,255,0.06)"
+data-spin-fill-alt="rgba(255,255,255,0.025)"
+data-spin-rim="0"            data-spin-studs="off"
+data-spin-stud-size="0.5"
+data-spin-edge="1"           data-spin-edge-width="0.2"
+data-spin-sheen="0.48"       data-spin-light-angle="40"
+data-spin-label-mode="radial"
+data-spin-label-size="4.5"   data-spin-label-radius="87"
+data-spin-label-color="#ffffff"
+data-spin-stroke-width="0"   data-spin-labels="on"
+```
+
+Plus the routing targets, which have no sensible defaults:
+
+```
+data-spin-product="/flexicare-product"    where to bounce if the quiz isn't finished
+data-spin-onboarding="/onboarding"        where to bounce if there's no session
+```
+
+### Step 5 — the rest of the site
+
+- Add `data-kiosk-idle-factor="2"` to this page, so a shopper reading a claim code
+  doesn't have it yanked away at 90 seconds.
+- Add `data-kiosk-screen="spin"` if you want the heartbeat to report it precisely.
+- Re-paste the **footer script list** — it changed (§ hosting doc). `flexicare-kiosk.js`
+  goes between core and onboarding; `flexicare-spin.js` after product.
+- Build the `/kiosk` pairing page (§4).
+- Optionally set `data-product-next-web` on the product page (§5).
+
+### Step 6 — check it
+
+Load `/spin-to-win?spindemo` on the published URL. You should get a drawn wheel and a
+working spin with no backend and no paired tablet. Then `?spindemo=consolation`,
+`=redeemed`, `=expired`, `=voided`, `=nophone`, `=unavailable` to check each panel you
+built. Open the console — the script warns about a non-square stage and a misplaced
+wrapper.
+
+---
+
+## 9. Building the page in Webflow before a tablet exists — `?spindemo`
 
 The real page needs a `COMPLETED` session on a **paired** tablet, and pairing needs
 a code from the admin UI. That is the right gate for production and a miserable one
@@ -646,7 +776,7 @@ drop the parameter before any real testing.
 
 ---
 
-## 9. Testing checklist
+## 10. Testing checklist
 
 Test on the **published or preview URL**, never the Designer.
 

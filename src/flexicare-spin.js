@@ -58,13 +58,13 @@
                                   data-spin-product="/flexicare-product"  bounce
                                      target when the session isn't COMPLETED
                                   data-spin-done="/"      optional "finish" CTA
-                                  data-spin-turns="6"     extra full rotations
+                                  data-spin-turns="1"     extra full rotations
                                      before landing
-                                  data-spin-duration="4.5" seconds of the
+                                  data-spin-duration="1.5" seconds of the
                                      landing tween
-                                  data-spin-idle-turn="1.6" seconds per rotation
+                                  data-spin-idle-turn="1" seconds per rotation
                                      while waiting for the response
-                                  data-spin-min="2.5"     minimum seconds of
+                                  data-spin-min="2"       minimum seconds of
                                      spinning before landing may start, even if
                                      the API answers instantly
                                   data-spin-pointer-angle="0"  where the pointer
@@ -102,32 +102,32 @@
                                      hairline circles bounding that band.
                                   data-spin-studs="on|off"  the pearl studs on
                                      the rim — one per segment boundary.
-                                  data-spin-stud-size="2.6"
+                                  data-spin-stud-size="0.5"
                                   data-spin-stud-fill="#ffffff"
                                   (the rendered nodes are marked
                                    [data-spin-edge-line] and
                                    [data-spin-sheen-layer], deliberately NOT
                                    the same names as these config attributes,
                                    so your CSS can target one without the other)
-                                  data-spin-edge="0.3"    brightness of the lit
+                                  data-spin-edge="1"      brightness of the lit
                                      edge down each pane's leading side — the
                                      cue that makes a segment read as its own
                                      piece of glass. 0 = off.
-                                  data-spin-edge-width="0.6"
+                                  data-spin-edge-width="0.2"
                                   data-spin-edge-color="#ffffff"
-                                  data-spin-sheen="0.14"  a specular overlay
+                                  data-spin-sheen="0.48"  a specular overlay
                                      that does NOT turn with the wheel. Light
                                      that rotates with an object reads as
                                      paint; light that stays put reads as
                                      glass. 0 = off.
-                                  data-spin-light-angle="315"  where that light
+                                  data-spin-light-angle="40"   where that light
                                      comes from, degrees clockwise from 12.
                                   data-spin-hub-radius     where the lit edges
                                      fade out (default 24% of the segment
                                      radius) — keep it under your hub cap.
                                   data-spin-labels="on|off"    draw segment text
                                   data-spin-label-mode="radial|tangential"
-                                  data-spin-label-size="7"     viewBox units
+                                  data-spin-label-size="4.5"   viewBox units
                                   data-spin-label-color="#ffffff"
                                   data-spin-label-radius        outer edge the
                                      radial labels reach to. Defaults to just
@@ -141,6 +141,17 @@
                                      Defaults to 0.5 in glass style, 0 in solid.
                                   data-spin-expires-format="Claim by {date}"
                                   data-spin-debug         console logging
+
+     STYLING HOOKS (the script does not read these — they exist so the
+     required CSS can be attribute-driven and you can name your Webflow
+     classes whatever you like). See demo/spin-webflow-embed.html:
+     [data-spin-stage]          The square container holding the wheel, the
+                                dial and the marker. MUST be square.
+     [data-spin-hub]            The dial that caps the wheel's centre.
+     [data-spin-marker]         A full-size wrapper around the pointer,
+                                rotated by --fc-pointer-angle.
+     [data-spin-glow]           Optional. Your colour layer. Must be a
+                                SIBLING of the wheel, never its parent.
 
      THE WHEEL (Webflow supplies an EMPTY box; this script fills it):
      [data-spin-wheel]          REQUIRED. A square, position:relative box. The
@@ -556,6 +567,22 @@
     }
     if (!segments || !segments.length) return false;
 
+    /* The SVG's viewBox is square and it fills the box at 100% x 100%, so a
+       non-square box letterboxes the wheel inside itself — the drawing shrinks
+       to fit and stops touching the edge the pointer is aimed at. It still
+       LOOKS like a wheel, which is why this is worth saying out loud: it is
+       the single most common way a hand-built stage goes wrong, and the only
+       symptom is that the marker no longer sits on the segment that won. */
+    var bw = box.offsetWidth;
+    var bh = box.offsetHeight;
+    if (bw && bh && Math.abs(bw - bh) / Math.max(bw, bh) > 0.02) {
+      console.warn(
+        "[spin] [data-spin-wheel] is " + bw + "x" + bh + " — it must be SQUARE. " +
+          "Give it aspect-ratio: 1 / 1 (or equal width and height), or the " +
+          "wheel will not line up with the pointer."
+      );
+    }
+
     var w = state.wrap;
 
     /* GLASS is the default style, because the rest of the funnel is glass and
@@ -577,7 +604,7 @@
     var rimStroke = attr(w, "data-spin-rim-stroke", "rgba(255,255,255,0.28)");
     var rimWidth = num(w, "data-spin-rim-width", 0.6, 0, 6);
     var showStuds = attr(w, "data-spin-studs", "off") === "on";
-    var studSize = num(w, "data-spin-stud-size", 2.6, 0.5, 10);
+    var studSize = num(w, "data-spin-stud-size", 0.5, 0.1, 10);
     var studFill = attr(w, "data-spin-stud-fill", "#ffffff");
 
     // Segments stop below the rim band; the studs live in the middle of it.
@@ -586,7 +613,7 @@
 
     var showLabels = attr(w, "data-spin-labels", "on") !== "off";
     var labelMode = attr(w, "data-spin-label-mode", "radial");
-    var labelSize = num(w, "data-spin-label-size", 5, 2, 30);
+    var labelSize = num(w, "data-spin-label-size", 4.5, 2, 30);
     var labelColor = attr(w, "data-spin-label-color", "#ffffff");
     // Default to just inside the segment edge, and clamp — a label must never
     // run out under the studs, whatever the author types.
@@ -613,11 +640,11 @@
        this scale — a lit edge, and a specular sheen that stays PUT while the
        wheel spins underneath it. The fixed sheen is the important half: light
        that rotated with the object would read as paint. */
-    var edge = num(w, "data-spin-edge", glassStyle ? 0.3 : 0, 0, 1);
-    var edgeWidth = num(w, "data-spin-edge-width", 0.6, 0.1, 4);
+    var edge = num(w, "data-spin-edge", glassStyle ? 1 : 0, 0, 1);
+    var edgeWidth = num(w, "data-spin-edge-width", 0.2, 0.1, 4);
     var edgeColor = attr(w, "data-spin-edge-color", "#ffffff");
-    var sheen = num(w, "data-spin-sheen", glassStyle ? 0.14 : 0, 0, 1);
-    var lightAngle = num(w, "data-spin-light-angle", 315);
+    var sheen = num(w, "data-spin-sheen", glassStyle ? 0.48 : 0, 0, 1);
+    var lightAngle = num(w, "data-spin-light-angle", 40);
 
     var svg = el("svg", {
       viewBox: "0 0 " + VIEW + " " + VIEW,
@@ -934,7 +961,7 @@
 
   function startIdleSpin() {
     if (!state.rotor || !window.gsap) return;
-    var perTurn = num(state.wrap, "data-spin-idle-turn", 1.6, 0.4);
+    var perTurn = num(state.wrap, "data-spin-idle-turn", 1, 0.4);
     stopTweens();
     state.idleTween = window.gsap.to(state.rotor, {
       rotation: "+=360",
@@ -957,8 +984,8 @@
   }
 
   function land(index, count, done) {
-    var turns = num(state.wrap, "data-spin-turns", 6, 0);
-    var duration = num(state.wrap, "data-spin-duration", 4.5, 0.3);
+    var turns = num(state.wrap, "data-spin-turns", 1, 0);
+    var duration = num(state.wrap, "data-spin-duration", 1.5, 0.3);
     var target = landingRotation(index, count);
 
     if (!state.rotor || !window.gsap || reduced()) {
@@ -1003,7 +1030,7 @@
     startIdleSpin();
 
     var token = state.token;
-    var minSpin = num(state.wrap, "data-spin-min", 2.5, 0) * 1000;
+    var minSpin = num(state.wrap, "data-spin-min", 2, 0) * 1000;
 
     /* The header is what proves this spin is happening on the tablet that
        started the session. Without it the server cannot tell, and answers 403. */
@@ -1274,7 +1301,7 @@
       land(index, count, function () {
         if (alive(token)) paintAward(a);
       });
-    }, num(state.wrap, "data-spin-min", 2.5, 0) * 1000);
+    }, num(state.wrap, "data-spin-min", 2, 0) * 1000);
   }
 
   /* ------------------------------- loading ------------------------------- */

@@ -35,8 +35,18 @@
   })();
 </script>
 
+<!-- THE required CSS, byte-identical to what docs/spin-webflow-embed.html
+     pastes into Webflow. Loaded here so the playground proves the embed. -->
+<link rel="stylesheet" href="spin-webflow.css" />
+
 <style>
-  /* ---------- the page chrome (playground only — do not port to Webflow) ---------- */
+  /* ============================================================
+     EVERYTHING IN THIS <style> BLOCK IS PLAYGROUND-ONLY.
+     None of it goes to Webflow. The cards, the buttons, the claim code and
+     the background are all yours to build in the Designer — what is here is
+     the plainest thing that lets you judge the wheel.
+     ============================================================ */
+  /* ---------- the page chrome ---------- */
   :root {
     /* The ONLY three colours in the system. They never appear as flat fills —
        they exist as blurred light BEHIND glass. The single exception is a
@@ -115,17 +125,12 @@
      This is the part worth porting to Webflow (as classes, not this CSS).
      ============================================================ */
 
-  /* --- the wheel stage: MUST be square. The SVG fills it. --- */
-  .spin-stage {
-    position: relative;
-    width: min(74vmin, 520px);
-    aspect-ratio: 1 / 1;
-    margin: 0 auto;
-    /* NO `filter` HERE. A filter makes an element a backdrop root for its
-       DESCENDANTS, which would leave the glass below with nothing behind it
-       to refract — the exact thing that switched refraction off on the
-       landing orb (see CLAUDE.md). Shadows go on the layers themselves. */
-  }
+  /* Only the SIZE is set here — position/aspect-ratio come from the shared
+     stylesheet. NO `filter` on this element, ever: a filter makes it a
+     backdrop root for its descendants and the wheel would have nothing left
+     to frost (the same thing that switched refraction off on the landing
+     orb — see CLAUDE.md). Shadows go on the layers themselves. */
+  [data-spin-stage] { width: min(74vmin, 520px); margin: 0 auto; }
 
   /* ===== THE COLOUR LAYER =====
      This is where ALL the colour in the component lives: three soft blurred
@@ -135,7 +140,11 @@
 
      It is a SIBLING of the wheel, never an ancestor — its own blur would
      otherwise make it a backdrop root and kill the refraction above it. */
-  .spin-glow {
+  /* YOU WILL REPLACE THIS. It is here so the glass has something to refract
+     while you tune the wheel — the real background is yours to build in
+     Webflow. The one rule that carries over: the colour layer must be a
+     SIBLING of the wheel, never a parent. */
+  [data-spin-glow] {
     position: absolute;
     inset: -14%;
     border-radius: 50%;
@@ -144,14 +153,14 @@
     opacity: .9;
     pointer-events: none;
   }
-  .spin-glow span {
+  [data-spin-glow] span {
     position: absolute;
     display: block;
     border-radius: 50%;
   }
-  .spin-glow .g-indigo { width: 62%; height: 62%; left: -4%;  top: 2%;    background: var(--indigo); opacity: .85; }
-  .spin-glow .g-lime   { width: 58%; height: 58%; right: 2%;  bottom: 6%; background: var(--lime);   opacity: .70; }
-  .spin-glow .g-teal   { width: 46%; height: 46%; right: 8%;  top: 10%;   background: var(--teal);   opacity: .55; }
+  [data-spin-glow] .g-indigo { width: 62%; height: 62%; left: -4%;  top: 2%;    background: var(--indigo); opacity: .85; }
+  [data-spin-glow] .g-lime   { width: 58%; height: 58%; right: 2%;  bottom: 6%; background: var(--lime);   opacity: .70; }
+  [data-spin-glow] .g-teal   { width: 46%; height: 46%; right: 8%;  top: 10%;   background: var(--teal);   opacity: .55; }
 
   /* ===== THE GLASS WHEEL =====
      The script clears and fills this. Leave it empty in the Designer.
@@ -159,19 +168,10 @@
      glass host: it refracts the colour layer behind it, while the SVG (its
      child) paints on top, undistorted. */
   [data-spin-wheel] {
-    position: absolute;
-    inset: 0;
-    border-radius: 50%;
-    overflow: hidden;
     z-index: 1;
     background: rgba(255,255,255,.02);
-    /* THE real glass on the wheel: one backdrop blur over the colour layer.
-       backdrop-filter cannot go on an SVG shape, so this single element does
-       the frosting for every pane at once — cheap, static, and it works on
-       iPad where refraction does not. The per-pane lit edges and the fixed
-       sheen (both drawn by the script) do the rest. */
-    backdrop-filter: blur(14px) saturate(1.25);
-    -webkit-backdrop-filter: blur(14px) saturate(1.25);
+    /* position / border-radius / the backdrop blur all come from
+       spin-webflow.css. Only the shadow is cosmetic. */
     box-shadow:
       inset 0 0 0 1px rgba(255,255,255,.22),
       inset 0 12px 40px rgba(255,255,255,.06),
@@ -189,7 +189,7 @@
      sets both to 0. */
   /* The hub caps the point where every segment meets. Translucent, with a
      hairline ring floating just outside it. */
-  .spin-hub {
+  [data-spin-hub] {
     position: absolute; left: 50%; top: 50%;
     width: 26%; aspect-ratio: 1/1;
     transform: translate(-50%, -50%);
@@ -199,11 +199,6 @@
     font-weight: 700; font-size: clamp(10px, 2vmin, 16px);
     letter-spacing: .14em; text-transform: uppercase; color: var(--ink);
     background: rgba(255,255,255,.05);
-    /* The dial sits ON the wheel, so its backdrop is the already-frosted wheel
-       plus the colour behind it. A second, gentler blur here reads as a
-       thicker piece of glass resting on top. */
-    backdrop-filter: blur(10px) saturate(1.2);
-    -webkit-backdrop-filter: blur(10px) saturate(1.2);
     box-shadow:
       inset 0 0 0 1px rgba(255,255,255,.28),
       inset 0 6px 18px rgba(255,255,255,.07),
@@ -211,7 +206,7 @@
       0 10px 30px rgba(0,0,0,.5);
   }
   /* The floating outer ring from the reference. */
-  .spin-hub::after {
+  [data-spin-hub]::after {
     content: "";
     position: absolute;
     inset: -13%;
@@ -222,13 +217,8 @@
   [data-glass-on] .spin-card { backdrop-filter: none; }
   /* Decorative only — the script never moves it. If you move it off 12
      o'clock, set data-spin-pointer-angle to match. */
-  /* Rotating this full-size wrapper swings the marker around the rim. The
-     angle comes from the script, so it always matches where the wheel stops. */
-  .spin-marker {
-    position: absolute; inset: 0; z-index: 4;
-    transform: rotate(var(--fc-pointer-angle, 0deg));
-    pointer-events: none;
-  }
+  /* position / rotation come from spin-webflow.css. */
+  [data-spin-marker] { z-index: 4; }
   [data-spin-pointer] {
     position: absolute; left: 50%; top: -3%;
     width: 7%; height: 12%;
@@ -239,33 +229,27 @@
   }
   /* Segment label typography. The script sets fill/size; everything else
      is yours. */
-  [data-spin-label] { font-family: inherit; font-weight: 700; letter-spacing: .01em; }
 
   /* --- panels --- */
+  /* ===== PANEL TEMPLATE — you will rebuild all of this in Webflow =====
+     Deliberately plain. It exists so the states are legible while you work
+     on the wheel, NOT as a design. Every one of these panels is yours to
+     build in the Designer; the only thing that has to survive is the
+     data-spin-* attributes on the right elements. */
   .spin-card {
     position: relative;
     width: min(92vw, 520px);
     text-align: center;
-    background: var(--glass);
-    border: 1px solid var(--line);
-    border-radius: 26px;
-    padding: 38px 30px;
-    backdrop-filter: blur(18px) saturate(1.3);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,.16), 0 30px 70px rgba(0,0,0,.55);
+    background: rgba(255,255,255,.04);
+    border: 1px dashed var(--line);
+    border-radius: 18px;
+    padding: 30px 26px;
   }
-  /* Cards get the same colour treatment: light behind glass, never a fill. */
-  .spin-card::before {
-    content: "";
-    position: absolute; inset: -40% -20%;
-    z-index: -1;
-    border-radius: 50%;
-    background:
-      radial-gradient(closest-side, var(--indigo), transparent) 8% 20% / 55% 70% no-repeat,
-      radial-gradient(closest-side, var(--lime),   transparent) 92% 84% / 50% 65% no-repeat,
-      radial-gradient(closest-side, var(--teal),   transparent) 78% 8%  / 40% 50% no-repeat;
-    filter: blur(52px);
-    opacity: .55;
-    pointer-events: none;
+  .spin-card::after {
+    content: "template — rebuild in Webflow";
+    position: absolute; top: 8px; right: 12px;
+    font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+    color: rgba(255,255,255,.28);
   }
   .spin-card h2 { margin: 0 0 6px; font-size: clamp(22px, 3.4vmin, 30px); }
   .spin-card p { margin: 6px 0; color: var(--muted); }
@@ -276,34 +260,32 @@
   /* The claim code is the one thing on the page that must be readable from a
      step away, so it gets glass with a bright hairline rather than a tint —
      contrast from luminance, not from a fill. */
+  /* Left plain on purpose. In Webflow make this LARGE and high-contrast —
+     staff read it off the tablet from a step away, or the shopper
+     photographs it. It is the one piece of copy with a real-world job. */
   [data-spin-claim] {
-    font: 800 clamp(26px, 6.2vmin, 52px)/1.1 ui-monospace, "SF Mono", Menlo, monospace;
+    font: 800 clamp(24px, 5.5vmin, 44px)/1.1 ui-monospace, "SF Mono", Menlo, monospace;
     letter-spacing: .08em;
     color: #fff;
-    background: rgba(255,255,255,.07);
-    border: 1px solid rgba(255,255,255,.32);
-    border-radius: 16px;
-    padding: 18px 18px;
-    margin: 18px 0 6px;
+    margin: 16px 0 6px;
     word-break: break-word;
-    text-shadow: 0 2px 20px rgba(0,0,0,.5);
   }
 
-  /* THE ONE PLACE A FLAT COLOUR IS ALLOWED: the primary button. */
+  /* Buttons: also a template. Build the real ones in Webflow. The only
+     behaviour that must survive is that a disabled CTA looks disabled —
+     the script sets aria-disabled, and spin-webflow.css already makes it
+     unclickable. */
   .cta {
-    display: inline-block; margin-top: 22px;
+    display: inline-block; margin-top: 20px;
     background: var(--lime); color: #0b1402;
-    font-weight: 700; font-size: 17px; letter-spacing: .01em;
-    border-radius: 999px; padding: 16px 44px;
+    font-weight: 700; font-size: 16px;
+    border-radius: 999px; padding: 14px 38px;
     text-decoration: none; border: 0; cursor: pointer;
-    box-shadow: 0 12px 34px rgba(170,219,30,.28);
   }
-  .cta[aria-disabled="true"] { opacity: .35; pointer-events: none; box-shadow: none; }
-  /* Secondary actions are glass, never colour. */
+  .cta[aria-disabled="true"] { opacity: .35; }
   .cta.ghost {
-    background: var(--glass); color: var(--ink);
-    border: 1px solid var(--line); font-size: 14px; padding: 12px 28px;
-    box-shadow: none; backdrop-filter: blur(12px);
+    background: transparent; color: var(--muted);
+    border: 1px dashed var(--line); font-size: 13px; padding: 10px 22px;
   }
 
   .wheel-wrap { display: grid; justify-items: center; gap: 26px; }
@@ -320,28 +302,29 @@
        ============================================================ -->
   <div data-spin
        data-spin-debug
-       data-spin-turns="6"
-       data-spin-duration="4.5"
-       data-spin-min="2.5"
-       data-spin-idle-turn="1.6"
-       data-spin-pointer-angle="315"
+       data-spin-turns="1"
+       data-spin-duration="1.5"
+       data-spin-min="2"
+       data-spin-idle-turn="1"
+       data-spin-pointer-angle="0"
        data-spin-style="glass"
        data-spin-tint="0"
        data-spin-fill="rgba(255,255,255,0.06)"
        data-spin-fill-alt="rgba(255,255,255,0.025)"
        data-spin-rim="0"
        data-spin-studs="off"
-       data-spin-stud-size="0.9"
+       data-spin-stud-size="0.5"
+       data-spin-edge="1"
+       data-spin-edge-width="0.2"
+       data-spin-sheen="0.48"
+       data-spin-light-angle="40"
        data-spin-label-mode="radial"
-       data-spin-label-size="5"
+       data-spin-label-size="4.5"
        data-spin-label-radius="87"
        data-spin-label-color="#ffffff"
        data-spin-stroke-width="0"
        data-spin-stroke="#000000"
        data-spin-labels="on"
-       data-spin-edge="0.3"
-       data-spin-sheen="0.14"
-       data-spin-light-angle="315"
        data-spin-expires-format="Claim by {date}">
 
     <!-- LOADING -->
@@ -351,21 +334,21 @@
 
     <!-- THE WHEEL -->
     <div data-spin-when="ready spinning" class="wheel-wrap">
-      <div class="spin-stage">
+      <div data-spin-stage>
         <!-- ALL the colour in the component. Sibling of the wheel, never a
              parent — its blur would otherwise kill the refraction above it. -->
-        <div class="spin-glow" aria-hidden="true">
+        <div data-spin-glow aria-hidden="true">
           <span class="g-indigo"></span>
           <span class="g-lime"></span>
           <span class="g-teal"></span>
         </div>
         <div data-spin-wheel></div>
-        <div class="spin-hub">Flex</div>
+        <div data-spin-hub>Flex</div>
         <!-- The marker rides a full-size wrapper that rotates by
              --fc-pointer-angle, which the script publishes from
              data-spin-pointer-angle. One source of truth: change the
              attribute and the pointer moves with the landing maths. -->
-        <div class="spin-marker" aria-hidden="true"><div data-spin-pointer></div></div>
+        <div data-spin-marker aria-hidden="true"><div data-spin-pointer></div></div>
       </div>
       <button data-spin-go class="cta">Spin to win</button>
     </div>
@@ -580,9 +563,9 @@
     if (!/[?&]glass=1/.test(location.search)) return;
     document.documentElement.setAttribute("data-glass-on", "");
     var pairs = [
-      [".spin-card", "panel"],
-      [".cta", "cta"],
-      [".spin-hub", "nav"],       // nav = press:0, tilt:0 — the hub must not move
+      // Cards and buttons are a TEMPLATE here — you build the real ones in
+      // Webflow, so the playground does not dress them up.
+      ["[data-spin-hub]", "nav"],
       ["[data-spin-wheel]", "nav"], // the segments are translucent now, so the
                                     // wheel itself can refract the colour layer
     ];
