@@ -699,6 +699,8 @@ lorem ipsum will ship.
 
 ### Step 4 — the attributes on `[data-spin]`
 
+The complete list, with every default and range, is **`docs/spin-attributes.md`**.
+
 The tuned values. Most are already the script's defaults, so a bare `[data-spin]`
 lands close to this; set them explicitly if you want to be sure.
 

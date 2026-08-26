@@ -90,6 +90,12 @@ cleared the box with `innerHTML = ""`, destroying glass.js's injected `.lg-layer
 would never rebuild it and the glass silently lost its lighting layer on the first
 redraw. The controller now clears only what it owns, keeping any `data-lg-*` node.
 
+**`docs/spin-attributes.md`** — the complete attribute reference for the spin page:
+every config attribute with its default and range, every structural hook, every panel
+state and reason code, every content slot, and the attributes the script writes onto
+the injected SVG. Tests check it against the source, so a default that drifts or an
+attribute that gets added without being written up fails the suite.
+
 **Fixed in `glass.js`: `data-liquid-glass` clobbered author positioning.** The hook's
 stylesheet set `position:relative` on every host. It is appended at
 script-execution time, and these scripts load in Webflow's FOOTER, so it landed after

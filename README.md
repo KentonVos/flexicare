@@ -43,6 +43,7 @@ flexicare/
 │   ├── reveal-loading-state.md   ← the reveal-page skeleton/shimmer
 │   ├── product-copy-embed.html   ← PASTE-READY: the /flexicare-product copy database
 │   ├── kiosk-and-spin.md         ← kiosk pairing + the prize wheel (Webflow build guide)
+│   ├── spin-attributes.md        ← every /spin-to-win attribute, with defaults
 │   ├── webflow-head-snippet.md   ← the head snippet that lives in Webflow (site head)
 │   └── hosting-and-publishing.md ← hosting + publish + rollback workflow
 ├── demo/
