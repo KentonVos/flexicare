@@ -269,7 +269,8 @@
     segments: null, // from GET /prizes/wheel
     session: null, // from GET /sessions/{id}
     award: null, // PrizeAwardOut, once spun (or recovered)
-    rotor: null, // the <g> everything spins on
+    rotor: null, // the back <g> (panes); kept for convenience
+    rotors: null, // BOTH spinning groups — panes and content. Tweened together.
     idleTween: null,
     landTween: null,
     spinStartedAt: 0,
@@ -661,6 +662,17 @@
     var defs = el("defs", {});
     svg.appendChild(defs);
 
+    /* TWO rotating groups, not one, with the fixed sheen sandwiched between:
+
+         rotor       panes, lit edges, rim, studs      ← the material
+         sheen                                          ← fixed specular
+         contentRotor  labels and icons                 ← the content
+
+       SVG paints in document order, so a sheen drawn after a single rotor
+       lands on top of the labels and veils them. Invisible at a gentle
+       setting, a heavy white wash over white type at a strong one. Splitting
+       the rotor keeps the specular above the glass and the text above the
+       specular. Both groups carry the same rotation and are tweened together. */
     var rotor = el("g", { "data-spin-rotor": "" });
     svg.appendChild(rotor);
 
@@ -671,6 +683,9 @@
     var hubR = num(w, "data-spin-hub-radius", segR * 0.24, 0, segR);
     // Unique per render: several wheels (or a redraw) must not share gradient ids.
     var gradId = "fcspin-" + ++gradSeq;
+
+    // Built now, appended AFTER the sheen (see the note on the rotor above).
+    var contentRotor = el("g", { "data-spin-rotor": "" });
 
     for (var i = 0; i < n; i++) {
       var seg = segments[i];
@@ -740,11 +755,11 @@
         // and store tablets are not always new.
         img.setAttribute("href", seg.image_url);
         img.setAttributeNS(XLINK_NS, "xlink:href", seg.image_url);
-        rotor.appendChild(img);
+        contentRotor.appendChild(img); // above the sheen — never washed out
       }
 
       if (showLabels && seg.label) {
-        rotor.appendChild(
+        contentRotor.appendChild(
           labelNode(seg, mid, labelMode, labelSize, labelColor, labelRadius)
         );
       }
@@ -806,6 +821,9 @@
       );
     }
 
+    // Labels and icons last, so nothing paints over them.
+    svg.appendChild(contentRotor);
+
     /* Single source of truth for where the pointer is. The landing maths uses
        data-spin-pointer-angle; the pointer you can SEE is positioned in CSS.
        Publishing the angle as a custom property means the two cannot drift
@@ -816,11 +834,12 @@
 
     clearWheelBox(box);
     box.appendChild(svg);
-    state.rotor = rotor;
+    state.rotor = rotor; // kept for callers that just need "a" rotor
+    state.rotors = [rotor, contentRotor];
 
     // Rotate about the wheel's centre in the SVG's own user units — NOT the
     // element's bounding box, which for a <g> is only as big as its contents.
-    if (window.gsap) window.gsap.set(rotor, { svgOrigin: CX + " " + CY });
+    if (window.gsap) window.gsap.set(state.rotors, { svgOrigin: CX + " " + CY });
     setRotation(0);
     return true;
   }
@@ -928,19 +947,18 @@
   }
 
   function setRotation(deg) {
-    if (!state.rotor) return;
-    if (window.gsap) window.gsap.set(state.rotor, { rotation: deg });
+    if (!state.rotors || !state.rotors.length) return;
+    if (window.gsap) window.gsap.set(state.rotors, { rotation: deg });
     else
-      state.rotor.setAttribute(
-        "transform",
-        "rotate(" + round(deg) + " " + CX + " " + CY + ")"
-      );
+      for (var i = 0; i < state.rotors.length; i++)
+        state.rotors[i].setAttribute(
+          "transform",
+          "rotate(" + round(deg) + " " + CX + " " + CY + ")"
+        );
   }
   function currentRotation() {
-    if (!state.rotor) return 0;
-    if (window.gsap)
-      return Number(window.gsap.getProperty(state.rotor, "rotation")) || 0;
-    return 0;
+    if (!state.rotors || !state.rotors.length || !window.gsap) return 0;
+    return Number(window.gsap.getProperty(state.rotors[0], "rotation")) || 0;
   }
 
   /* ------------------------------ the spin ------------------------------ */
@@ -960,10 +978,12 @@
   }
 
   function startIdleSpin() {
-    if (!state.rotor || !window.gsap) return;
+    if (!state.rotors || !state.rotors.length || !window.gsap) return;
     var perTurn = num(state.wrap, "data-spin-idle-turn", 1, 0.4);
     stopTweens();
-    state.idleTween = window.gsap.to(state.rotor, {
+    // One tween, both groups — they must never drift apart by a frame or the
+    // labels would visibly lag the panes they belong to.
+    state.idleTween = window.gsap.to(state.rotors, {
       rotation: "+=360",
       duration: perTurn,
       ease: "none",
@@ -988,7 +1008,7 @@
     var duration = num(state.wrap, "data-spin-duration", 1.5, 0.3);
     var target = landingRotation(index, count);
 
-    if (!state.rotor || !window.gsap || reduced()) {
+    if (!state.rotors || !state.rotors.length || !window.gsap || reduced()) {
       stopTweens();
       setRotation(target);
       if (done) done();
@@ -1005,7 +1025,7 @@
       state.idleTween.kill();
       state.idleTween = null;
     }
-    state.landTween = window.gsap.to(state.rotor, {
+    state.landTween = window.gsap.to(state.rotors, {
       rotation: to,
       duration: duration,
       ease: "power4.out",
@@ -1462,6 +1482,7 @@
     state.session = null;
     state.award = null;
     state.rotor = null;
+    state.rotors = null;
     state.busy = false;
     stopTweens();
     stopCooldown();
@@ -1497,6 +1518,7 @@
     state.segments = null;
     state.session = null;
     state.rotor = null;
+    state.rotors = null;
     state.busy = false;
     state.mode = null;
   }

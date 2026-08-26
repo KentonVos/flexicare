@@ -90,7 +90,15 @@ cleared the box with `innerHTML = ""`, destroying glass.js's injected `.lg-layer
 would never rebuild it and the glass silently lost its lighting layer on the first
 redraw. The controller now clears only what it owns, keeping any `data-lg-*` node.
 
-**Webflow handover.** Two new files:
+**Fixed: a strong sheen washed out the labels.** The specular overlay is drawn
+after the rotor so it stays put while the wheel turns — which also put it *above*
+the label text. Invisible at the old 0.14 default, a heavy white veil over white
+type at the tuned 0.48. The wheel now uses TWO rotating groups with the sheen
+sandwiched between them: panes and lit edges in the back group, the fixed sheen,
+then labels and icons in the front group. Both groups are driven by a single tween
+so they cannot drift apart by a frame.
+
+**Webflow handover.** Three new files:
 - `demo/spin-webflow.css` — the only CSS the wheel needs. Entirely
   attribute-driven (no class names, so Webflow classes can be named freely), and
   limited to what the Designer cannot express: `backdrop-filter`, the pointer's
@@ -102,6 +110,10 @@ redraw. The controller now clears only what it owns, keeping any `data-lg-*` nod
   panel by CLEARING its inline display.
 - `demo/spin-webflow-embed.html` — that same CSS wrapped in `<style>`, paste-ready.
   Generated from the `.css`, and a test asserts the two cannot drift apart.
+- `demo/spin-webflow-structure.html` — the complete element/attribute reference for
+  the page, heavily commented. Tests assert it covers every panel state, every slot
+  the script writes into, and every hook the CSS keys off, so it cannot fall behind
+  the contract.
 
 New structural hooks the script does not read but the CSS keys off:
 `[data-spin-stage]`, `[data-spin-hub]`, `[data-spin-marker]`, `[data-spin-glow]`.

@@ -50,8 +50,11 @@ flexicare/
 │   │                          backend): `python3 -m http.server 8080`
 │   ├── spin-webflow.css     ← the ONLY CSS the wheel needs from you. Attribute-
 │   │                          driven, no class names. The playground links it.
-│   └── spin-webflow-embed.html ← PASTE-READY: that same CSS wrapped in <style>,
-│                                 for Webflow's page head. GENERATED from the .css
+│   ├── spin-webflow-embed.html ← PASTE-READY: that same CSS wrapped in <style>,
+│   │                             for Webflow's page head. GENERATED from the .css
+│   └── spin-webflow-structure.html ← REFERENCE: every element and attribute of
+│                                 the spin page, commented. Rebuild it in the
+│                                 Designer with your own classes.
 └── src/               ← the sixteen scripts (served by Cloudflare from /src/)
     ├── glass.js
     ├── transition.js

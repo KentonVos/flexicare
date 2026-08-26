@@ -1,0 +1,199 @@
+<!-- ============================================================
+     THE COMPLETE ELEMENT + ATTRIBUTE STRUCTURE for /spin-to-win
+
+     This is a REFERENCE, not something to paste. Rebuild it in the Designer
+     with your own classes — the script only ever looks at the data-*
+     attributes, never at a class or an id.
+
+     Indentation = nesting. Everything marked REQUIRED is load-bearing;
+     leave it out and that piece silently does nothing.
+
+     Pair it with demo/spin-webflow-embed.html (the CSS) in the page head.
+     ============================================================ -->
+
+<!-- REQUIRED. The gate. No [data-spin], no init, blank page.
+     Must live INSIDE data-barba="container" or Barba never brings it across.
+     Every knob below is optional — these are the tuned values, and most are
+     already the script's defaults. -->
+<div data-spin
+
+     data-spin-product="/flexicare-product"   
+     data-spin-onboarding="/onboarding"       
+     data-spin-debug                          
+
+     data-spin-turns="1"
+     data-spin-duration="1.5"
+     data-spin-min="2"
+     data-spin-idle-turn="1"
+     data-spin-pointer-angle="0"
+
+     data-spin-style="glass"
+     data-spin-tint="0"
+     data-spin-fill="rgba(255,255,255,0.06)"
+     data-spin-fill-alt="rgba(255,255,255,0.025)"
+     data-spin-rim="0"
+     data-spin-studs="off"
+     data-spin-stroke-width="0"
+
+     data-spin-edge="1"
+     data-spin-edge-width="0.2"
+     data-spin-sheen="0.48"
+     data-spin-light-angle="40"
+
+     data-spin-labels="on"
+     data-spin-label-mode="radial"
+     data-spin-label-size="4.5"
+     data-spin-label-radius="87"
+     data-spin-label-color="#ffffff"
+
+     data-spin-expires-format="Claim by {date}">
+
+
+  <!-- ========== PANEL: while it resolves ========== -->
+  <div data-spin-when="loading">
+    <p>Loading your wheel…</p>
+  </div>
+
+
+  <!-- ========== PANEL: the wheel ==========
+       "ready spinning" = show in BOTH states. Space-separated. -->
+  <div data-spin-when="ready spinning">
+
+    <!-- REQUIRED, and MUST BE SQUARE.
+         The embed gives it position:relative and aspect-ratio:1/1 — you give
+         it a WIDTH. Without one it stretches to its parent and you get a
+         wheel the size of the viewport.
+             width: min(74vmin, 520px)   is a good starting point.
+         NEVER put a `filter` (a drop-shadow is the tempting one) on this
+         element — it becomes a backdrop root and the glass below it has
+         nothing left to frost. Use box-shadow on the canvas instead. -->
+    <div data-spin-stage>
+
+      <!-- OPTIONAL. Your colour/gradient. Must be a SIBLING of the wheel,
+           never its parent — same backdrop-root reason as above.
+           position:absolute; inset:0 (or larger); z-index:0 -->
+      <div data-spin-glow></div>
+
+      <!-- REQUIRED. LEAVE IT EMPTY — cleared on every render.
+           The embed positions it and gives it the backdrop blur.
+           z-index:1 -->
+      <div data-spin-wheel></div>
+
+      <!-- OPTIONAL. The dial capping the centre.
+           You set: position absolute, centred, width ~26%, border-radius 50%,
+           a translucent background, z-index:3.
+           The embed adds the second, gentler blur. -->
+      <div data-spin-hub>Flex</div>
+
+      <!-- The marker. TWO elements, and the outer one matters:
+           [data-spin-marker] is a FULL-SIZE wrapper (the embed makes it
+           position:absolute; inset:0) that rotates to
+           data-spin-pointer-angle. Rotating a full-size box swings the
+           pointer around the rim.
+           Set z-index:4 on it so the pointer sits above the wheel.
+
+           Your actual graphic goes INSIDE, at the TOP CENTRE:
+             position:absolute; left:50%; top:-3%;
+             transform:translateX(-50%);
+             width ~7%; height ~12%;   ← give it real dimensions AND a
+                                          background, or there is nothing
+                                          to see. -->
+      <div data-spin-marker>
+        <div data-spin-pointer></div>
+      </div>
+    </div>
+
+    <!-- REQUIRED. No button, no spin. Anywhere inside [data-spin]. -->
+    <a href="#" data-spin-go>Spin to win</a>
+  </div>
+
+
+  <!-- ========== PANEL: won a real prize ========== -->
+  <div data-spin-when="prize">
+    <p><span data-spin-name-wrap>Nice one, <span data-spin-name></span>.</span></p>
+    <h2 data-spin-prize-name></h2>
+    <!-- Optional: the short on-wheel label instead of the full prize name. -->
+    <span data-spin-prize-label></span>
+
+    <!-- The claim code. Staff read this off the tablet from a step away, or
+         the shopper photographs it. LARGE and HIGH-CONTRAST. The wrap is
+         hidden automatically whenever there is no code to show. -->
+    <div data-spin-claim-wrap>
+      <div data-spin-claim></div>
+    </div>
+
+    <!-- Write REAL copy here. The API may send null and the script falls
+         back to whatever you authored — lorem ipsum will ship. -->
+    <p data-spin-instructions>Show this code to a Clicks team member at the till.</p>
+
+    <!-- Hidden automatically when the award never expires. -->
+    <p data-spin-expires-wrap><span data-spin-expires></span></p>
+
+    <p>Collect at <strong data-spin-store></strong></p>
+    <a href="/" data-spin-done>Done</a>
+  </div>
+
+
+  <!-- ========== PANEL: the consolation segment ==========
+       Every award carries a claim code, including this one — but there is
+       nothing to collect, so DO NOT put [data-spin-claim] in here. -->
+  <div data-spin-when="consolation">
+    <!-- -prize-name is the full name ("Try again next time"); -prize-label is
+         the short on-wheel copy ("Try again"). Use whichever reads better. -->
+    <h2 data-spin-prize-name></h2>
+    <p data-spin-instructions>Thanks for playing.</p>
+    <a href="/" data-spin-done>Done</a>
+  </div>
+
+
+  <!-- ========== PANELS: an award that is no longer claimable ==========
+       Reached on a reload, not after a spin. Three separate states so the
+       copy can differ; combine them with data-spin-when="redeemed expired
+       voided" if one message will do. -->
+  <div data-spin-when="redeemed">
+    <h2>Already collected</h2>
+    <p>You've picked up <span data-spin-prize-name></span>.</p>
+    <a href="/" data-spin-done>Done</a>
+  </div>
+  <div data-spin-when="expired">
+    <h2>This reward has expired</h2>
+    <a href="/" data-spin-done>Done</a>
+  </div>
+  <div data-spin-when="voided">
+    <h2>This reward is no longer valid</h2>
+    <a href="/" data-spin-done>Done</a>
+  </div>
+
+
+  <!-- ========== PANEL: no phone number on the session ==========
+       Shouldn't happen (onboarding collects it) but the API can refuse. -->
+  <div data-spin-when="nophone">
+    <h2>One more thing</h2>
+    <p>We need a mobile number before you can spin.</p>
+    <a href="/onboarding" data-spin-back>Add my number</a>
+  </div>
+
+
+  <!-- ========== PANEL: everything that can go wrong ==========
+       A web session, the wheel not configured, the network down, already
+       spun on this number. All of them land here. Again: author real copy —
+       it is the fallback when the script has nothing better to say. -->
+  <div data-spin-when="unavailable error">
+    <h2>The wheel is taking a break</h2>
+    <p data-spin-error>We couldn't spin the wheel right now — please ask a Clicks team member.</p>
+    <a href="/" data-spin-done>Done</a>
+  </div>
+</div>
+
+
+<!-- ============================================================
+     ELSEWHERE ON THIS PAGE (not inside [data-spin]):
+
+       data-kiosk-idle-factor="2"
+         Doubles the kiosk idle timeout here, so a shopper reading a claim
+         code does not have it yanked away at 90 seconds.
+
+       data-kiosk-screen="spin"
+         What the heartbeat reports to the admin's device list. Optional —
+         the script guesses from the URL otherwise.
+     ============================================================ -->
