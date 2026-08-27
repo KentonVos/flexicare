@@ -185,6 +185,14 @@ Barba + GSAP page transitions. **Calls `barba.init()` — the only place.** Mark
   `data-nav-reveal` (animate height instead of just opacity),
   `data-progress-bar` + `data-progress="0..1"` per container.
 - Tunables in `window.PageTransition.config`.
+- `window.PageTransition.nav.hide(instant)` / `.show(instant)` / `.isHidden()` — the same
+  collapse the landing page uses, callable MID-page. `/spin-to-win` hides the nav the
+  moment the wheel starts turning (the spin CTA lives in there, and the next step is going
+  home, where it is collapsed anyway). It runs the real `navReveal()`, so `__navHidden`
+  stays truthful and the next navigation agrees about where the nav already is — a
+  hand-rolled height tween would leave `applyVisibility` collapsing or reopening it a
+  second time. Needs `[data-nav-reveal]` on the wrapper. Note the collapse RETURNS ITS
+  SPACE to the layout, so a `flex:1` sibling (the spin stage) grows into it.
 
 **The persistence problem (read this before touching transition.js).** Barba swaps ONLY
 the container. Everything else — the entire shell — stays as whatever the FIRST page you

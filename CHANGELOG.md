@@ -14,6 +14,29 @@ Format:
 
 ---
 
+## 2026-08-27 — Tapping spin collapses the nav
+
+- `src/transition.js`, `src/flexicare-spin.js`, `ARCHITECTURE.md`,
+  `docs/spin-attributes.md`
+- New public API: `PageTransition.nav.hide(instant)` / `.show(instant)` /
+  `.isHidden()`. It runs the SAME `navReveal()` the landing page's
+  `data-show-except` path uses — same duration, easing and glass freeze, and the
+  same `__navHidden` bookkeeping, which is the point: a hand-rolled height tween
+  would leave `applyVisibility` disagreeing about where the nav is and collapsing
+  or reopening it a second time on the next navigation. Needs `[data-nav-reveal]`.
+- `/spin-to-win` now collapses the nav the moment the wheel starts turning: the
+  spin CTA lives in the nav, so it is spent, and the next step is the landing page
+  where it is collapsed anyway — so it is deliberately NOT restored on teardown.
+  It returns in exactly one case: the state goes back to `ready` (a 429 cooldown,
+  a retryable network error), because the CTA is inside it.
+- On the first paint (a reload that recovers an award, a web session refused up
+  front) the collapse is instant — animating there would open the nav with the
+  page entrance and immediately shut it again.
+- **No Webflow change needed** beyond what is already there (`data-nav-reveal` on
+  `button-navigation-wrapper`). Opt out with `data-spin-nav-hide="off"` on
+  `[data-spin]`. Note the collapse returns its space to the layout, so a `flex:1`
+  sibling — the spin stage — grows into it as the nav goes.
+
 ## 2026-08-27 — The panel swap animates (wheel out, card in)
 
 - `src/flexicare-spin.js`, `docs/spin-attributes.md`, `demo/spin-webflow-panels.html`

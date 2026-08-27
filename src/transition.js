@@ -873,6 +873,42 @@
     return navTL;
   }
 
+  /* ---------- public nav control ----------
+     applyVisibility decides the nav's fate once per NAVIGATION, from the
+     namespace: data-show-except="landing" means "collapsed on the landing
+     page". But a page sometimes needs that same gesture MID-page.
+     /spin-to-win is the case: the spin CTA lives in the nav, so the moment the
+     wheel starts turning the nav has done its job, and the next step is going
+     home — where it is collapsed anyway.
+
+     Deliberately the same navReveal() the namespace path uses: same duration,
+     same easing, same glass freeze, and — the part that matters — the same
+     `__navHidden` bookkeeping. Roll your own height tween instead and
+     applyVisibility will disagree about where the nav already is, then
+     collapse or reopen it a second time on the next navigation.
+
+     Returns the GSAP timeline, or null when there is nothing to do (no
+     [data-nav-reveal] on the page, or it is already in that state). */
+  function setNav(hide, instant) {
+    var el = document.querySelector("[data-nav-reveal]");
+    // Shell element, outside every barba container, so there is exactly one —
+    // the same lookup applyVisibility and the entrance both already use.
+    if (!el) return null;
+    return navReveal(el, hide, !!instant);
+  }
+  window.PageTransition.nav = {
+    hide: function (instant) {
+      return setNav(true, instant);
+    },
+    show: function (instant) {
+      return setNav(false, instant);
+    },
+    isHidden: function () {
+      var el = document.querySelector("[data-nav-reveal]");
+      return !!(el && el.__navHidden);
+    },
+  };
+
   // Silent innerHTML swap for a synced region (no cross-fade) — used when the
   // nav reveal is going to animate the same wrapper, so it owns the motion.
   function syncSwapSilent(nextDoc, el) {

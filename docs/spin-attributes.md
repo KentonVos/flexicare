@@ -25,6 +25,7 @@ Everything in §2–§5 goes **on this element**.
 |---|---|---|---|
 | `data-spin-product` | `/flexicare-product` | | Bounce target when the session isn't `COMPLETED`. |
 | `data-spin-onboarding` | `/onboarding` | | Bounce target when there's no session id. |
+| `data-spin-nav-hide` | `on` | Whether tapping spin collapses the nav wrapper. The spin CTA lives in the nav, so once the wheel turns the nav is spent: it slides away with the **same gesture the landing page uses** (`PageTransition.nav`, so it needs `[data-nav-reveal]` on the wrapper) and stays away, because the next step is going home where it is collapsed anyway. It returns only if the state goes back to `ready` — the spin didn't take — since otherwise the shopper is left with a wheel they can't tap. `off` disables. |
 | `data-spin-expires-format` | `Claim by {date}` | | `{date}` is replaced with the localised date. |
 | `data-spin-debug` | absent | flag | Console logging **and the layout audit**. Turn it on while building. |
 

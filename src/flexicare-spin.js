@@ -140,6 +140,19 @@
                                   data-spin-stroke-width       hairline dividers.
                                      Defaults to 0.5 in glass style, 0 in solid.
                                   data-spin-expires-format="Claim by {date}"
+                                  data-spin-nav-hide="on|off"  whether tapping
+                                     spin collapses the nav wrapper. Default on.
+                                     The spin CTA lives in the nav, so once the
+                                     wheel is turning the nav is spent — it
+                                     slides away with the SAME gesture the
+                                     landing page uses (PageTransition.nav,
+                                     which needs [data-nav-reveal] on the
+                                     wrapper), and stays away, because the next
+                                     step is going home where it is collapsed
+                                     anyway. It returns only if the state goes
+                                     back to `ready` — i.e. the spin did not
+                                     take — since otherwise the shopper is left
+                                     with a wheel they cannot tap.
                                   data-spin-debug         console logging
 
                                 PANEL MOTION (the wheel out, the card in —
@@ -331,6 +344,7 @@
     debug: false,
     demo: null, // ?spindemo — dev only; see the header comment
     painted: false, // has applyWhen run once? gates the panel animation
+    navHidden: false, // did WE collapse the nav? gates putting it back
   };
 
   /* Used only when ?spindemo is on AND GET /prizes/wheel is unreachable, so
@@ -489,8 +503,10 @@
     if (root) root.setAttribute("data-spin-state", mode);
     // The first paint of a page has nothing to cross-fade from, and it would
     // fight the Barba entrance animation. Every state change after it animates.
-    applyWhen(state.painted);
+    var animate = state.painted;
+    applyWhen(animate);
     state.painted = true;
+    syncNav(mode, animate);
     refreshButton();
     // Keep the admin's device list honest about where the shopper actually is.
     if (FC.kiosk && FC.kiosk.setScreen)
@@ -677,6 +693,52 @@
     };
     if (!flat) out.scale = cfg.scaleOut;
     window.gsap.to(el, out);
+  }
+
+  /* ------------------------------- the nav -------------------------------
+     The spin CTA lives in the nav wrapper, so the nav has exactly one job on
+     this page. The moment the wheel starts turning that job is done — and the
+     next step is going home, where the nav is collapsed anyway. So it slides
+     away with the same gesture the landing page uses, which makes the two
+     reads as one flow rather than two unrelated animations.
+
+     We do NOT own the nav, we borrow it: PageTransition.nav wraps the same
+     navReveal() the namespace path uses, so `__navHidden` stays truthful and
+     the navigation that follows doesn't collapse or reopen it a second time.
+     For the same reason we never put it back on teardown — leaving it hidden
+     is what makes the trip to the landing page seamless.
+
+     It comes back in exactly one case: the state returns to `ready` after we
+     hid it, meaning the spin did NOT take (a 429 cooldown, a retryable
+     network error). The CTA is inside the nav, so without this the shopper is
+     left looking at a wheel they cannot tap.
+
+     Opt out with data-spin-nav-hide="off" on [data-spin]. */
+  function syncNav(mode, animate) {
+    if (attr(state.wrap, "data-spin-nav-hide", "on") === "off") return;
+    var pt = window.PageTransition;
+    if (!pt || !pt.nav) return;
+
+    // `loading` and `ready` are the only states where spinning is still ahead
+    // of the shopper. Everything else — spinning, every award state, every
+    // dead end — is past it.
+    var needed = mode === "loading" || mode === "ready";
+
+    if (!needed) {
+      if (state.navHidden) return;
+      state.navHidden = true;
+      // On the FIRST paint (a reload that recovers an award, a web session
+      // refused up front) collapse it instantly: animating here would open
+      // the nav with the page entrance and immediately close it again.
+      pt.nav.hide(!animate);
+      dbg("nav → hidden", animate ? "" : "(instant)");
+      return;
+    }
+    if (mode === "ready" && state.navHidden) {
+      state.navHidden = false;
+      pt.nav.show(!animate);
+      dbg("nav → shown (the spin did not take)");
+    }
   }
 
   function refreshButton() {
@@ -1863,6 +1925,7 @@
     state.rotors = null;
     state.busy = false;
     state.painted = false;
+    state.navHidden = false;
     stopTweens();
     stopCooldown();
     resetPanels();
@@ -1897,6 +1960,11 @@
     stopCooldown();
     resetPanels();
     state.painted = false;
+    /* Deliberately NOT restoring the nav: we are on our way to the landing
+       page, where it is collapsed anyway, and the next navigation's
+       applyVisibility opens it if the destination wants it. Reopening here
+       would flash it in for the length of the leave transition. */
+    state.navHidden = false;
     state.token++; // invalidate anything still in flight
     if (state.wrap) {
       state.wrap.removeAttribute("data-spin-state");
