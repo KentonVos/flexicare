@@ -14,6 +14,25 @@ Format:
 
 ---
 
+## 2026-08-27 — The spin result panels, as two card templates
+
+- `demo/spin-webflow-panels.html` (new)
+- Build reference for every post-wheel state on `/spin-to-win`, as **two** card
+  layouts rather than eleven: **A** the prize card (`prize` — the only state with
+  a claim code, expiry and store), **B** one message card whose outer
+  `[data-spin-when]` lists `consolation redeemed expired voided nophone
+  unavailable error` and whose copy is switched by NESTED `[data-spin-when]`
+  blocks. Nesting works because `applyWhen()` evaluates each one independently,
+  so the card chrome is authored once.
+- Documents three things that catch people out: there is no "no prize" state
+  (`consolation` is it, and its claim code must never be shown); `nophone` is the
+  one state with a different CTA (`data-spin-back` → `/onboarding`); and the 429
+  cooldown writes its countdown into `[data-spin-error]` while the state is still
+  `ready`, so a SECOND (empty) error slot belongs inside the `ready spinning`
+  panel or the countdown is invisible.
+- No script change, no Webflow footer change. Companion to
+  `demo/spin-webflow-structure.html`, which covers the stage, wheel and CTA.
+
 ## 2026-08-26 — Kiosk mode + the prize wheel (spin-to-win)
 
 **New files.** The Webflow footer script list CHANGED — see the block in

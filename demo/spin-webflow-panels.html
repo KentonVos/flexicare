@@ -1,0 +1,188 @@
+<!-- ============================================================
+     Flexicare /spin-to-win — THE TWO PANEL TEMPLATES
+     ------------------------------------------------------------
+     Reference structure for building the result states in the Webflow
+     Designer. Companion to demo/spin-webflow-structure.html (which covers
+     the stage, the wheel and the CTA) — this file covers everything the
+     shopper sees AFTER the wheel stops, plus every dead end.
+
+     READ THIS FIRST: THERE IS ONLY ONE PAGE.
+     Every state below lives on /spin-to-win at the same time. The script
+     sets data-spin-state on [data-spin] and shows exactly the
+     [data-spin-when] panels that list it — display:none for the rest. There
+     is no second barba.go(), no /spin-result page, no Webflow page template.
+     "Two templates" here means TWO CARD LAYOUTS, both authored on this page.
+
+       TEMPLATE A — the PRIZE card.    One state:  prize
+       TEMPLATE B — the MESSAGE card.  Six states: consolation, redeemed,
+                                       expired, voided, nophone,
+                                       unavailable/error
+
+     Why the split falls there: A is the only state with something to
+     collect, so it is the only one that carries a claim code, an expiry and
+     a store. B is always the same shape — headline, one line of copy, one
+     button — so it is built ONCE and the copy is switched by NESTING
+     [data-spin-when] blocks inside it.
+
+     NESTING IS SUPPORTED AND IS THE POINT.
+     The script evaluates every [data-spin-when] independently, so an outer
+     panel that lists six states can hold inner blocks that each list one.
+     The card chrome (padding, glass, radius) is authored once; only the
+     words change. Do NOT build six separate cards — six copies of the same
+     card is six places to fix a padding tweak.
+
+     THERE IS NO "no prize" STATE. `consolation` is it. It is a real award
+     with a real claim code that must NOT be shown, because there is nothing
+     to hand over. Never put [data-spin-claim] inside a consolation block.
+     ============================================================ -->
+
+
+<!-- ============================================================
+     TEMPLATE A — THE PRIZE CARD
+     Reached: the wheel landed on a non-consolation segment, or a reload
+     recovered an award that is still AWARDED.
+     ============================================================ -->
+<div data-spin-when="prize">
+
+  <!-- The greeting. -name-wrap is hidden automatically when the session has
+       no first name, so author the punctuation INSIDE the wrap — otherwise a
+       nameless shopper reads "Nice one, ." -->
+  <p><span data-spin-name-wrap>Nice one, <span data-spin-name></span>!</span> You've won</p>
+
+  <!-- prize.name — the full name. Empty in the Designer: the API fills it.
+       Style it as the hero of the card. -->
+  <h1 data-spin-prize-name></h1>
+
+  <!-- THE CLAIM CODE — the single most important thing on this page.
+       Staff read it off a tablet from a step away, or the shopper
+       photographs it. LARGE, high contrast, monospace or wide letter-spacing
+       so FLX-7K3M-9Q2A cannot be misread. The wrap is hidden automatically
+       whenever there is no code to emphasise, so put the label inside it. -->
+  <div data-spin-claim-wrap>
+    <div>Your claim code</div>
+    <div data-spin-claim></div>
+  </div>
+
+  <!-- API copy with an AUTHORED FALLBACK. The API may send null and the
+       script keeps whatever you typed here — so type real copy, never lorem
+       ipsum, or lorem ipsum is what ships. -->
+  <p data-spin-instructions>Show this code to a Clicks team member at the till to collect your reward.</p>
+
+  <!-- Hidden automatically when the award never expires. Format comes from
+       data-spin-expires-format on [data-spin] ("Claim by {date}"), so do not
+       author the words "Claim by" here — they would print twice. -->
+  <p data-spin-expires-wrap><span data-spin-expires></span></p>
+
+  <!-- The store the award is bound to. -->
+  <p>Collect at <strong data-spin-store></strong></p>
+
+  <a href="/" data-spin-done>Done</a>
+</div>
+
+
+<!-- ============================================================
+     TEMPLATE B — THE MESSAGE CARD
+     One card, one set of chrome, six states. The outer panel lists all of
+     them; each inner block lists one. Everything shared (the card itself,
+     its padding, its glass) is authored here exactly once.
+
+     Note there is no [data-spin-claim] anywhere in this card — none of these
+     states has anything to collect, and consolation actively must not show
+     the code it technically has.
+     ============================================================ -->
+<div data-spin-when="consolation redeemed expired voided nophone unavailable error">
+
+  <!-- ---------- consolation: the "try again" segment ----------
+       A real award, no prize. -prize-name is the full copy ("Try again next
+       time"); -prize-label is the short on-wheel version ("Try again"). Use
+       whichever reads better and delete the other. -->
+  <div data-spin-when="consolation">
+    <h1 data-spin-prize-name>Not this time</h1>
+    <p data-spin-instructions>Thanks for playing — your Flexicare results are yours to keep.</p>
+  </div>
+
+  <!-- ---------- redeemed / expired / voided ----------
+       Only ever reached on a RELOAD, never straight after a spin: the award
+       already existed and its status is no longer AWARDED. Three states so
+       the copy can differ; merge them into one block if one message will do.
+       -prize-name is still populated in all three. -->
+  <div data-spin-when="redeemed">
+    <h1>Already collected</h1>
+    <p>You've picked up <span data-spin-prize-name></span>. Nothing more to do.</p>
+  </div>
+  <div data-spin-when="expired">
+    <h1>This reward has expired</h1>
+    <p>The claim window on <span data-spin-prize-name></span> has closed.</p>
+  </div>
+  <div data-spin-when="voided">
+    <h1>This reward is no longer valid</h1>
+    <p>Please ask a Clicks team member if you think this is a mistake.</p>
+  </div>
+
+  <!-- ---------- nophone ----------
+       Onboarding collects the number, so this shouldn't happen — but the API
+       can refuse a spin without one. THE ONLY STATE WITH A DIFFERENT CTA:
+       data-spin-back, pointed at onboarding. Keep it inside this block. -->
+  <div data-spin-when="nophone">
+    <h1>One more thing</h1>
+    <p>We need a mobile number before you can spin.</p>
+    <a href="/onboarding" data-spin-back>Add my number</a>
+  </div>
+
+  <!-- ---------- unavailable / error — every failure path ----------
+       A web session, the wheel not configured, the network down, already
+       spun, an unexpected 409. All of them land here, and none of them may
+       block the journey: the shopper keeps their results either way.
+
+       [data-spin-error] is filled by the script when it has something
+       specific to say and falls back to this authored text when it doesn't —
+       so write a real sentence. data-spin-reason on [data-spin] narrows it
+       further (web | wheel | already-spun | other-kiosk | disabled |
+       rate-limit | network | unknown) if you want per-reason copy in CSS. -->
+  <div data-spin-when="unavailable error">
+    <h1>The wheel is taking a break</h1>
+    <p data-spin-error>We couldn't spin the wheel right now — please ask a Clicks team member.</p>
+  </div>
+
+  <!-- The shared CTA for the five states that are simply over. nophone
+       carries its own above; hide this one there. -->
+  <div data-spin-when="consolation redeemed expired voided unavailable error">
+    <a href="/" data-spin-done>Done</a>
+  </div>
+</div>
+
+
+<!-- ============================================================
+     ONE MORE SLOT THAT IS NOT A PANEL — the 429 countdown
+     ------------------------------------------------------------
+     The spin is rate-limited per kiosk (10/min). On a 429 the script counts
+     Retry-After down on the CTA and writes "One moment — try again in 8
+     seconds." into [data-spin-error] — WHILE THE STATE IS STILL `ready`.
+     If the only [data-spin-error] on the page lives inside the unavailable
+     panel, that countdown is written somewhere invisible and the button just
+     looks broken.
+
+     So put a SECOND [data-spin-error] near the spin button, inside the
+     ready/spinning panel. The script writes to every match, and blanks them
+     when the countdown ends. Leave this one EMPTY in the Designer — the
+     authored text of the first one is the fallback message, and an empty
+     element here means nothing shows until there is something to say.
+     ============================================================ -->
+<!-- goes inside the existing <div data-spin-when="ready spinning"> -->
+<p data-spin-error></p>
+
+
+<!-- ============================================================
+     PAGE-LEVEL, OUTSIDE THE PANELS
+
+       data-kiosk-idle-factor="2"  on the page wrapper
+         A shopper reading a claim code off a tablet must not have it yanked
+         away at 90 seconds. Doubles the kiosk idle timeout on this page.
+
+     BUILD/TEST WITHOUT A PAIRED TABLET  —  ?spindemo
+       ?spindemo=consolation | redeemed | expired | voided | nophone
+                | unavailable        jump straight to that panel
+       ?spindemo                      draw the wheel and spin to a fake prize
+     It never calls POST /spin and never writes a real award. Remove the
+     parameter before any real testing.
+     ============================================================ -->
