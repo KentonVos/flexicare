@@ -14,6 +14,49 @@ Format:
 
 ---
 
+## 2026-08-27 — Site-wide Webflow attribute audit (no code change)
+
+Applied in the **Webflow Designer** via the MCP connector, not in this repo — so
+there is nothing to push for these. Left UNPUBLISHED for Kenton to review.
+
+**Audited:** all 10 funnel pages against each controller's documented contract,
+plus the site head/footer custom code. Every page's REQUIRED attributes are
+present. The shell ancestor chain is identical across all 10 pages (9 levels,
+same types and tags; only classes differ, which is what `syncShellClasses` is
+for). The footer points at the Worker URL — nothing pinned to a stale jsDelivr
+tag, so pushes are genuinely live. The head snippet setting `window.__fcLayout`
+is intact.
+
+**Fixed:**
+- `/meet-your-two-selves` — one of the two `[data-reveal-next]` CTAs targeted
+  `/flex`, which **does not exist** (404, and its link type was "none" so there
+  was no href fallback). Now `/flexicare`, matching the other.
+- **25 glass hosts** across 8 pages had `data-anim` (which moves the element)
+  instead of `data-anim-fade`. Glass owns `transform`. Avatar 11, reveal 4,
+  product 4, start 2, home/onboarding/archetype/flexicare 1 each. The ~10
+  non-glass `data-anim` elements were deliberately left alone.
+- Debug flags that were logging on the live site: `data-reveal-debug`,
+  `data-avatar-debug`.
+- `data-checked-target=".fc-consent"` on both quiz option templates — a leftover
+  from the onboarding page they were duplicated from. Inert (only
+  `flexicare-onboarding.js` reads it) but confusing.
+- Footer script order now matches the documented order: GSAP before Barba, and
+  onboarding before selfie/avatar. **The file LIST did not change** — no Webflow
+  paste needed, and nothing was broken before; this is consistency only.
+
+**Known audit blind spot:** attribute queries do NOT see inside HTML Embeds. The
+onboarding inputs (`data-onboarding-name`, `-whatsapp`) and the whole product copy
+database live in embeds and first appeared as missing required attributes. Read
+them with the element-settings tool's `code` key before believing a "missing
+attribute" result. Also: `set_attributes` cannot write an element's id — that's
+`set_dom_id` on the settings tool, and the failure gives no hint.
+
+**Still open (needs elements placed in the Designer):** a second, empty
+`[data-spin-error]` inside the spin page's `ready spinning` panel so the 429
+countdown is visible, and `[data-spin-expires-wrap]` / `[data-spin-expires]` on
+the prize card. Deliberately not attempted from here — positioning new elements
+is guesswork against layout the API doesn't expose.
+
 ## 2026-08-27 — Tapping spin collapses the nav
 
 - `src/transition.js`, `src/flexicare-spin.js`, `ARCHITECTURE.md`,
