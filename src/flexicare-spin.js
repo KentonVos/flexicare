@@ -528,6 +528,11 @@
        resets, so a state change that arrives mid-tween lands cleanly. */
     var motion = animate && window.gsap && !reduced();
     if (!motion) {
+      dbg(
+        "panels → " + state.mode + " (no motion:",
+        !animate ? "first paint" : !window.gsap ? "no gsap" : "reduced motion",
+        ")"
+      );
       for (i = 0; i < items.length; i++) {
         resetPanel(items[i].el);
         items[i].el.style.display = items[i].on ? "" : "none";
@@ -617,12 +622,17 @@
 
     // A child of a panel that is itself changing: no motion of its own.
     if (ancestorChanging(el)) {
+      dbg("panel skip", attr(el, "data-spin-when", "?"), "— parent panel carries the motion");
       resetPanel(el);
       el.style.display = item.on ? "" : "none";
       return;
     }
 
     var flat = isGlassHost(el);
+    dbg(
+      (item.on ? "panel IN  " : "panel OUT ") + attr(el, "data-spin-when", "?"),
+      flat ? "(glass host — opacity only)" : "(scale + opacity)"
+    );
     if (flat && !el.__spinGlassWarned) {
       el.__spinGlassWarned = true;
       if (window.console)
@@ -1915,6 +1925,57 @@
      to say "the DOM changed under you, look again". Nothing in the funnel
      calls it — the Barba hooks below do that job in production. */
   FC.spin = FC.spin || {};
+
+  /* ------------------------- structure inspector -------------------------
+     `Flexicare.spin.panels()` in the console. Answers "why is my panel not
+     animating" without reading this file: it prints every [data-spin-when]
+     the script can actually SEE, what it decided about each one, and the
+     three things about the markup that change the answer — whether the panel
+     is a glass host (fades, never scales), whether it is nested inside
+     another panel (the parent carries the motion), and what CSS is really
+     doing to its display. A panel that does not appear in this table is one
+     the script never found: it is outside [data-spin] and outside the barba
+     container, and nothing will ever show it. */
+  FC.spin.panels = function () {
+    if (!state.wrap) {
+      console.warn("[spin] not initialised on this page — no [data-spin] wrapper.");
+      return [];
+    }
+    var rows = slots("[data-spin-when]").map(function (el) {
+      var cs = window.getComputedStyle(el);
+      var parent = null;
+      var p = el.parentNode;
+      while (p && p.nodeType === 1 && p !== state.wrap) {
+        if (p.hasAttribute("data-spin-when")) {
+          parent = p.getAttribute("data-spin-when");
+          break;
+        }
+        p = p.parentNode;
+      }
+      return {
+        when: el.getAttribute("data-spin-when"),
+        element: el.tagName.toLowerCase() + (el.className ? "." + String(el.className).trim().replace(/\s+/g, ".") : ""),
+        visible: el.__spinOn === true,
+        display: cs.display,
+        opacity: cs.opacity,
+        position: cs.position,
+        "glass host": isGlassHost(el) ? "YES — opacity only" : "no",
+        "nested in": parent || "—",
+      };
+    });
+    if (console.table) console.table(rows);
+    else console.log(rows);
+    console.log(
+      "[spin] state:", state.mode,
+      "| painted:", state.painted,
+      "| gsap:", !!window.gsap,
+      "| prefers-reduced-motion:", reduced()
+    );
+    var cfg = panelCfg();
+    console.log("[spin] panel motion:", cfg);
+    return rows;
+  };
+
   FC.spin.reinit = function () {
     teardown();
     init(document);
