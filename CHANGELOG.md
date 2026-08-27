@@ -14,6 +14,33 @@ Format:
 
 ---
 
+## 2026-08-27 — Spin page: countdown slot + expiry line, and a connector guide
+
+**Webflow (unpublished, applied via the MCP connector):**
+- `[data-spin-expires-wrap]` added to the prize card's EXISTING
+  `.spin-card_meta-wrapper`. Correction to the earlier audit entry: it claimed
+  `[data-spin-expires]` was missing, but only the WRAP was — the slot was there
+  all along. No new element was needed.
+- New empty `[data-spin-error]` inside `.spin-stage` (the `ready spinning` panel)
+  so the 429 cooldown countdown is visible while the CTA is disabled. It carries
+  `data-spin-error-copy` with the same sentence as the card's error box —
+  **required**, because `showError()` takes its fallback from the FIRST error slot
+  in document order and the wheel panel precedes the cards, so an empty slot there
+  would otherwise replace the authored copy with the script's hard-coded string.
+- New class `.spin-cooldown` (absolute, pinned bottom, `pointer-events:none`) so an
+  empty div cannot shift the wheel's layout. No existing class was modified.
+  **Its position is a guess** — bottom edge inside the square stage. Restyle freely.
+
+**Docs:**
+- `docs/webflow-mcp.md` (new) — the connector guide: the confirm-first rule, setup,
+  site and page ids, which tool does what, the traps (embeds are invisible to
+  attribute queries; `set_attributes` can't write an id; `set_site_freeform_code`
+  replaces the whole block), the shell-diff recipe, and what to keep doing by hand.
+- `docs/spin-attributes.md`, `demo/spin-webflow-panels.html` — document
+  `data-spin-error-copy`, which existed in the script but nowhere in the docs.
+- `CLAUDE.md` — points at the connector guide, and adds the standing rule: never
+  add a styling property to an existing class; create a new one.
+
 ## 2026-08-27 — Site-wide Webflow attribute audit (no code change)
 
 Applied in the **Webflow Designer** via the MCP connector, not in this repo — so

@@ -194,7 +194,9 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
   `applyVisibility` collapsing or reopening the nav a second time one page later. It
   returns in exactly one case — the state goes back to `ready` (429 cooldown, retryable
   error) — because the CTA is inside it.
-- **The Webflow MCP connector can WRITE, but CONFIRM EVERY CHANGE FIRST.** Reading needs
+- **The Webflow MCP connector can WRITE, but CONFIRM EVERY CHANGE FIRST.** Full
+  guide — page ids, which tool does what, and the traps — in `docs/webflow-mcp.md`;
+  read it before using the connector. Reading needs
   no permission — inspect freely, and diffing the shell tree across pages is the biggest
   win (see the shell structure rules above). Writing does: propose the exact edit, wait
   for a yes, then make it. Batch related edits into one list to approve rather than
@@ -204,7 +206,9 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
   such: approval to "fix these attributes" is not approval to delete anything. Attribute
   and style edits are the safe, high-value case; creating and POSITIONING new elements is
   guesswork against layout the API does not show, so prefer having the element placed in
-  the Designer and setting its attributes from here.
+  the Designer and setting its attributes from here. **Never add a styling property to an
+  existing class** — Kenton crafts the visual design and classes are shared; if a change
+  needs CSS, create a NEW class.
 - **The click model is event delegation.** Controllers attach ONE listener to
   `document` and re-resolve the target by attribute at click time. This is deliberate
   (it survives glass rebuilds and Barba swaps). Don't refactor it to attach listeners
