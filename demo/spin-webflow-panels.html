@@ -190,14 +190,27 @@
      panel, that countdown is written somewhere invisible and the button just
      looks broken.
 
-     So put a SECOND [data-spin-error] near the spin button, inside the
-     ready/spinning panel. The script writes to every match, and blanks them
-     when the countdown ends. Leave this one EMPTY in the Designer — the
-     authored text of the first one is the fallback message, and an empty
-     element here means nothing shows until there is something to say.
+     So put a SECOND [data-spin-error] inside the ready/spinning panel. The
+     script writes to every match and blanks them when the countdown ends.
+     Leave it EMPTY so nothing shows until there is something to say.
+
+     BUT AN EMPTY ONE CANNOT BE THE ONLY FALLBACK. showError() reads its
+     default from the FIRST [data-spin-error] in document order, and the
+     ready/spinning panel comes before the result cards — so an empty slot
+     there would silently replace your authored "ask a Clicks team member"
+     copy with the script's hard-coded string.
+
+     That is what data-spin-error-copy is for: it supplies the fallback
+     WITHOUT putting visible text in the element. Put the same sentence there
+     as in the card's error box, and the fallback is right whichever slot the
+     script happens to read first.
+
+     Position it out of normal flow (absolute) so an empty div cannot nudge
+     the wheel's layout.
      ============================================================ -->
 <!-- goes inside the existing <div data-spin-when="ready spinning"> -->
-<p data-spin-error></p>
+<p data-spin-error
+   data-spin-error-copy="We couldn't spin the wheel right now — please ask a Clicks team member."></p>
 
 
 <!-- ============================================================

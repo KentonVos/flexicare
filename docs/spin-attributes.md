@@ -218,7 +218,8 @@ Written as **text**, never HTML — every string comes from the API.
 | `[data-spin-expires]` | Formatted via `data-spin-expires-format`. |
 | `[data-spin-expires-wrap]` | Hidden when the award never expires. |
 | `[data-spin-store]` | The store to collect from. |
-| `[data-spin-error]` | Fallback message. Its authored text is the default, so write something real here too. |
+| `[data-spin-error]` | Fallback message. Its authored text is the default, so write something real here too. The 429 cooldown countdown is written here **while the state is still `ready`**, so a second slot inside the `ready spinning` panel is what makes it visible. |
+| `[data-spin-error-copy]` | Supplies an `[data-spin-error]` element's fallback text *without* rendering it. Use it on the empty second slot: `showError()` takes its default from the FIRST error slot in document order, and the wheel panel precedes the result cards, so an empty slot there would otherwise override your authored copy with the script's hard-coded string. |
 
 ### Buttons
 
