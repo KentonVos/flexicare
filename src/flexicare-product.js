@@ -4,8 +4,10 @@
    Plain JS (ES5-style). Load AFTER flexicare-core.js, @barba/core and gsap.
 
    WHAT THIS PAGE DOES
-     The last beat of the funnel: the FLEX quiz has finished, the server has
-     scored every stored answer, and this page shows the ONE plan it picked.
+     The last beat of the WEB funnel: the FLEX quiz has finished, the server
+     has scored every stored answer, and this page shows the ONE plan it
+     picked. (On a kiosk the journey carries on to /spin-to-win — see
+     data-product-next-web below and src/flexicare-spin.js.)
 
        1. Read the result. Normally free — flexicare-quiz.js put the
           POST /sessions/{id}/finish response on Flexicare.result before it

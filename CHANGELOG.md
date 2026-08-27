@@ -221,6 +221,64 @@ a 401/403).
 
 ---
 
+## Where things stand — 2026-08-27 (end of the kiosk + spin-to-win pass)
+
+A snapshot for the next session. The previous snapshot (2026-08-26, the FLEX +
+product-page pass) is superseded and appears below; everything in it still holds
+except the journey now continues past `/flexicare-product`.
+
+**Journey:** landing → selfie **or** avatar picker → onboarding → `/archetype`
+(ROUTING quiz) → `/meet-your-two-selves` (reveal) → `/flexicare` (FLEX quiz) →
+`/flexicare-product` (recommendation) → `/spin-to-win` (the prize wheel, **kiosk
+only**).
+
+**What this pass added:** `src/flexicare-kiosk.js` (device pairing, heartbeat, idle
+reset) and `src/flexicare-spin.js` (the wheel), plus the seam in onboarding that makes
+a session `channel: "KIOSK"`. Everything is on `main` and live; tagged `v1.1.0`.
+
+**The one thing to internalise:** the prize spin is decided at `/onboarding`, not at
+`/spin-to-win`. A session can only spin if `POST /sessions` carried `X-Kiosk-Token`;
+on a `WEB` session `POST /spin` is a hard 409. So it is a chain — pair the tablet →
+token in `localStorage` → header on session create → header on spin — and breaking any
+link means the shopper completes the whole journey and is refused at the wheel. If the
+spin page says "unavailable", the session was started on an unpaired browser.
+
+**Where things are up to on the Webflow side.** The wheel component is BUILT and
+working. Still to build: the other panels (`prize`, `consolation`, `redeemed`,
+`expired`, `voided`, `nophone`, `unavailable error`), and the `/kiosk` pairing page.
+That is the next phase.
+
+**Read these before touching the spin page:**
+- `docs/spin-attributes.md` — every attribute with its default and range.
+- `demo/spin-webflow-structure.html` — the complete element/attribute reference.
+- `demo/spin-webflow-embed.html` — the CSS that must be in the page head.
+- `docs/kiosk-and-spin.md` — why any of it works the way it does.
+- `https://flexicare.kenton-323.workers.dev/demo/spin?spindemo` — the live playground.
+  `?spindemo=consolation` (or `=redeemed`, `=expired`, `=voided`, `=nophone`,
+  `=unavailable`) jumps straight to a panel, which is how you build and style the
+  states without a paired tablet or a completed session.
+
+**Two fixes in this pass that were NOT spin-specific:**
+- `glass.js` no longer forces `position:relative` on every `data-liquid-glass` host —
+  only on ones that were actually `static`. It had been silently overriding author
+  positioning site-wide, because its stylesheet is injected from the footer and won at
+  equal specificity. Anything you positioned *and* gave glass to will now sit where
+  you put it.
+- `FC.api()` gained `opts.kiosk` (attaches `X-Kiosk-Token`) and `err.retryAfter`.
+
+**Diagnostics.** `data-spin-debug` (or `?spindemo`, which implies it) makes the script
+measure the stage, wheel, dial, marker and pointer on every render and name the
+specific layout fault and its fix. Use it before theorising — a dial in the wrong place
+and an invisible pointer both look like script bugs and are almost always a CSS box.
+
+**Testing.** There is no test runner in the repo (no build step, by design). The suites
+used during this pass ran from a scratch directory with `jsdom` installed outside the
+repo — 404 assertions covering the wheel maths, the controllers, the kiosk seam, the
+glass integration and the docs' own accuracy. If you need them again, they are
+reconstructible from the module contracts; nothing in the repo depends on them.
+
+---
+
 ## Where things stand — 2026-08-26 (end of the FLEX + product-page pass)
 
 A snapshot for the next session, so nothing below has to be re-derived. Details are in

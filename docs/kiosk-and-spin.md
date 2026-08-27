@@ -96,7 +96,7 @@ Notes that will save you a round trip:
 ### Sizing and typography of the labels
 
 The labels are drawn as SVG text inside a 200×200 `viewBox`, so sizes are in
-viewBox units, not pixels — `data-spin-label-size="7"` is 7/200ths of the wheel's
+viewBox units, not pixels — `data-spin-label-size="4.5"` is 4.5/200ths of the wheel's
 width, which lands around 19px on a 560px wheel.
 
 Default `data-spin-label-mode="radial"` reads outward from the hub and gives each
@@ -174,57 +174,49 @@ variants via CSS if you want them:
 
 ### The structure
 
+The complete, commented version — every element, every attribute, what is required
+and what the traps are — is **`demo/spin-webflow-structure.html`**. Copy from there.
+The shape of it:
+
 ```html
 <div data-spin
      data-spin-product="/flexicare-product"
-     data-spin-onboarding="/onboarding"
-     data-spin-turns="6"
-     data-spin-duration="4.5"
-     data-spin-pointer-angle="0">
+     data-spin-onboarding="/onboarding">
 
-  <!-- LOADING -->
-  <div data-spin-when="loading"> …skeleton/shimmer… </div>
+  <div data-spin-when="loading"> …skeleton… </div>
 
-  <!-- THE WHEEL -->
   <div data-spin-when="ready spinning">
-    <div class="spin-stage">
-      <div data-spin-wheel></div>
-      <div class="spin-hub"></div>
-      <div data-spin-pointer></div>
+    <div data-spin-stage>          <!-- MUST be square; give it a width -->
+      <div data-spin-glow></div>   <!-- optional: your colour, a SIBLING -->
+      <div data-spin-wheel></div>  <!-- LEAVE EMPTY -->
+      <div data-spin-hub>Flex</div>
+      <div data-spin-marker>       <!-- rotates to --fc-pointer-angle -->
+        <div data-spin-pointer></div>   <!-- your graphic, top centre -->
+      </div>
     </div>
-    <a href="#" data-spin-go class="btn">Spin</a>
   </div>
 
-  <!-- THE REWARD -->
-  <div data-spin-when="prize redeemed expired voided">
-    <p><span data-spin-name-wrap>Nice one, <span data-spin-name></span>!</span></p>
+  <!-- [data-spin-go] may live here, in a nav, or anywhere on the page -->
+  <a href="#" data-spin-go>Spin to win</a>
+
+  <div data-spin-when="prize">
     <h2 data-spin-prize-name></h2>
-    <div data-spin-claim-wrap>
-      <div data-spin-claim class="claim-code"></div>
-    </div>
-    <p data-spin-instructions>Show this code to a Clicks team member at the till.</p>
+    <div data-spin-claim-wrap><div data-spin-claim></div></div>
+    <p data-spin-instructions>Show this code at the till.</p>
     <p data-spin-expires-wrap><span data-spin-expires></span></p>
-    <p>Collect at <span data-spin-store></span></p>
-    <a href="/" data-spin-done>Done</a>
+    <p>Collect at <strong data-spin-store></strong></p>
   </div>
 
-  <!-- CONSOLATION — deliberately no claim code -->
-  <div data-spin-when="consolation">
+  <div data-spin-when="consolation">  <!-- NO claim code here -->
     <h2 data-spin-prize-name></h2>
-    <p data-spin-instructions>Thanks for playing!</p>
-    <a href="/" data-spin-done>Done</a>
+    <p data-spin-instructions>Thanks for playing.</p>
   </div>
 
-  <!-- NO PHONE NUMBER -->
-  <div data-spin-when="nophone">
-    <p>We need a number to send your reward to.</p>
-    <a href="/onboarding" data-spin-back>Add my number</a>
-  </div>
+  <div data-spin-when="redeemed expired voided"> … </div>
+  <div data-spin-when="nophone"> … </div>
 
-  <!-- FALLBACK -->
   <div data-spin-when="unavailable error">
     <p data-spin-error>We couldn't spin the wheel right now — please ask a Clicks team member.</p>
-    <a href="/" data-spin-done>Done</a>
   </div>
 </div>
 ```
@@ -452,10 +444,10 @@ So the effect is split in two:
 
    | Attribute | Default | |
    |---|---|---|
-   | `data-spin-edge` | `0.3` | a lit hairline down each pane's leading radial edge, brightest at the rim and fading to nothing near the hub — the way light catches a bevel. Rotates **with** the wheel. |
-   | `data-spin-edge-width` | `0.6` | |
-   | `data-spin-sheen` | `0.14` | a specular overlay across the whole disc that does **not** rotate. |
-   | `data-spin-light-angle` | `315` | where that light comes from. |
+   | `data-spin-edge` | `1` | a lit hairline down each pane's leading radial edge, brightest at the rim and fading to nothing near the hub — the way light catches a bevel. Rotates **with** the wheel. |
+   | `data-spin-edge-width` | `0.2` | |
+   | `data-spin-sheen` | `0.48` | a specular overlay across the whole disc that does **not** rotate. |
+   | `data-spin-light-angle` | `40` | where that light comes from. |
    | `data-spin-hub-radius` | 24% of the segment radius | where the lit edges fade out — keep it under your hub cap. |
 
 **The fixed sheen is the important half.** Light that rotates with an object reads as
@@ -519,23 +511,26 @@ These are the values the design settled on. Put them on `[data-spin]`:
 
 ```html
 <div data-spin
-  data-spin-turns="6"        data-spin-duration="4.5"
-  data-spin-min="2.5"        data-spin-idle-turn="1.6"
-  data-spin-pointer-angle="315"
+  data-spin-turns="3"        data-spin-duration="3"
+  data-spin-ease="power2.inOut"
+  data-spin-pointer-angle="0"
   data-spin-style="glass"    data-spin-tint="0"
   data-spin-fill="rgba(255,255,255,0.06)"
   data-spin-fill-alt="rgba(255,255,255,0.025)"
   data-spin-rim="0"          data-spin-studs="off"
   data-spin-stroke-width="0"
-  data-spin-label-mode="radial"  data-spin-label-size="5"
+  data-spin-label-mode="radial"  data-spin-label-size="4.5"
   data-spin-label-radius="87"    data-spin-label-color="#ffffff"
-  data-spin-edge="0.3"       data-spin-sheen="0.14"
-  data-spin-light-angle="315">
+  data-spin-edge="1"         data-spin-edge-width="0.2"
+  data-spin-sheen="0.48"     data-spin-light-angle="40">
 ```
 
-Most of these are now the script's defaults too, so a bare `[data-spin]` lands close
-to this. The ones worth setting explicitly are `data-spin-pointer-angle` (it has to
-match your marker) and the fills.
+**Every one of these is already the script's default**, so a bare `[data-spin]` lands
+exactly here. Set them explicitly only when you want to move away from it. The two
+that genuinely need setting are `data-spin-product` and `data-spin-onboarding`, which
+have no sensible default for your URLs.
+
+The full list with ranges is `docs/spin-attributes.md`.
 
 ### Everything else that is glass
 
@@ -790,7 +785,8 @@ Test on the **published or preview URL**, never the Designer.
    If it says `WEB`, the token was not present at session creation — start over
    after pairing, don't try to fix it downstream.
 3. **Finish the quiz** through to the product page.
-4. **Spin.** The wheel should start turning on tap, before the response.
+4. **Spin.** One smooth wind-up and settle, ~3s. It waits for the server before
+   moving; only a slow response makes it spin first.
 5. **Reload the spin page.** It must re-show the same prize and the same claim
    code, and must not offer another spin.
 6. **Spin again on the same phone number** (new session, same number): "already

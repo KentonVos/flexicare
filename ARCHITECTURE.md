@@ -117,7 +117,19 @@ Pages, in order, and where state is created:
    the plan the server picked, straight out of `Flexicare.result`: `product` (`CORE`/`PLUS`),
    `product_label`, `archetype_label` and `recommended_price_cents`. Nothing to wait for —
    every value is resolved server-side, so on a `barba.go()` arrival the page paints in the
-   same frame. CTA → the spin-to-win page (`data-product-next`).
+   same frame. CTA → the spin-to-win page (`data-product-next`), or straight past it
+   on an unpaired device if `data-product-next-web` is set.
+8. **Spin to win** (`/spin-to-win`, `flexicare-spin.js`) — **KIOSK ONLY**, and the only
+   page in the funnel that is. `GET /sessions/{id}` answers everything at once (is it
+   `COMPLETED`, is the channel `KIOSK`, is there a `phone_number`, has it already spun,
+   which store), then `GET /prizes/wheel` supplies the segments and `POST /spin` decides
+   the outcome. A `WEB` session is detected up front and shown the unavailable panel
+   rather than being allowed to tap a wheel that would 409.
+
+   The kiosk half of this starts much earlier: `flexicare-kiosk.js` holds the device
+   token and `onboarding` sends it on `POST /sessions`, which is what makes the session
+   `channel: "KIOSK"`. Break that chain and the shopper is refused at the wheel after
+   completing the whole journey.
 
 On a **hard reload** mid-funnel, in-memory state is gone but recoverable: answers are
 rebuilt from `GET /sessions/{id}`, and a missing archetype is recovered with a preview.
@@ -808,10 +820,17 @@ call — an abandoned session needs no cleanup) and `barba.go()` to the attract 
 
 **The server owns the outcome.** There is no client-side randomness anywhere in the file
 and there must never be: `segment_index` in the `POST /spin` response *is* the result, and
-stock and pacing are enforced server-side. The wheel starts turning on tap, *before* the
-response, and only then decelerates onto the segment — which buys the request latency for
-free instead of making the shopper watch a spinner. A minimum spin time
-(`data-spin-min`, default 2.5s) keeps a 200ms response feeling like a spin.
+stock and pacing are enforced server-side.
+
+**The animation is ONE gesture.** Tap → ask the server where to land → a single
+ease-in-out that winds up and settles (`data-spin-duration` 3s, `data-spin-ease`
+`power2.inOut`, `data-spin-turns` 3). It deliberately does not move before the answer
+arrives: a single speed-up-and-slow-down has to know where it ends before it begins, and
+starting first is exactly what produced the earlier two-part motion (a flat spin, then a
+separate braking phase). After `data-spin-wait` (0.4s) it starts turning anyway rather
+than sitting frozen on flaky store wifi, and then *decelerates* (`data-spin-ease-out`)
+instead of easing in from a moving wheel, which would brake it to a stop first.
+`data-spin-min` applies only to that fallback path.
 
 **One `GET /sessions/{id}` answers everything**: is it `COMPLETED`, is the channel
 `KIOSK`, is there a `phone_number`, does `has_prize` say it already spun, and which store.
