@@ -23,14 +23,16 @@
                               before the script has picked a state
 
    DO NOT paste this into a page as a Webflow "class". Paste the embed
-   version (spin-webflow-embed.html) into an HTML Embed on the spin page,
-   or into Page Settings → Custom Code → Head.
+   version (spin-webflow-embed.html) into SITE Settings → Custom Code →
+   Head. Not the spin page's own head: Barba never swaps <head>, so page
+   head code is absent on every in-funnel navigation and the panels flash.
    ============================================================ */
 
 /* ---------- 1. Stop every panel appearing at once before boot ----------
    Webflow loads the scripts in the FOOTER, so between the page painting and
    the controller running, all your panels are visible simultaneously — the
-   wheel, the prize screen, the error screen, stacked.
+   wheel, the prize screen, the error screen, stacked. On a Barba navigation
+   the gap is wider still: the controller does not run until afterEnter.
 
    Once the script has picked a state it sets data-spin-state on the wrapper,
    this rule stops matching, and the script's own inline display styles take

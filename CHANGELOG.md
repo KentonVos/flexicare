@@ -14,6 +14,32 @@ Format:
 
 ---
 
+## 2026-08-27 — Spin CSS moved site-wide: the panel flash on /spin-to-win
+
+**Webflow (unpublished, applied via the MCP connector):**
+- The spin wheel's CSS block moved OUT of `/spin-to-win` → Page Settings →
+  Custom Code → Head, and INTO Site Settings → Custom Code → Head (appended
+  after the font-smoothing and viewport blocks). The page head now holds only
+  a comment saying where it went and why.
+
+**Why:** navigating to the page showed both `.spin-panel` divs (prize +
+message) and the stage stacked for a beat before the script hid them. The
+pre-boot rule `[data-spin]:not([data-spin-state]) [data-spin-when]{display:none}`
+was correct — it just was not on the page. **Barba never swaps `<head>`**, so a
+destination page's own head code is absent on every in-funnel navigation, which
+is every real visit to the spin page. The rest of that stylesheet was missing
+too (square stage, the wheel/hub `backdrop-filter`, the marker's
+`rotate(var(--fc-pointer-angle))`) — all of it now applies on arrival.
+
+Every selector is attribute-scoped, so the block is inert on the other nine
+pages. Comments were trimmed on the way in to stay under Webflow's site
+custom-code limit; the fully-commented version remains `demo/spin-webflow.css`.
+
+- `demo/spin-webflow.css`, `demo/spin-webflow-embed.html`,
+  `docs/kiosk-and-spin.md` — all three recommended the PAGE head as the
+  preferred location. Corrected to site-wide, with the Barba reason spelled
+  out so it does not get put back.
+
 ## 2026-08-27 — Spin page: countdown slot + expiry line, and a connector guide
 
 **Webflow (unpublished, applied via the MCP connector):**

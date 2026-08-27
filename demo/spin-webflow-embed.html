@@ -1,10 +1,13 @@
 <!-- ============================================================
      PASTE-READY WEBFLOW EMBED — the spin wheel's required CSS.
 
-     Where to put it: on the /spin-to-win page, either
-       • an HTML Embed dropped anywhere inside the Barba container, or
-       • Page Settings -> Custom Code -> Inside <head> tag   (preferred:
-         it applies before first paint, so nothing flashes)
+     Where to put it: Site Settings -> Custom Code -> Inside <head> tag.
+     SITE-WIDE, not the /spin-to-win page's own head -- Barba never swaps
+     <head>, so page-level head code is absent on every in-funnel
+     navigation, which is every real visit to this page. Every selector is
+     attribute-scoped, so it is inert on the other nine pages.
+     (An HTML Embed inside the Barba container also travels, but it applies
+     only once the container is inserted, so it flashes.)
 
      GENERATED from demo/spin-webflow.css — edit that file, not this one.
      The playground at demo/spin.html loads the same stylesheet, so whatever

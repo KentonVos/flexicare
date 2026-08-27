@@ -73,6 +73,13 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
   repo: it sets `window.__fcLayout` (viewport/layout mode) before first paint, in
   Webflow → Site Settings → Custom Code → **Head**. If `Flexicare.layout.forced` is
   `false` on a large tablet, that snippet is missing. See `docs/webflow-head-snippet.md`.
+- **Barba never swaps `<head>`, so PAGE-level custom code is a trap.** Anything in a
+  page's Settings → Custom Code → Head only exists if that page was the FIRST one
+  loaded; arrive through the funnel and it is simply absent. All site custom code
+  belongs in **Site** Settings → Custom Code (scope it with attribute selectors so it
+  is inert elsewhere). This cost a real bug: the spin wheel's CSS sat in the page head,
+  so every `[data-spin-when]` panel flashed on screen on arrival and the wheel lost its
+  square stage and backdrop blur. Fixed 2026-08-27 by moving the block site-wide.
 - **There is NO `/loading` page.** The routing quiz goes straight to
   `/meet-your-two-selves` (`flexicare-reveal.js`), which resolves the archetype and polls
   for the generated images *while the copy is already on screen*. Don't reintroduce a

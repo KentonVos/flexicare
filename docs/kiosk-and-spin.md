@@ -631,9 +631,16 @@ You build everything. The script only ever fills one empty box.
 
 ### Step 1 — paste the embed
 
-`demo/spin-webflow-embed.html` is paste-ready. Put it in **Page Settings → Custom
-Code → Inside `<head>` tag** on `/spin-to-win` (preferred — it applies before first
-paint), or an HTML Embed inside the Barba container.
+`demo/spin-webflow-embed.html` is paste-ready. It goes in **Site Settings → Custom
+Code → Inside `<head>` tag** — SITE-wide, not on the page.
+
+**Not the page's own head, and this bit is not a preference.** Barba never swaps
+`<head>`, so a destination page's head code is simply absent whenever the visitor
+arrives through an in-funnel navigation — which is every real visit to this page.
+That is exactly how it was set up until 2026-08-27, and the symptom was the panels
+flashing on screen on arrival: the pre-boot rule below was never on the page when it
+was needed. Every selector here is attribute-scoped, so site-wide is inert on the
+other nine pages.
 
 It is ~40 lines and it is entirely attribute-driven: **no class names**, so name your
 Webflow classes whatever you like. It contains only the five things the Designer
@@ -643,7 +650,8 @@ panel flashing on screen at once before the script boots.
 
 That last one matters more than it sounds: Webflow loads the scripts in the **footer**,
 so without it there is a moment where the wheel, the prize screen and every error
-screen are all visible stacked on top of each other.
+screen are all visible stacked on top of each other. On a Barba navigation the gap is
+even wider — the controller does not run until `afterEnter`.
 
 ### Step 2 — the wheel
 
