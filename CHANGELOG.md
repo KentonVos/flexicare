@@ -14,6 +14,28 @@ Format:
 
 ---
 
+## 2026-08-27 — The panel swap animates (wheel out, card in)
+
+- `src/flexicare-spin.js`, `docs/spin-attributes.md`, `demo/spin-webflow-panels.html`
+- `applyWhen()` used to toggle `display` outright, so the wheel vanished the
+  instant an award landed. It now scales + fades the outgoing panel out and the
+  incoming one in. New optional attributes on `[data-spin]`:
+  `data-spin-panel-in` (0.45s), `-out` (0.28s), `-overlap` (0s),
+  `-scale` (0.94), `-scale-out`, `-ease` (power2.out), `-ease-out` (power2.in).
+  All defaulted — **no Webflow change is required** for the animation to work.
+- **Webflow-side, if you want the scale on the cards:** a panel that is itself a
+  glass host fades WITHOUT scaling (glass owns `transform`; its press spring
+  resets to the transform captured at attach and would wipe the tween). Move
+  `data-liquid-glass` off `[data-spin-when]` and onto a card div inside it. The
+  console warns once when it finds them on the same element.
+- `-overlap` defaults to 0 (strictly sequential) because that is the only safe
+  default while panels are siblings in normal flow. Stack them in one grid cell
+  before raising it, or both sit in the layout for the overlap and the page jumps.
+- Nested panels skip their own motion when the parent panel is also changing —
+  the outermost carries it, or fades multiply and scales compound. A block whose
+  parent stays put (`redeemed` → `expired`) still animates.
+- Skipped under `prefers-reduced-motion` and on the first paint of a page.
+
 ## 2026-08-27 — The spin result panels, as two card templates
 
 - `demo/spin-webflow-panels.html` (new)
