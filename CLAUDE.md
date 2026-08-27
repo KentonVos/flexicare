@@ -172,6 +172,33 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
   layered over it. A hand-built seven-slice wheel breaks the first time an admin adds a
   prize. Also: no `data-liquid-glass` on the wheel stage — glass owns `transform` and
   bakes its map from the layout box, which a spinning child defeats.
+- **On `/spin-to-win` the panels animate, and that decides where glass goes.** The
+  wheel and the result cards are `[data-spin-when]` panels on ONE page — there is no
+  second Barba navigation — and the swap between them is a scale + opacity
+  cross-dissolve run from `applyWhen()`. A panel that is ALSO a glass host fades
+  **without** scaling (glass owns `transform`, and its press spring resets to the
+  transform captured at attach, which would wipe the tween). So the panel is a plain
+  wrapper and `data-liquid-glass` goes on the card INSIDE it. `data-spin-panel-overlap`
+  defaults to 0 because a cross-fade only works once the panels are stacked — siblings
+  in normal flow both occupy the layout for the overlap and the page jumps. Nested
+  panels skip their own motion when the parent panel is changing, or the fades
+  multiply. When something here looks wrong, run `Flexicare.spin.panels()` in the
+  console: it prints every panel the script can SEE plus the facts that decide the
+  outcome (a panel missing from that table is one it never found).
+- **Tapping spin collapses the nav, and it is NOT restored.** The spin CTA lives in the
+  nav wrapper, so once the wheel turns the nav is spent and the next step is the landing
+  page where it is collapsed anyway. It uses `PageTransition.nav.hide()` — a wrapper
+  around the SAME `navReveal()` the landing page's `data-show-except` path uses. Use
+  that, never a hand-rolled height tween: `navReveal` maintains `__navHidden`, which the
+  next navigation reads to decide whether to animate, so a private tween leaves
+  `applyVisibility` collapsing or reopening the nav a second time one page later. It
+  returns in exactly one case — the state goes back to `ready` (429 cooldown, retryable
+  error) — because the CTA is inside it.
+- **The Webflow MCP connector is READ-ONLY by Kenton's instruction.** Inspect the site
+  with it freely (diffing the shell tree across pages is the biggest win — see the shell
+  structure rules above); never call a create/update/delete tool against the site, even
+  when it would be faster. Describe the Designer change and hand it over. A bad script
+  push is a one-minute `git revert`; an unpicked Designer edit is not.
 - **The click model is event delegation.** Controllers attach ONE listener to
   `document` and re-resolve the target by attribute at click time. This is deliberate
   (it survives glass rebuilds and Barba swaps). Don't refactor it to attach listeners
