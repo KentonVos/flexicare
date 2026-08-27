@@ -166,6 +166,38 @@ embed. They're SVG text nodes, so the Designer can't reach them.
 The state is also written to `data-spin-state` on `[data-spin]` **and** on `<html>`,
 so a full-bleed background can react to it.
 
+#### Panel motion
+
+The swap between panels is animated — the outgoing one scales and fades out, the
+incoming one scales and fades in. Configured on `[data-spin]`:
+
+| Attribute | Default | |
+|---|---|---|
+| `data-spin-panel-in` | `0.45` | Seconds, the entrance. |
+| `data-spin-panel-out` | `0.28` | Seconds, the exit. |
+| `data-spin-panel-overlap` | `0` | Seconds the entrance starts **before** the exit ends. `0` is sequential — the safe default when panels are siblings in normal flow. Raise it for a cross-fade only once the panels are **stacked** (one grid cell, or absolutely positioned); otherwise both are in the layout for that overlap and the page jumps. |
+| `data-spin-panel-scale` | `0.94` | The entrance starts here, the exit ends here. |
+| `data-spin-panel-scale-out` | = `-panel-scale` | Override for the exit only. |
+| `data-spin-panel-ease` | `power2.out` | Entrance ease. |
+| `data-spin-panel-ease-out` | `power2.in` | Exit ease. |
+
+Skipped entirely under `prefers-reduced-motion`, and on the **first** paint of the
+page — there is nothing to cross-fade from, and it would fight the Barba entrance.
+
+Two rules the markup has to respect:
+
+- **A panel that is also a glass host fades without scaling.** Glass owns
+  `transform`, and its press spring resets to the transform captured at attach,
+  which would wipe a scale tween. The console warns once. To get the scale, make
+  the panel a plain wrapper and put `data-liquid-glass` on the card inside it —
+  scaling a wrapper is safe, since an affine deform transforms the finished glass
+  rendering, rim and displacement map as one unit.
+- **Nested panels don't animate when their parent panel is also changing.** The
+  message card lists six states and each block inside it lists one, so landing on
+  `consolation` changes both; the outermost carries the motion or the fades
+  multiply. A block whose parent is staying put (`redeemed` → `expired` inside
+  the same card) still animates.
+
 `data-spin-reason` narrows `unavailable`: `web`, `wheel`, `already-spun`,
 `other-kiosk`, `disabled`, `rate-limit`, `network`, `unknown`.
 

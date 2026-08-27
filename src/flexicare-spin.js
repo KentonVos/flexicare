@@ -142,6 +142,32 @@
                                   data-spin-expires-format="Claim by {date}"
                                   data-spin-debug         console logging
 
+                                PANEL MOTION (the wheel out, the card in —
+                                see the PANELS note below):
+                                  data-spin-panel-in="0.45"   seconds
+                                  data-spin-panel-out="0.28"  seconds
+                                  data-spin-panel-overlap="0" seconds the
+                                     incoming panel starts BEFORE the outgoing
+                                     one finishes. 0 = strictly sequential,
+                                     which is the only safe default when the
+                                     panels are siblings in normal flow. Raise
+                                     it for a cross-fade — but only once the
+                                     panels are STACKED (same grid cell, or
+                                     absolutely positioned), or for that
+                                     overlap both are in the layout at once
+                                     and the page jumps.
+                                  data-spin-panel-scale="0.94"  the in starts
+                                     here, the out ends here.
+                                  data-spin-panel-scale-out    override for the
+                                     exit; defaults to -panel-scale.
+                                  data-spin-panel-ease="power2.out"
+                                  data-spin-panel-ease-out="power2.in"
+                                  (all of it skipped under
+                                   prefers-reduced-motion, and on the first
+                                   paint of the page — there is nothing to
+                                   cross-fade from, and it would fight the
+                                   Barba entrance)
+
      STYLING HOOKS (the script does not read these — they exist so the
      required CSS can be attribute-driven and you can name your Webflow
      classes whatever you like). See demo/spin-webflow-embed.html:
@@ -179,6 +205,23 @@
                                 separated. This is how the wheel, the prize
                                 screen and every error state share one page
                                 without a second Barba navigation.
+
+                                The swap is ANIMATED: the outgoing panel scales
+                                and fades out, the incoming one scales and fades
+                                in (data-spin-panel-* above). Two consequences
+                                worth knowing:
+
+                                • A panel that is ALSO a glass host fades
+                                  without scaling — glass owns `transform` and
+                                  its press spring would wipe the tween. For the
+                                  scale, make the panel a plain wrapper and put
+                                  data-liquid-glass on the card inside it.
+                                • NESTED panels (the message card lists six
+                                  states, each block inside it lists one) do not
+                                  animate when their parent panel is also
+                                  changing — the outermost one carries the
+                                  motion, or the fades multiply. A block whose
+                                  parent is staying put still animates.
 
      API-DRIVEN SLOTS (written as TEXT — server copy is never trusted as HTML):
      [data-spin-name]           first_name from the award / session.
@@ -287,6 +330,7 @@
     cooldownUntil: 0,
     debug: false,
     demo: null, // ?spindemo — dev only; see the header comment
+    painted: false, // has applyWhen run once? gates the panel animation
   };
 
   /* Used only when ?spindemo is on AND GET /prizes/wheel is unreachable, so
@@ -443,7 +487,10 @@
     }
     var root = document.documentElement;
     if (root) root.setAttribute("data-spin-state", mode);
-    applyWhen();
+    // The first paint of a page has nothing to cross-fade from, and it would
+    // fight the Barba entrance animation. Every state change after it animates.
+    applyWhen(state.painted);
+    state.painted = true;
     refreshButton();
     // Keep the admin's device list honest about where the shopper actually is.
     if (FC.kiosk && FC.kiosk.setScreen)
@@ -461,14 +508,165 @@
     );
   }
 
-  function applyWhen() {
-    slots("[data-spin-when]").forEach(function (el) {
+  function applyWhen(animate) {
+    var panels = slots("[data-spin-when]");
+    var items = [];
+    var i, j;
+    for (i = 0; i < panels.length; i++) {
+      var el = panels[i];
       var list = (attr(el, "data-spin-when", "") + "").split(/\s+/);
       var on = false;
-      for (var i = 0; i < list.length; i++)
-        if (list[i] && list[i] === state.mode) on = true;
-      el.style.display = on ? "" : "none";
-    });
+      for (j = 0; j < list.length; j++)
+        if (list[j] && list[j] === state.mode) on = true;
+      items.push({ el: el, on: on, changed: el.__spinOn !== on });
+      el.__spinOn = on;
+    }
+
+    /* The hard path: the first paint of a page (nothing to cross-fade FROM),
+       no GSAP, or a shopper who asked for reduced motion. Also the safety
+       net — every animated path ends by clearing the same inline styles this
+       resets, so a state change that arrives mid-tween lands cleanly. */
+    var motion = animate && window.gsap && !reduced();
+    if (!motion) {
+      for (i = 0; i < items.length; i++) {
+        resetPanel(items[i].el);
+        items[i].el.style.display = items[i].on ? "" : "none";
+      }
+      return;
+    }
+
+    var cfg = panelCfg();
+
+    /* Nested panels: the message card lists six states and each block inside
+       it lists one, so a spin landing on `consolation` changes BOTH. Animating
+       both multiplies the fades and compounds the scales, so the OUTERMOST
+       changing panel carries the motion and its children just toggle. A child
+       whose parent is staying put (redeemed → expired inside the same card)
+       still animates — that is the case worth having. */
+    function ancestorChanging(node) {
+      var p = node.parentNode;
+      while (p && p.nodeType === 1 && p !== state.wrap) {
+        if (p.hasAttribute("data-spin-when")) {
+          for (var k = 0; k < items.length; k++)
+            if (items[k].el === p) return items[k].changed;
+          return false;
+        }
+        p = p.parentNode;
+      }
+      return false;
+    }
+
+    /* The incoming panel waits for the outgoing one unless there is nothing
+       leaving (the very first card after `loading`, say) — otherwise a state
+       change with no exit would sit doing nothing for outDur. */
+    var leaving = false;
+    for (i = 0; i < items.length; i++)
+      if (items[i].changed && !items[i].on && !ancestorChanging(items[i].el))
+        leaving = true;
+    var delay = leaving ? Math.max(0, cfg.outDur - cfg.overlap) : 0;
+
+    for (i = 0; i < items.length; i++) animatePanel(items[i], cfg, delay, ancestorChanging);
+  }
+
+  /* --------------------------- panel motion ---------------------------
+     The wheel and the result cards are panels on ONE page, so there is no
+     Barba transition to ride: the swap between them is a scale + opacity
+     cross-dissolve run from here.
+
+     GLASS HOSTS GET OPACITY ONLY. glass.js writes el.style.transform in its
+     press spring and resets it to the transform captured at attach — which
+     would wipe a scale tween mid-flight. So a panel carrying
+     data-liquid-glass fades without scaling, and the console says so once.
+     Want the scale: put the panel on a plain wrapper and the glass on the
+     card inside it. Scaling a wrapper is safe — an affine deform transforms
+     the finished glass rendering, rim and displacement map as one unit.
+     (What is never safe is animating border-radius. See CLAUDE.md.) */
+
+  function isGlassHost(el) {
+    return !!(el && el.hasAttribute && el.hasAttribute("data-liquid-glass"));
+  }
+
+  function panelCfg() {
+    var w = state.wrap;
+    var scale = num(w, "data-spin-panel-scale", 0.94, 0.2, 2);
+    return {
+      inDur: num(w, "data-spin-panel-in", 0.45, 0),
+      outDur: num(w, "data-spin-panel-out", 0.28, 0),
+      overlap: num(w, "data-spin-panel-overlap", 0, 0),
+      scaleIn: scale,
+      scaleOut: num(w, "data-spin-panel-scale-out", scale, 0.2, 2),
+      easeIn: attr(w, "data-spin-panel-ease", "power2.out"),
+      easeOut: attr(w, "data-spin-panel-ease-out", "power2.in"),
+    };
+  }
+
+  // Everything the tweens touch, taken back off the element. Inline styles
+  // left behind by a killed tween are how a panel ends up stuck at 40%
+  // opacity three states later.
+  function resetPanel(el) {
+    if (!el) return;
+    if (window.gsap) window.gsap.killTweensOf(el);
+    el.style.opacity = "";
+    el.style.transform = "";
+    el.style.willChange = "";
+  }
+
+  function animatePanel(item, cfg, delay, ancestorChanging) {
+    var el = item.el;
+    if (!item.changed) return;
+
+    // A child of a panel that is itself changing: no motion of its own.
+    if (ancestorChanging(el)) {
+      resetPanel(el);
+      el.style.display = item.on ? "" : "none";
+      return;
+    }
+
+    var flat = isGlassHost(el);
+    if (flat && !el.__spinGlassWarned) {
+      el.__spinGlassWarned = true;
+      if (window.console)
+        console.warn(
+          "[spin] [data-spin-when] panel also has data-liquid-glass, so it " +
+            "fades without scaling — glass owns transform. For the scale, " +
+            "make the panel a plain wrapper and put the glass on the card inside."
+        );
+    }
+
+    window.gsap.killTweensOf(el);
+
+    if (item.on) {
+      el.style.display = "";
+      var from = { opacity: 0 };
+      var to = {
+        opacity: 1,
+        duration: cfg.inDur,
+        ease: cfg.easeIn,
+        delay: delay,
+        onComplete: function () {
+          // Hand the element back to CSS — and to the glass press spring.
+          resetPanel(el);
+        },
+      };
+      if (!flat) {
+        from.scale = cfg.scaleIn;
+        to.scale = 1;
+      }
+      window.gsap.fromTo(el, from, to);
+      return;
+    }
+
+    var out = {
+      opacity: 0,
+      duration: cfg.outDur,
+      ease: cfg.easeOut,
+      onComplete: function () {
+        el.style.display = "none";
+        resetPanel(el);
+      },
+    };
+    if (!flat) out.scale = cfg.scaleOut;
+    window.gsap.to(el, out);
   }
 
   function refreshButton() {
@@ -1654,8 +1852,10 @@
     state.rotor = null;
     state.rotors = null;
     state.busy = false;
+    state.painted = false;
     stopTweens();
     stopCooldown();
+    resetPanels();
 
     captureDefaults(); // BEFORE anything can blank the authored copy
     setState("loading");
@@ -1672,9 +1872,21 @@
     start(token);
   }
 
+  /* Panels are authored Webflow nodes, so on a dev-mode reinit they are the
+     SAME elements — a tween still running from the last state would keep
+     writing to them. Kill them and forget what was visible. */
+  function resetPanels() {
+    slots("[data-spin-when]").forEach(function (el) {
+      resetPanel(el);
+      el.__spinOn = undefined;
+    });
+  }
+
   function teardown() {
     stopTweens();
     stopCooldown();
+    resetPanels();
+    state.painted = false;
     state.token++; // invalidate anything still in flight
     if (state.wrap) {
       state.wrap.removeAttribute("data-spin-state");

@@ -31,6 +31,27 @@
      words change. Do NOT build six separate cards — six copies of the same
      card is six places to fix a padding tweak.
 
+     THE PANEL SWAP IS ANIMATED — AND THAT DECIDES WHERE GLASS GOES.
+     The outgoing panel scales and fades out, the incoming one scales and
+     fades in (tuned with data-spin-panel-* on [data-spin]). A panel that is
+     ALSO a glass host fades WITHOUT scaling, because glass owns `transform`
+     and its press spring would wipe the tween. So:
+
+       [data-spin-when]        plain wrapper  ← the script animates THIS
+         └─ [data-liquid-glass]  the card     ← your glass, padding, radius
+
+     Scaling the wrapper is safe: an affine deform transforms the finished
+     glass rendering, rim and displacement map as one unit. What is never
+     safe is animating border-radius on a glass host — see CLAUDE.md.
+
+     LAYOUT: keep it sequential, or STACK THE PANELS.
+     data-spin-panel-overlap defaults to 0, so the wheel is fully gone before
+     the card starts. That is the only safe default while the panels are
+     siblings in normal flow. For a cross-fade, first put every panel in the
+     SAME grid cell (a 1x1 grid on [data-spin], every panel in row 1 / col 1)
+     or absolutely position them in a relative parent — otherwise both are in
+     the layout for the length of the overlap and the page visibly jumps.
+
      THERE IS NO "no prize" STATE. `consolation` is it. It is a real award
      with a real claim code that must NOT be shown, because there is nothing
      to hand over. Never put [data-spin-claim] inside a consolation block.
@@ -42,7 +63,8 @@
      Reached: the wheel landed on a non-consolation segment, or a reload
      recovered an award that is still AWARDED.
      ============================================================ -->
-<div data-spin-when="prize">
+<div data-spin-when="prize">                            <!-- NO GLASS HERE -->
+ <div data-liquid-glass>                                <!-- the card itself -->
 
   <!-- The greeting. -name-wrap is hidden automatically when the session has
        no first name, so author the punctuation INSIDE the wrap — otherwise a
@@ -77,6 +99,7 @@
   <p>Collect at <strong data-spin-store></strong></p>
 
   <a href="/" data-spin-done>Done</a>
+ </div>
 </div>
 
 
@@ -91,6 +114,7 @@
      the code it technically has.
      ============================================================ -->
 <div data-spin-when="consolation redeemed expired voided nophone unavailable error">
+ <div data-liquid-glass>
 
   <!-- ---------- consolation: the "try again" segment ----------
        A real award, no prize. -prize-name is the full copy ("Try again next
@@ -149,6 +173,7 @@
   <div data-spin-when="consolation redeemed expired voided unavailable error">
     <a href="/" data-spin-done>Done</a>
   </div>
+ </div>
 </div>
 
 
