@@ -14,6 +14,36 @@ Format:
 
 ---
 
+## 2026-08-28 — The spin CTA doubles as the lead form's submit
+
+- `src/flexicare-spin.js` — in state `form` the `[data-spin-go]` button submits
+  the form instead of spinning, and relabels itself (`data-spin-lead-label` on
+  `[data-spin]`, default "Submit"), reverting once the form is accepted. It also
+  gets `data-spin-go-mode="submit"|"spin"` so the two jobs can be styled apart.
+  A dedicated `[data-spin-lead-submit]` still works and is now optional.
+  New `[data-spin-go-text]` marks the CTA's inner text element — Webflow buttons
+  wrap their label in a div, so relabelling the button itself would wipe it.
+  Why one button: the spin CTA lives in the persistent nav wrapper, outside the
+  Barba container and outside every panel, so it is already visible during
+  `form` and a second primary button there would be both redundant and awkward.
+
+**Webflow (unpublished):** `/spin-to-win` lead form wired —
+`data-spin-when="form"` on `.form-stage`; `data-spin-lead-idtype="id"` /
+`"passport"` + `data-selected-target=".fc-consent"` on the two `.consent-wrapper`
+rows; `data-spin-lead-idlabel` on the ID Number label; `data-spin-go-text` on
+`.primary-button-text`; `data-spin-lead-label="Submit"` on `[data-spin]`.
+
+Removed three onboarding attributes that came across with the copied component
+and would have made `flexicare-onboarding.js` initialise on the spin page:
+`data-onboarding-form` on `.input-fields-container`, and `data-onboarding-consent`
++ `data-checked-target` on both ID/Passport rows. That last pair mattered most —
+both rows carried the SAME consent attribute, so under the onboarding controller
+they toggled one shared boolean and lit up together, while the spin controller
+was treating them as one-of-two. `data-onboarding-error` also cleared off two
+stray boxes.
+
+---
+
 ## 2026-08-28 — A lead form now gates the spin wheel
 
 - `src/flexicare-spin.js` — new state **`form`**, between `loading` and

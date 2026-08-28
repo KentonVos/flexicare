@@ -183,9 +183,22 @@ session in `sessionStorage`, so a reload does not re-ask.
 | `[data-spin-lead-email]` | required | `<input>`. Prefilled from `session.email`. |
 | `[data-spin-lead-idtype]` | required | On **both** options, valued `id` / `passport`. Plain Webflow divs, like the onboarding gender pills — put it on the whole clickable row. The selected one gets a class (`is-selected`, override with `data-selected-class`, or target an inner element with `data-selected-target`) plus `aria-checked`. A native radio is synced too. The wrapper gets `data-spin-lead-type`. |
 | `[data-spin-lead-idnumber]` | required | `<input>`. 13 digits for `id`, 6–20 alphanumerics for `passport`. |
-| `[data-spin-lead-submit]` | required | The button. `aria-disabled` while in flight. |
+| `[data-spin-lead-submit]` | optional | A dedicated submit button, if you want one. **Not required** — in state `form` the main `[data-spin-go]` CTA doubles as the submit and relabels itself. That is how `/spin-to-win` is built: its CTA lives in the nav, so a second button there would be awkward. |
 | `[data-spin-lead-error]` | optional | Message box, written as TEXT, hidden when empty. |
 | `[data-spin-lead-idlabel]` | optional | Its text follows the chosen type. |
+
+#### The CTA doubles as the submit
+
+In state `form` the `[data-spin-go]` button submits the form instead of spinning,
+and its label changes. It reverts the moment the form is accepted.
+
+| Attribute | Where | |
+|---|---|---|
+| `data-spin-lead-label` | `[data-spin]` | What the CTA says while the form is up. Default `Submit`. |
+| `[data-spin-go-text]` | the CTA's inner text element | Webflow buttons wrap their label in a div — mark it so the right node is relabelled. Without it the button's own text is used. |
+
+The button also gets `data-spin-go-mode="submit"` / `"spin"`, so the two jobs can
+look different if you want them to.
 
 > **Only phone and email reach the backend.** They have real endpoints
 > (`PATCH …/contact/phone` and `…/contact/email`). `name`, `surname`, `id_type`

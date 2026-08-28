@@ -58,6 +58,9 @@
                                   data-spin-product="/flexicare-product"  bounce
                                      target when the session isn't COMPLETED
                                   data-spin-done="/"      optional "finish" CTA
+                                  data-spin-lead-label="Submit"  what the CTA
+                                     says while the lead form is up; it reverts
+                                     to its authored text afterwards
                                   data-spin-turns="1"     extra full rotations
                                      before landing
                                   data-spin-duration="1.5" seconds of the
@@ -257,6 +260,10 @@
      [data-spin-expires-wrap]   Hidden when expires_at is null (= never expires).
      [data-spin-error]          Message box for the fallback copy. Its authored
                                 text is used as the default message.
+     [data-spin-go-text]        Optional, on the INNER text element of the CTA
+                                (Webflow buttons wrap their label in a div).
+                                Marks what gets relabelled in state "form".
+                                Without it the button's own text is used.
 
      THE LEAD FORM — gates the wheel (state "form", before "ready"):
      Put all of this inside a [data-spin-when="form"] panel. The wheel is
@@ -282,8 +289,13 @@
                                 you would rather have one. Defaults to "id".
      [data-spin-lead-idnumber]  <input>. Validated as 13 digits for "id", or
                                 6–20 alphanumerics for "passport".
-     [data-spin-lead-submit]    The "Call me back" button. Disabled while the
-                                request is in flight.
+     [data-spin-lead-submit]    A dedicated submit button, if you want one.
+                                NOT required: in state "form" the main
+                                [data-spin-go] CTA doubles as the submit and
+                                relabels itself, which is how /spin-to-win is
+                                built (its CTA lives in the nav, so a second
+                                button there would be awkward). Disabled while
+                                the request is in flight.
      [data-spin-lead-error]     Message box. Written as TEXT. Hidden when empty.
      [data-spin-lead-idlabel]   Optional. Its text follows the chosen type
                                 ("ID number" / "Passport number").
@@ -788,13 +800,38 @@
     }
   }
 
+  /* The CTA's text lives in an inner element on a Webflow button
+     (.primary-button-text and friends), so mark it with data-spin-go-text and
+     the label is swapped there. Without the marker we fall back to the button
+     itself, which is right for a bare <button>Spin</button>. */
+  function goTextNode(btn) {
+    return (btn.querySelector && btn.querySelector("[data-spin-go-text]")) || btn;
+  }
+
+  /* ONE button for two jobs. In state "form" the CTA is the form's submit —
+     it is the only primary button on the page and it lives in the nav, so a
+     second one would be both redundant and awkward to place. It relabels
+     itself, and reverts the moment the form is accepted. */
   function refreshButton() {
     var btn = slot("[data-spin-go]");
     if (!btn) return;
-    var enabled = state.mode === "ready" && !state.busy && !cooling();
+    var submitting = state.mode === "form";
+    var enabled = submitting
+      ? !state.leadBusy
+      : state.mode === "ready" && !state.busy && !cooling();
     btn.disabled = !enabled;
     btn.setAttribute("aria-disabled", enabled ? "false" : "true");
-    btn.setAttribute("data-spin-busy", state.busy ? "true" : "false");
+    btn.setAttribute("data-spin-busy", (state.busy || state.leadBusy) ? "true" : "false");
+    btn.setAttribute("data-spin-go-mode", submitting ? "submit" : "spin");
+
+    // Captured lazily but BEFORE the first swap: every state change calls
+    // this, and the first one (loading) is not the form.
+    var node = goTextNode(btn);
+    if (node.__spinGoDefault == null) node.__spinGoDefault = node.textContent;
+    var next = submitting
+      ? attr(state.wrap, "data-spin-lead-label", "Submit")
+      : node.__spinGoDefault;
+    if (node.textContent !== next) node.textContent = next;
   }
 
   /* The authored fallback copy is captured ONCE per element, on arrival —
@@ -2145,7 +2182,9 @@
     var goBtn = t.closest("[data-spin-go]");
     if (goBtn) {
       e.preventDefault();
-      onSpin();
+      // Same button, two jobs — see refreshButton.
+      if (state.mode === "form") submitLead();
+      else onSpin();
       return;
     }
 
