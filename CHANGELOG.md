@@ -14,6 +14,41 @@ Format:
 
 ---
 
+## 2026-08-28 — A lead form now gates the spin wheel
+
+- `src/flexicare-spin.js` — new state **`form`**, between `loading` and
+  `ready`. The wheel is rendered as before, but the panel over it must be
+  completed first; on success the state flips to `ready` and the gate is
+  remembered per session in `sessionStorage`, so a reload does not re-ask.
+  New `[data-spin-lead-*]` contract: `-name`, `-surname`, `-phone`, `-email`,
+  `-idtype` (`id` / `passport`), `-idnumber`, `-submit`, `-error`, `-idlabel`.
+  Prefilled from the session where it already knows the answer. `?spindemo=form`
+  builds it with no backend.
+- `demo/spin-lead-embed.html` — paste-ready embed for the six fields, using the
+  same `.fc-field` classes the onboarding `field-style` embed already styles.
+- `docs/spin-attributes.md`, `docs/kiosk-and-spin.md` — the new state, the panel
+  and the full attribute table.
+
+**Only phone and email reach the backend.** `PATCH …/contact/phone` and
+`…/contact/email` are real; `name`, `surname`, `id_type` and `id_number` have
+**no endpoint anywhere in `docs/api-contract.md`** (checked — the words do not
+appear in it). They are buffered on `Flexicare.lead` in memory and are lost on a
+hard reload. Deliberate and temporary, agreed with Kenton: the form ships ahead
+of the backend. When the endpoints land, `submitLead()` is the one function to
+change. **The button says "Call me back" — until those fields are persisted,
+nothing downstream can honour that for surname or ID number.**
+
+Two ordering details worth remembering:
+- The form gate is checked BEFORE the `nophone` state, because the form is what
+  collects the number. Otherwise a session missing a phone would be bounced to
+  onboarding by the very panel this replaces.
+- `form` had to be added to `syncNav`'s "spinning is still ahead" list. The spin
+  CTA lives in the nav and `navReveal` is deliberately one-way — collapsing it
+  when the form appeared would have taken the CTA with it, permanently.
+
+**Webflow:** needs a `[data-spin-when="form"]` panel on `/spin-to-win` holding
+the fields. Nothing is wired there yet.
+
 ## 2026-08-28 — The /kiosk pairing page, wired
 
 **Webflow (unpublished, applied via the MCP connector):**

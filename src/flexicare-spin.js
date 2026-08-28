@@ -258,9 +258,42 @@
      [data-spin-error]          Message box for the fallback copy. Its authored
                                 text is used as the default message.
 
+     THE LEAD FORM — gates the wheel (state "form", before "ready"):
+     Put all of this inside a [data-spin-when="form"] panel. The wheel is
+     already rendered behind it, so submitting only flips the state.
+
+     [data-spin-lead-name]      <input>. Prefilled from session.first_name.
+     [data-spin-lead-surname]   <input>.
+     [data-spin-lead-phone]     <input>. Prefilled from session.phone_number.
+                                Normalised to E.164 before sending.
+     [data-spin-lead-email]     <input>. Prefilled from session.email.
+     [data-spin-lead-idtype]    The ID/Passport choice. Put it on BOTH options
+                                with data-spin-lead-idtype="id" / "passport" —
+                                clicks are delegated, so a styled div works as
+                                well as a radio. Defaults to "id".
+     [data-spin-lead-idnumber]  <input>. Validated as 13 digits for "id", or
+                                6–20 alphanumerics for "passport".
+     [data-spin-lead-submit]    The "Call me back" button. Disabled while the
+                                request is in flight.
+     [data-spin-lead-error]     Message box. Written as TEXT. Hidden when empty.
+     [data-spin-lead-idlabel]   Optional. Its text follows the chosen type
+                                ("ID number" / "Passport number").
+
+     WHAT ACTUALLY REACHES THE BACKEND, AND WHAT DOES NOT
+       Only two of these fields have an endpoint today:
+         phone → PATCH /sessions/{id}/contact/phone
+         email → PATCH /sessions/{id}/contact/email
+       name, surname, id_type and id_number have NO endpoint in the API
+       contract (checked 2026-08-28 — the words do not appear in it). They are
+       buffered on Flexicare.lead, in memory, and are LOST on a hard reload.
+       This is deliberate and temporary: the form was built ahead of the
+       backend so the page could ship. When the endpoints land, send them from
+       submitLead() and delete this paragraph.
+
    STATE (drive your CSS and your panels off this — set on the wrapper AND
    on <html>, so a full-bleed background can react too):
      data-spin-state = "loading"      resolving the session + the wheel
+                     | "form"         the lead form must be completed first
                      | "ready"        wheel drawn, CTA live
                      | "spinning"     turning; CTA disabled
                      | "prize"        won a real prize — show the claim code
@@ -290,6 +323,7 @@
                                 show a FAKE prize screen
      ?spindemo=consolation    → jump straight to the consolation panel
      ?spindemo=redeemed       → …the redeemed panel   (also: expired, voided)
+     ?spindemo=form           → …the lead form, wheel behind it
      ?spindemo=nophone        → …the no-phone panel
      ?spindemo=unavailable    → …the fallback panel
 
@@ -343,6 +377,9 @@
     cooldownUntil: 0,
     debug: false,
     demo: null, // ?spindemo — dev only; see the header comment
+    needLead: false, // must the lead form be completed before "ready"?
+    leadBusy: false, // a lead submit is in flight
+    leadType: "id", // "id" | "passport" — which document was chosen
     painted: false, // has applyWhen run once? gates the panel animation
     navHidden: false, // did WE collapse the nav? gates putting it back
   };
@@ -719,10 +756,11 @@
     var pt = window.PageTransition;
     if (!pt || !pt.nav) return;
 
-    // `loading` and `ready` are the only states where spinning is still ahead
-    // of the shopper. Everything else — spinning, every award state, every
-    // dead end — is past it.
-    var needed = mode === "loading" || mode === "ready";
+    // `loading`, `form` and `ready` are the states where spinning is still
+    // ahead of the shopper. Everything else — spinning, every award state,
+    // every dead end — is past it. `form` MUST be in this list: the spin CTA
+    // lives in the nav, and collapsing it here is not reversible.
+    var needed = mode === "loading" || mode === "form" || mode === "ready";
 
     if (!needed) {
       if (state.navHidden) return;
@@ -1722,6 +1760,7 @@
 
     // Panels that don't involve the wheel at all — jump straight there.
     if (kind === "nophone") return setState("nophone");
+    if (kind === "form") state.needLead = true;
     if (kind === "unavailable" || kind === "error")
       return showError(null, "wheel");
     if (kind === "consolation" || kind === "redeemed" || kind === "expired" || kind === "voided")
@@ -1737,7 +1776,11 @@
         if (!alive(token)) return;
         state.segments = segments && segments.length ? segments : DEMO_SEGMENTS;
         if (!renderWheel(state.segments)) return showError(null, "wheel");
-        setState("ready");
+        if (state.needLead) {
+          setLeadType(state.leadType);
+          leadError("");
+        }
+        setState(state.needLead ? "form" : "ready");
       });
   }
 
@@ -1817,12 +1860,18 @@
             return null;
           });
         }
-        if (!session.phone_number) {
-          // Onboarding normally captures this, so reaching here means it
-          // failed silently back then. The panel sends them back for it.
+        /* The lead form gates the wheel. It collects the phone number
+           itself, so it comes BEFORE the nophone check — otherwise a session
+           that never got a number would be bounced back to onboarding by a
+           panel the form exists to replace. */
+        state.needLead = !leadDone(id);
+        if (!state.needLead && !session.phone_number) {
+          // The form was already completed, so a missing number here means
+          // onboarding failed silently AND the form did too. Send them back.
           setState("nophone");
           return null;
         }
+        prefillLead(session);
         return loadWheel();
       })
       .then(function (segments) {
@@ -1836,7 +1885,8 @@
           showError(null, "wheel");
           return;
         }
-        setState("ready");
+        // The wheel is drawn either way; the form panel simply sits over it.
+        setState(state.needLead ? "form" : "ready");
       })
       .catch(function (err) {
         if (!alive(token)) return;
@@ -1856,6 +1906,216 @@
       });
   }
 
+  /* --------------------------- the lead form ---------------------------
+     A gate in front of the wheel: the shopper fills this in, and only then
+     does the state go to "ready". The wheel is already drawn behind the
+     panel, so submitting is a state flip, not a load.
+
+     ONLY TWO FIELDS HAVE SOMEWHERE TO GO. phone and email have real
+     endpoints; name, surname, id_type and id_number do not exist anywhere in
+     the API contract, so they are buffered on Flexicare.lead and go no
+     further. See the header comment — when the backend adds them, this is the
+     one function to change. */
+
+  // Per-session, so a reload does not re-ask. sessionStorage, not local:
+  // the next shopper on a kiosk must never inherit this.
+  function leadKey(id) {
+    return "flx_spin_lead_" + id;
+  }
+  function leadDone(id) {
+    if (!id) return false;
+    try {
+      return window.sessionStorage.getItem(leadKey(id)) === "1";
+    } catch (e) {
+      return false; // private mode: ask again rather than skipping the gate
+    }
+  }
+  function markLeadDone(id) {
+    if (!id) return;
+    try {
+      window.sessionStorage.setItem(leadKey(id), "1");
+    } catch (e) {}
+  }
+
+  // Same normalisation flexicare-onboarding.js uses. Duplicated on purpose:
+  // spin.js must not depend on a page controller that may not have loaded.
+  function normaliseZaMobile(raw) {
+    if (!raw) return null;
+    var d = String(raw).replace(/\D/g, "");
+    var national;
+    if (d.length === 11 && d.slice(0, 2) === "27") national = "0" + d.slice(2);
+    else if (d.length === 10 && d.charAt(0) === "0") national = d;
+    else if (d.length === 9 && /^[6-8]/.test(d)) national = "0" + d;
+    else return null;
+    if (!/^0[6-8]\d{8}$/.test(national)) return null;
+    return "+27" + national.slice(1);
+  }
+
+  function leadValue(sel) {
+    var el = slot(sel);
+    return el ? String(el.value == null ? "" : el.value).trim() : "";
+  }
+
+  function leadError(msg) {
+    slots("[data-spin-lead-error]").forEach(function (el) {
+      el.textContent = msg || "";
+      el.style.display = msg ? "" : "none";
+    });
+  }
+
+  function setLeadType(kind) {
+    state.leadType = kind === "passport" ? "passport" : "id";
+    if (state.wrap) state.wrap.setAttribute("data-spin-lead-type", state.leadType);
+    // Mark the chosen option so CSS can show the selected state.
+    slots("[data-spin-lead-idtype]").forEach(function (el) {
+      var on = attr(el, "data-spin-lead-idtype", "") === state.leadType;
+      el.setAttribute("aria-checked", on ? "true" : "false");
+      if (el.tagName === "INPUT" && el.type === "radio") el.checked = on;
+    });
+    write(
+      "[data-spin-lead-idlabel]",
+      state.leadType === "passport" ? "Passport number" : "ID number"
+    );
+  }
+
+  function refreshLeadButton() {
+    slots("[data-spin-lead-submit]").forEach(function (el) {
+      el.setAttribute("aria-disabled", state.leadBusy ? "true" : "false");
+      if (el.tagName === "BUTTON") el.disabled = !!state.leadBusy;
+    });
+  }
+
+  // Fill from what the session already knows, so the shopper is confirming
+  // rather than retyping. first_name and phone_number are normally already
+  // captured at /onboarding.
+  function prefillLead(session) {
+    if (!session) return;
+    var pairs = [
+      ["[data-spin-lead-name]", session.first_name],
+      ["[data-spin-lead-phone]", session.phone_number],
+      ["[data-spin-lead-email]", session.email],
+    ];
+    for (var i = 0; i < pairs.length; i++) {
+      var el = slot(pairs[i][0]);
+      if (el && !el.value && pairs[i][1]) el.value = pairs[i][1];
+    }
+    setLeadType(state.leadType);
+    leadError("");
+  }
+
+  function readLead() {
+    var phoneRaw = leadValue("[data-spin-lead-phone]");
+    return {
+      name: leadValue("[data-spin-lead-name]"),
+      surname: leadValue("[data-spin-lead-surname]"),
+      phoneRaw: phoneRaw,
+      phone: normaliseZaMobile(phoneRaw),
+      email: leadValue("[data-spin-lead-email]"),
+      idType: state.leadType,
+      idNumber: leadValue("[data-spin-lead-idnumber]").toUpperCase(),
+    };
+  }
+
+  // Returns an error string, or null when the form is good.
+  function validateLead(f) {
+    if (!f.name) return "Please enter your name.";
+    if (!f.surname) return "Please enter your surname.";
+    if (!f.phone)
+      return "Enter a valid South African mobile number, e.g. 082 123 4567.";
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/.test(f.email))
+      return "Please enter a valid email address.";
+    if (f.idType === "passport") {
+      if (!/^[A-Z0-9]{6,20}$/.test(f.idNumber))
+        return "Enter your passport number (6–20 letters or numbers).";
+    } else if (!/^\d{13}$/.test(f.idNumber)) {
+      return "A South African ID number is 13 digits.";
+    }
+    return null;
+  }
+
+  function submitLead() {
+    if (state.leadBusy) return;
+    var id = FC.getSessionId();
+    if (!id) {
+      go(attr(state.wrap, "data-spin-onboarding", "/onboarding"));
+      return;
+    }
+
+    var f = readLead();
+    var bad = validateLead(f);
+    if (bad) {
+      leadError(bad);
+      return;
+    }
+
+    var token = state.token;
+    state.leadBusy = true;
+    refreshLeadButton();
+    leadError("");
+
+    /* Everything the backend has no home for. In memory only — a hard reload
+       loses it, which is exactly why this is temporary. */
+    FC.lead = {
+      name: f.name,
+      surname: f.surname,
+      phone: f.phone,
+      email: f.email,
+      id_type: f.idType,
+      id_number: f.idNumber,
+    };
+
+    // In the demo there is no session to PATCH — skip straight to the wheel.
+    if (state.demo) {
+      state.leadBusy = false;
+      refreshLeadButton();
+      dbg("lead (demo): not sent", FC.lead);
+      setState("ready");
+      return;
+    }
+
+    var base = "/sessions/" + id + "/contact/";
+    FC.api(base + "phone", { method: "PATCH", body: { phone_number: f.phone } })
+      .then(function () {
+        if (!alive(token)) return null;
+        return FC.api(base + "email", { method: "PATCH", body: { email: f.email } });
+      })
+      .then(function () {
+        if (!alive(token)) return;
+        state.leadBusy = false;
+        refreshLeadButton();
+        markLeadDone(id);
+        if (state.session) {
+          state.session.phone_number = f.phone;
+          state.session.email = f.email;
+        }
+        FC.setFirstName(f.name);
+        dbg("lead captured; name/surname/id buffered only", FC.lead);
+        setState("ready");
+      })
+      .catch(function (err) {
+        if (!alive(token)) return;
+        state.leadBusy = false;
+        refreshLeadButton();
+        /* A 422 is the shopper's problem to fix — the server validated the
+           number or the address. Anything else is ours, and must NOT trap
+           them in front of a wheel they were promised. */
+        if (err && err.status === 422) {
+          leadError(validationDetail(err) || "Please check your details and try again.");
+          return;
+        }
+        dbg("lead save failed", err && err.message);
+        leadError("We couldn't save your details — please try again.");
+      });
+  }
+
+  // FastAPI sends 422 as a list of { msg }. Surface the first one.
+  function validationDetail(err) {
+    var d = err && err.data && err.data.detail;
+    if (typeof d === "string") return d;
+    if (d && d.length && d[0] && d[0].msg) return String(d[0].msg);
+    return null;
+  }
+
   /* ------------------------ delegated listeners ------------------------ */
 
   function onClick(e) {
@@ -1866,6 +2126,20 @@
     if (goBtn) {
       e.preventDefault();
       onSpin();
+      return;
+    }
+
+    var idType = t.closest("[data-spin-lead-idtype]");
+    if (idType && state.wrap.contains(idType)) {
+      setLeadType(attr(idType, "data-spin-lead-idtype", "id"));
+      leadError("");
+      // Not prevented: a real <input type="radio"> still needs to check itself.
+    }
+
+    var leadBtn = t.closest("[data-spin-lead-submit]");
+    if (leadBtn) {
+      e.preventDefault();
+      submitLead();
       return;
     }
 
@@ -1924,6 +2198,9 @@
     state.rotor = null;
     state.rotors = null;
     state.busy = false;
+    state.needLead = false;
+    state.leadBusy = false;
+    state.leadType = "id";
     state.painted = false;
     state.navHidden = false;
     stopTweens();
@@ -1972,6 +2249,9 @@
       state.wrap.removeAttribute("data-spin-demo");
     }
     state.demo = null;
+    state.needLead = false;
+    state.leadBusy = false;
+    state.leadType = "id";
     var root = document.documentElement;
     if (root) root.removeAttribute("data-spin-state");
     state.wrap = null;

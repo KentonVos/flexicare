@@ -153,6 +153,7 @@ embed. They're SVG text nodes, so the Designer can't reach them.
 | Value | When |
 |---|---|
 | `loading` | Resolving the session and the wheel. |
+| `form` | The lead form must be completed before the wheel unlocks. |
 | `ready` | Wheel drawn, CTA live. |
 | `spinning` | Turning; CTA disabled. |
 | `prize` | Won a real prize. |
@@ -166,6 +167,34 @@ embed. They're SVG text nodes, so the Designer can't reach them.
 
 The state is also written to `data-spin-state` on `[data-spin]` **and** on `<html>`,
 so a full-bleed background can react to it.
+
+### The lead form (state `form`)
+
+A gate in front of the wheel. Put all of it inside a `[data-spin-when="form"]`
+panel; the wheel is already rendered behind it, so submitting only flips the
+state. On success the state goes to `ready` and the gate is remembered for that
+session in `sessionStorage`, so a reload does not re-ask.
+
+| Attribute | | |
+|---|---|---|
+| `[data-spin-lead-name]` | required | `<input>`. Prefilled from `session.first_name`. |
+| `[data-spin-lead-surname]` | required | `<input>`. |
+| `[data-spin-lead-phone]` | required | `<input>`. Prefilled from `session.phone_number`; normalised to E.164 before sending. |
+| `[data-spin-lead-email]` | required | `<input>`. Prefilled from `session.email`. |
+| `[data-spin-lead-idtype]` | required | On **both** options, valued `id` / `passport`. Clicks are delegated, so a styled div works as well as a radio. Gets `aria-checked`; the wrapper gets `data-spin-lead-type`. |
+| `[data-spin-lead-idnumber]` | required | `<input>`. 13 digits for `id`, 6–20 alphanumerics for `passport`. |
+| `[data-spin-lead-submit]` | required | The button. `aria-disabled` while in flight. |
+| `[data-spin-lead-error]` | optional | Message box, written as TEXT, hidden when empty. |
+| `[data-spin-lead-idlabel]` | optional | Its text follows the chosen type. |
+
+> **Only phone and email reach the backend.** They have real endpoints
+> (`PATCH …/contact/phone` and `…/contact/email`). `name`, `surname`, `id_type`
+> and `id_number` have **no endpoint in the API contract** — they are buffered
+> on `Flexicare.lead` in memory and are lost on a hard reload. Deliberate and
+> temporary: the form was built ahead of the backend. When the endpoints land,
+> `submitLead()` in `flexicare-spin.js` is the one function to change.
+
+Build it with `?spindemo=form`.
 
 #### Panel motion
 

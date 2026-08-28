@@ -151,6 +151,7 @@ code can never be lost to a page swap. States:
 | State | When |
 |---|---|
 | `loading` | resolving the session and the wheel |
+| `form` | the lead form must be completed before the wheel unlocks |
 | `ready` | wheel drawn, button live |
 | `spinning` | turning — button disabled |
 | `prize` | won a real prize; show the claim code |
@@ -684,6 +685,7 @@ attributes. Build one, style it, duplicate it for the rest.
 | Panel | `data-spin-when` | Must contain |
 |---|---|---|
 | Loading | `loading` | your skeleton/spinner |
+| The lead form | `form` | the `[data-spin-lead-*]` fields — see `docs/spin-attributes.md`. Gates the wheel |
 | The wheel | `ready spinning` | the stage. `[data-spin-go]` may live here or anywhere else on the page |
 | Won a prize | `prize` | `[data-spin-claim]` **large and high-contrast**, `[data-spin-prize-name]`, `[data-spin-instructions]`, `[data-spin-expires-wrap]`, `[data-spin-store]` |
 | Consolation | `consolation` | `[data-spin-prize-name]`, `[data-spin-instructions]`. **No claim code** |
@@ -762,6 +764,7 @@ for building the page: until a tablet is paired there is nothing on screen to st
 | URL | What you get |
 |---|---|
 | `/spin-to-win?spindemo` | the real wheel, a real spin animation, a fake prize screen |
+| `?spindemo=form` | the lead form, wheel behind it. Submitting never PATCHes anything |
 | `?spindemo=consolation` | straight to the consolation panel |
 | `?spindemo=redeemed` | …the redeemed panel (also `expired`, `voided`) |
 | `?spindemo=nophone` | …the no-phone panel |

@@ -1,0 +1,96 @@
+<!-- ============================================================
+     PASTE-READY WEBFLOW EMBED — the /spin-to-win lead form.
+
+     Where it goes: an HTML Embed inside a [data-spin-when="form"] panel on
+     the spin page. That panel gates the wheel: the script renders the wheel
+     behind it and only flips to state "ready" once this form is submitted.
+
+     WHY AN EMBED: the onboarding page already builds its inputs this way
+     (Webflow Form Blocks are not used anywhere in this project), and the
+     .fc-field / .fc-field-input classes below are the ones the existing
+     `field-style` embed already styles — so copy that embed onto the spin
+     page too and these fields inherit the glass field look for free.
+
+     PREFER DESIGNER CONTROL? Split this into one embed per input, each
+     wrapped in your own styled div, exactly like /onboarding does. The
+     script only ever looks for the data-spin-lead-* attributes; the markup
+     around them is yours.
+
+     WHAT REACHES THE BACKEND
+       phone → PATCH /sessions/{id}/contact/phone
+       email → PATCH /sessions/{id}/contact/email
+     name, surname, id_type and id_number have NO endpoint in the API
+     contract. They are buffered on Flexicare.lead in memory and are lost on
+     a hard reload. Temporary — see docs/spin-attributes.md § the lead form.
+     ============================================================ -->
+
+<div class="fc-lead">
+
+  <div class="fc-lead-row">
+    <div class="fc-field">
+      <input class="fc-field-input" type="text" placeholder="Name"
+             autocomplete="given-name" data-spin-lead-name />
+    </div>
+    <div class="fc-field">
+      <input class="fc-field-input" type="text" placeholder="Surname"
+             autocomplete="family-name" data-spin-lead-surname />
+    </div>
+  </div>
+
+  <div class="fc-lead-row">
+    <div class="fc-field">
+      <input class="fc-field-input" type="tel" placeholder="Cellphone number"
+             inputmode="tel" autocomplete="tel" data-spin-lead-phone />
+    </div>
+    <div class="fc-field">
+      <input class="fc-field-input" type="email" placeholder="Email address"
+             inputmode="email" autocomplete="email" data-spin-lead-email />
+    </div>
+  </div>
+
+  <!-- The document toggle. Real radios so a keyboard and a screen reader both
+       work; the script also listens for clicks on the attribute, so styled
+       divs would do just as well. -->
+  <div class="fc-lead-types" role="radiogroup" aria-label="Document type">
+    <label class="fc-lead-type">
+      <input type="radio" name="fc-idtype" value="id" checked
+             data-spin-lead-idtype="id" />
+      <span>ID</span>
+    </label>
+    <label class="fc-lead-type">
+      <input type="radio" name="fc-idtype" value="passport"
+             data-spin-lead-idtype="passport" />
+      <span>Passport</span>
+    </label>
+  </div>
+
+  <div class="fc-field">
+    <input class="fc-field-input" type="text" placeholder="ID Number"
+           inputmode="numeric" autocomplete="off" spellcheck="false"
+           data-spin-lead-idnumber />
+  </div>
+
+  <!-- Written as TEXT by the script, and hidden while empty. -->
+  <div class="fc-lead-error" data-spin-lead-error></div>
+
+</div>
+
+<style>
+  /* Layout only — colour, type and the glass field styling come from your
+     Webflow classes and the existing `field-style` embed. Delete any rule
+     here you would rather own in the Designer. */
+  .fc-lead        { display: grid; gap: 0.75rem; }
+  .fc-lead-row    { display: grid; gap: 0.75rem; grid-template-columns: 1fr 1fr; }
+  .fc-lead-types  { display: flex; gap: 1.5rem; align-items: center; }
+  .fc-lead-type   { display: inline-flex; gap: 0.5rem; align-items: center;
+                    cursor: pointer; }
+
+  /* Hidden while empty so it never reserves space on a clean form. The
+     script sets display back when it writes a message. */
+  .fc-lead-error  { display: none; }
+
+  /* One column on a phone — two 50% fields at 390px are unusable. */
+  @media (max-width: 600px) {
+    .fc-lead-row { grid-template-columns: 1fr; }
+  }
+</style>
