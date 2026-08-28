@@ -14,6 +14,24 @@ Format:
 
 ---
 
+## 2026-08-28 — Error-state styling for the lead form (Webflow)
+
+**Webflow (unpublished). Two NEW combo classes — no shared class was touched.**
+
+- `.field-glass.is-invalid` — `box-shadow: 0 0 0 1.5px rgba(255,107,107,.95)`.
+  A ring rather than a border: `.field-glass` is a `data-liquid-glass` host and
+  the glass overlay sits over the box, so an inset border can be covered. Colour
+  is a placeholder — the palette is lime/indigo/teal and has no error red.
+- `.fc-error.is-lead-copy` — colour, size, line-height, margin. Applied to the
+  lead error box. `display` is deliberately NOT set here: the base `.fc-error`
+  keeps `display:none` so the box stays hidden until the script writes a message.
+
+`data-spin-lead-field` moved from the five `.field-wrapper` divs onto the
+`.field-glass` boxes inside them, so the invalid ring hugs the input instead of
+enclosing the label as well.
+
+---
+
 ## 2026-08-28 — Fix: the lead form's error message never appeared
 
 - `src/flexicare-spin.js` — `leadError()` showed the box with
