@@ -184,7 +184,8 @@ session in `sessionStorage`, so a reload does not re-ask.
 | `[data-spin-lead-idtype]` | required | On **both** options, valued `id` / `passport`. Plain Webflow divs, like the onboarding gender pills — put it on the whole clickable row. The selected one gets a class (`is-selected`, override with `data-selected-class`, or target an inner element with `data-selected-target`) plus `aria-checked`. A native radio is synced too. The wrapper gets `data-spin-lead-type`. |
 | `[data-spin-lead-idnumber]` | required | `<input>`. 13 digits for `id`, 6–20 alphanumerics for `passport`. |
 | `[data-spin-lead-submit]` | optional | A dedicated submit button, if you want one. **Not required** — in state `form` the main `[data-spin-go]` CTA doubles as the submit and relabels itself. That is how `/spin-to-win` is built: its CTA lives in the nav, so a second button there would be awkward. |
-| `[data-spin-lead-error]` | optional | Message box, written as TEXT, hidden when empty. |
+| `[data-spin-lead-error]` | optional | Message box, written as TEXT, hidden when empty. Its class is normally `display:none` — the script captures the display the Designer intends and restores **that**, so a box styled as flex comes back as flex. |
+| `[data-spin-lead-field]` | optional | Wrapper around one field, valued `name` / `surname` / `phone` / `email` / `idnumber`. The invalid one gets class `is-invalid` (override with `data-invalid-class`) plus `aria-invalid="true"` on the input, and is focused. Without it the class lands on the `<input>`, which is inside an Embed and much harder to style. |
 | `[data-spin-lead-idlabel]` | optional | Its text follows the chosen type. |
 
 #### The CTA doubles as the submit

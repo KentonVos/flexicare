@@ -297,6 +297,17 @@
                                 button there would be awkward). Disabled while
                                 the request is in flight.
      [data-spin-lead-error]     Message box. Written as TEXT. Hidden when empty.
+                                Its authored class is normally display:none —
+                                the script captures the display the Designer
+                                intends and restores THAT, so a box styled as
+                                flex comes back as flex.
+     [data-spin-lead-field]     Optional wrapper around one field. The invalid
+                                field gets class `is-invalid` (override with
+                                data-invalid-class="YourComboClass") and
+                                aria-invalid="true". Without the wrapper the
+                                class lands on the <input> itself, which is
+                                inside an Embed and harder to style — so add it
+                                to the .field-wrapper of each field.
      [data-spin-lead-idlabel]   Optional. Its text follows the chosen type
                                 ("ID number" / "Passport number").
 
@@ -2002,11 +2013,54 @@
     return el ? String(el.value == null ? "" : el.value).trim() : "";
   }
 
-  function leadError(msg) {
+  /* The authored .fc-error class is display:none — that is how the box stays
+     invisible on a clean form. So showing it must set a REAL display value:
+     an inline "" falls straight back through to the class and the message is
+     written but never seen. (Exactly the trap the panel pre-boot rule warns
+     about.) Capture whatever the Designer intends the first time, so a box
+     styled as flex comes back as flex, not block. */
+  function leadShowDisplay(el) {
+    if (el.__spinShowDisplay == null) {
+      var css = "";
+      try {
+        css = window.getComputedStyle(el).display;
+      } catch (e) {}
+      el.__spinShowDisplay = !css || css === "none" ? "block" : css;
+    }
+    return el.__spinShowDisplay;
+  }
+
+  function leadError(msg, field) {
     slots("[data-spin-lead-error]").forEach(function (el) {
       el.textContent = msg || "";
-      el.style.display = msg ? "" : "none";
+      el.style.display = msg ? leadShowDisplay(el) : "none";
     });
+    markLeadInvalid(field || null);
+  }
+
+  /* Per-field state, so the offending input can look wrong too. The input is
+     inside an HTML Embed, so the class goes on the closest thing the Designer
+     can style — the [data-lead-field] wrapper if there is one, else the input
+     itself. aria-invalid is set either way. */
+  var LEAD_FIELDS = ["name", "surname", "phone", "email", "idnumber"];
+
+  function markLeadInvalid(field) {
+    for (var i = 0; i < LEAD_FIELDS.length; i++) {
+      var key = LEAD_FIELDS[i];
+      var el = slot("[data-spin-lead-" + key + "]");
+      if (!el) continue;
+      var on = key === field;
+      el.setAttribute("aria-invalid", on ? "true" : "false");
+      var host =
+        (el.closest && el.closest("[data-spin-lead-field]")) || el;
+      var cls = attr(host, "data-invalid-class", "is-invalid");
+      if (host.classList) host.classList.toggle(cls, on);
+      if (on && el.focus) {
+        try {
+          el.focus();
+        } catch (e) {}
+      }
+    }
   }
 
   function setLeadType(kind) {
@@ -2073,19 +2127,45 @@
     };
   }
 
-  // Returns an error string, or null when the form is good.
+  // Returns { field, msg } for the FIRST problem, or null when the form is
+  // good. One message at a time, in reading order — a wall of six errors is
+  // worse than being walked down the form.
   function validateLead(f) {
-    if (!f.name) return "Please enter your name.";
-    if (!f.surname) return "Please enter your surname.";
+    if (!f.name) return { field: "name", msg: "Please enter your name." };
+    if (!f.surname) return { field: "surname", msg: "Please enter your surname." };
+    if (!f.phoneRaw)
+      return { field: "phone", msg: "Please enter your cellphone number." };
     if (!f.phone)
-      return "Enter a valid South African mobile number, e.g. 082 123 4567.";
+      return {
+        field: "phone",
+        msg: "That doesn't look like a South African mobile number — try 071 234 5678.",
+      };
+    if (!f.email)
+      return { field: "email", msg: "Please enter your email address." };
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/.test(f.email))
-      return "Please enter a valid email address.";
+      return { field: "email", msg: "That email address doesn't look right." };
+    if (!f.idNumber)
+      return {
+        field: "idnumber",
+        msg:
+          f.idType === "passport"
+            ? "Please enter your passport number."
+            : "Please enter your ID number.",
+      };
     if (f.idType === "passport") {
       if (!/^[A-Z0-9]{6,20}$/.test(f.idNumber))
-        return "Enter your passport number (6–20 letters or numbers).";
+        return {
+          field: "idnumber",
+          msg: "A passport number is 6–20 letters or numbers.",
+        };
     } else if (!/^\d{13}$/.test(f.idNumber)) {
-      return "A South African ID number is 13 digits.";
+      return {
+        field: "idnumber",
+        msg:
+          "A South African ID number is 13 digits — that one has " +
+          f.idNumber.replace(/\D/g, "").length +
+          ".",
+      };
     }
     return null;
   }
@@ -2105,7 +2185,7 @@
     var f = readLead();
     var bad = validateLead(f);
     if (bad) {
-      leadError(bad);
+      leadError(bad.msg, bad.field);
       return;
     }
 
@@ -2224,6 +2304,23 @@
     }
   }
   document.addEventListener("click", onClick);
+
+  /* Typing anywhere in the form clears the message and the invalid mark. An
+     error that stays on screen while the shopper fixes it reads as "still
+     wrong", and they stop trusting it. Delegated like everything else, so it
+     survives Barba swaps and glass rebuilds. */
+  document.addEventListener("input", function (e) {
+    var t = e.target;
+    if (!t || typeof t.closest !== "function" || !state.wrap) return;
+    if (state.mode !== "form") return;
+    for (var i = 0; i < LEAD_FIELDS.length; i++) {
+      var sel = "[data-spin-lead-" + LEAD_FIELDS[i] + "]";
+      if (t.closest(sel) && state.wrap.contains(t)) {
+        leadError("");
+        return;
+      }
+    }
+  });
 
   /* --------------------------- init / teardown --------------------------- */
 

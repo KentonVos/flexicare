@@ -14,6 +14,29 @@ Format:
 
 ---
 
+## 2026-08-28 — Fix: the lead form's error message never appeared
+
+- `src/flexicare-spin.js` — `leadError()` showed the box with
+  `el.style.display = ""`, which falls straight back through to the authored
+  `.fc-error { display: none }`. The message was being written correctly and
+  was invisible every time. It now captures the display the Designer intends
+  (computed once, before the box is ever hidden) and restores that, so a box
+  styled as flex comes back as flex rather than being forced to block. Same
+  class of trap as the panel pre-boot rule.
+- Validation now returns **which** field failed, not just a message: the
+  offending wrapper gets `is-invalid` (override with `data-invalid-class`), the
+  input gets `aria-invalid="true"` and focus. One message at a time, in reading
+  order — six at once is worse than being walked down the form. Empty-vs-malformed
+  are now separate messages, and the ID error says how many digits were typed.
+- Typing anywhere in the form clears the message and the invalid mark. An error
+  that persists while you fix it reads as "still wrong".
+
+**Webflow (unpublished):** `data-spin-lead-field` on the five `.field-wrapper`
+elements, so the invalid state lands on something the Designer can style — the
+input itself is inside an HTML Embed.
+
+---
+
 ## 2026-08-28 — Fix: submitting the demo lead form bounced to /onboarding
 
 - `src/flexicare-spin.js` — `submitLead()` checked "no session id → go to
