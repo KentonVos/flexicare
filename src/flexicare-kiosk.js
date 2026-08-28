@@ -783,6 +783,13 @@
       screenEl = scope.querySelector("[data-kiosk-screen]");
     state.screen = screenEl ? attr(screenEl, "data-kiosk-screen", null) : null;
 
+    /* Whatever copy the Designer left in the error box is NOT a fallback the
+       way [data-spin-error] is — this box only ever holds a server message.
+       Nothing else clears it before the first failed attempt, so an authored
+       placeholder (Webflow's default "This is some text inside of a div
+       block.") would sit on the unpaired screen looking like a real error. */
+    clearPanelError();
+
     applyState();
     resetIdle();
   }

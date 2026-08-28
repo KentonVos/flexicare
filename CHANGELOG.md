@@ -14,6 +14,27 @@ Format:
 
 ---
 
+## 2026-08-28 — The /kiosk pairing page, wired
+
+**Webflow (unpublished, applied via the MCP connector):**
+- New page `/kiosk` (duplicated from `/onboarding`, so the persistent shell
+  structure matches). Wired: `data-kiosk-pair` + `data-kiosk-attract="/"` +
+  `data-kiosk-version="1.0.0"` on `.kiosk-panel`; `data-kiosk-when` on the four
+  state panels (`unpaired`, `pairing`, `active`, `disabled`);
+  `data-kiosk-pair-input` (inside the field HTML Embed), `data-kiosk-pair-submit`,
+  `data-kiosk-pair-error`; `data-kiosk-name` / `data-kiosk-store` on the paired
+  info slots; `data-page-id="landing"` on the container so the nav collapses.
+- Site head: the kiosk pre-boot rule
+  `[data-kiosk-pair]:not([data-kiosk-state]) [data-kiosk-when]{display:none}`
+  beside the spin CSS, plus `pointer-events:none` for the disabled Pair button.
+  Site-wide for the same reason as the spin block — Barba never swaps `<head>`.
+
+- `src/flexicare-kiosk.js` — `init()` now calls `clearPanelError()`.
+  `[data-kiosk-pair-error]` is not an authored-copy fallback the way
+  `[data-spin-error]` is; it only ever holds a server message. Nothing cleared
+  it before the first failed attempt, so Webflow's default div text sat on the
+  unpaired screen looking like a real error until the operator typed.
+
 ## 2026-08-27 — Spin CSS moved site-wide: the panel flash on /spin-to-win
 
 **Webflow (unpublished, applied via the MCP connector):**
