@@ -14,6 +14,15 @@ Format:
 
 ---
 
+## 2026-08-28 — Fix: submitting the demo lead form bounced to /onboarding
+
+- `src/flexicare-spin.js` — `submitLead()` checked "no session id → go to
+  /onboarding" BEFORE the `?spindemo` bypass. Demo mode has no session by
+  design, so every submit on `/spin-to-win?spindemo=form` navigated away
+  instead of unlocking the wheel. The demo check now comes first.
+
+---
+
 ## 2026-08-28 — The spin CTA doubles as the lead form's submit
 
 - `src/flexicare-spin.js` — in state `form` the `[data-spin-go]` button submits

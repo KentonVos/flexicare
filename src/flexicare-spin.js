@@ -2092,8 +2092,12 @@
 
   function submitLead() {
     if (state.leadBusy) return;
-    var id = FC.getSessionId();
-    if (!id) {
+
+    /* ?spindemo has no session BY DESIGN, so the missing-session bounce below
+       has to come after this check — with it first, submitting the demo form
+       navigated straight to /onboarding every time. */
+    var id = state.demo ? null : FC.getSessionId();
+    if (!state.demo && !id) {
       go(attr(state.wrap, "data-spin-onboarding", "/onboarding"));
       return;
     }
@@ -2121,7 +2125,7 @@
       id_number: f.idNumber,
     };
 
-    // In the demo there is no session to PATCH — skip straight to the wheel.
+    // Nothing to PATCH without a session — go straight to the wheel.
     if (state.demo) {
       state.leadBusy = false;
       refreshLeadButton();
