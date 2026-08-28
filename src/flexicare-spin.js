@@ -269,8 +269,17 @@
      [data-spin-lead-email]     <input>. Prefilled from session.email.
      [data-spin-lead-idtype]    The ID/Passport choice. Put it on BOTH options
                                 with data-spin-lead-idtype="id" / "passport" —
-                                clicks are delegated, so a styled div works as
-                                well as a radio. Defaults to "id".
+                                plain WEBFLOW DIVS work great here, exactly like
+                                the onboarding gender pills. The selected one
+                                gets a class toggled on it + aria-checked. The
+                                class defaults to `is-selected`; override it per
+                                element with:
+                                  data-selected-class="YourComboClass"
+                                To keep the whole row clickable but put the class
+                                on an INNER element (the styled dot, say), add:
+                                  data-selected-target="<css selector>"
+                                A native <input type="radio"> is synced too, if
+                                you would rather have one. Defaults to "id".
      [data-spin-lead-idnumber]  <input>. Validated as 13 digits for "id", or
                                 6–20 alphanumerics for "passport".
      [data-spin-lead-submit]    The "Call me back" button. Disabled while the
@@ -1966,11 +1975,22 @@
   function setLeadType(kind) {
     state.leadType = kind === "passport" ? "passport" : "id";
     if (state.wrap) state.wrap.setAttribute("data-spin-lead-type", state.leadType);
-    // Mark the chosen option so CSS can show the selected state.
+    /* Reflect the choice the same way the onboarding gender pills do: toggle
+       a class the Designer styled, overridable per element. aria-checked
+       rather than gender's aria-pressed — this is a radiogroup, not a pair of
+       toggle buttons. A native <input type="radio"> is synced too, so either
+       markup works. */
     slots("[data-spin-lead-idtype]").forEach(function (el) {
       var on = attr(el, "data-spin-lead-idtype", "") === state.leadType;
+      var cls = attr(el, "data-selected-class", "is-selected");
+      var sel = attr(el, "data-selected-target", null);
+      var target = (sel && el.querySelector(sel)) || el;
+      if (target.classList) target.classList.toggle(cls, on);
       el.setAttribute("aria-checked", on ? "true" : "false");
-      if (el.tagName === "INPUT" && el.type === "radio") el.checked = on;
+      var native =
+        (el.matches && el.matches('input[type="radio"]') && el) ||
+        (el.querySelector && el.querySelector('input[type="radio"]'));
+      if (native) native.checked = on;
     });
     write(
       "[data-spin-lead-idlabel]",

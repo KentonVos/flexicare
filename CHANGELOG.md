@@ -24,8 +24,13 @@ Format:
   `-idtype` (`id` / `passport`), `-idnumber`, `-submit`, `-error`, `-idlabel`.
   Prefilled from the session where it already knows the answer. `?spindemo=form`
   builds it with no backend.
-- `demo/spin-lead-embed.html` — paste-ready embed for the six fields, using the
-  same `.fc-field` classes the onboarding `field-style` embed already styles.
+- `demo/spin-lead-embed.html` — paste-ready embeds, ONE PER FIELD, matching how
+  `/onboarding` is built (own embed inside your own Designer wrapper, `.fc-field`
+  classes so the existing `field-style` embed styles them). The ID/Passport
+  toggle is deliberately NOT an embed: it is two Designer divs, reflected the
+  same way the onboarding gender pills are — a toggled class (`is-selected`,
+  overridable with `data-selected-class` / `data-selected-target`) plus
+  `aria-checked`, with a native radio synced if one is present.
 - `docs/spin-attributes.md`, `docs/kiosk-and-spin.md` — the new state, the panel
   and the full attribute table.
 

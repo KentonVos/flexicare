@@ -1,20 +1,23 @@
 <!-- ============================================================
-     PASTE-READY WEBFLOW EMBED — the /spin-to-win lead form.
+     PASTE-READY WEBFLOW EMBEDS — the /spin-to-win lead form.
 
-     Where it goes: an HTML Embed inside a [data-spin-when="form"] panel on
-     the spin page. That panel gates the wheel: the script renders the wheel
-     behind it and only flips to state "ready" once this form is submitted.
+     ONE EMBED PER FIELD, matching how /onboarding is built: each input sits
+     in its own HTML Embed, inside your own Designer-styled field wrapper, so
+     the layout and the glass field look stay yours. Copy the blocks below one
+     at a time.
 
-     WHY AN EMBED: the onboarding page already builds its inputs this way
-     (Webflow Form Blocks are not used anywhere in this project), and the
-     .fc-field / .fc-field-input classes below are the ones the existing
-     `field-style` embed already styles — so copy that embed onto the spin
-     page too and these fields inherit the glass field look for free.
+     REQUIRED ONCE PER PAGE: the `field-style` embed from /onboarding (the
+     <style> block that makes .fc-field input transparent inside the glass
+     wrapper). Without it these inputs render with the browser's white box.
 
-     PREFER DESIGNER CONTROL? Split this into one embed per input, each
-     wrapped in your own styled div, exactly like /onboarding does. The
-     script only ever looks for the data-spin-lead-* attributes; the markup
-     around them is yours.
+     WHERE IT ALL GOES: inside a [data-spin-when="form"] panel on the spin
+     page. That panel gates the wheel — the script renders the wheel behind it
+     and only flips to state "ready" once this form is submitted.
+
+     THE ID / PASSPORT TOGGLE IS NOT HERE ON PURPOSE. Build it as two plain
+     Webflow divs, like the onboarding gender pills, and put
+     data-spin-lead-idtype="id" / "passport" on them. See the bottom of this
+     file.
 
      WHAT REACHES THE BACKEND
        phone → PATCH /sessions/{id}/contact/phone
@@ -24,73 +27,77 @@
      a hard reload. Temporary — see docs/spin-attributes.md § the lead form.
      ============================================================ -->
 
-<div class="fc-lead">
 
-  <div class="fc-lead-row">
-    <div class="fc-field">
-      <input class="fc-field-input" type="text" placeholder="Name"
-             autocomplete="given-name" data-spin-lead-name />
-    </div>
-    <div class="fc-field">
-      <input class="fc-field-input" type="text" placeholder="Surname"
-             autocomplete="family-name" data-spin-lead-surname />
-    </div>
-  </div>
-
-  <div class="fc-lead-row">
-    <div class="fc-field">
-      <input class="fc-field-input" type="tel" placeholder="Cellphone number"
-             inputmode="tel" autocomplete="tel" data-spin-lead-phone />
-    </div>
-    <div class="fc-field">
-      <input class="fc-field-input" type="email" placeholder="Email address"
-             inputmode="email" autocomplete="email" data-spin-lead-email />
-    </div>
-  </div>
-
-  <!-- The document toggle. Real radios so a keyboard and a screen reader both
-       work; the script also listens for clicks on the attribute, so styled
-       divs would do just as well. -->
-  <div class="fc-lead-types" role="radiogroup" aria-label="Document type">
-    <label class="fc-lead-type">
-      <input type="radio" name="fc-idtype" value="id" checked
-             data-spin-lead-idtype="id" />
-      <span>ID</span>
-    </label>
-    <label class="fc-lead-type">
-      <input type="radio" name="fc-idtype" value="passport"
-             data-spin-lead-idtype="passport" />
-      <span>Passport</span>
-    </label>
-  </div>
-
-  <div class="fc-field">
-    <input class="fc-field-input" type="text" placeholder="ID Number"
-           inputmode="numeric" autocomplete="off" spellcheck="false"
-           data-spin-lead-idnumber />
-  </div>
-
-  <!-- Written as TEXT by the script, and hidden while empty. -->
-  <div class="fc-lead-error" data-spin-lead-error></div>
-
+<!-- ============================ 1. Name ============================ -->
+<!-- Name -->
+<div class="fc-field">
+  <input class="fc-field-input" type="text" placeholder="Name" autocomplete="given-name" data-spin-lead-name />
 </div>
 
-<style>
-  /* Layout only — colour, type and the glass field styling come from your
-     Webflow classes and the existing `field-style` embed. Delete any rule
-     here you would rather own in the Designer. */
-  .fc-lead        { display: grid; gap: 0.75rem; }
-  .fc-lead-row    { display: grid; gap: 0.75rem; grid-template-columns: 1fr 1fr; }
-  .fc-lead-types  { display: flex; gap: 1.5rem; align-items: center; }
-  .fc-lead-type   { display: inline-flex; gap: 0.5rem; align-items: center;
-                    cursor: pointer; }
 
-  /* Hidden while empty so it never reserves space on a clean form. The
-     script sets display back when it writes a message. */
-  .fc-lead-error  { display: none; }
+<!-- ========================== 2. Surname ========================== -->
+<!-- Surname -->
+<div class="fc-field">
+  <input class="fc-field-input" type="text" placeholder="Surname" autocomplete="family-name" data-spin-lead-surname />
+</div>
 
-  /* One column on a phone — two 50% fields at 390px are unusable. */
-  @media (max-width: 600px) {
-    .fc-lead-row { grid-template-columns: 1fr; }
-  }
-</style>
+
+<!-- ====================== 3. Cellphone number ====================== -->
+<!-- Cellphone number -->
+<div class="fc-field">
+  <input class="fc-field-input" type="tel" inputmode="tel" placeholder="e.g. 071 234 5678" autocomplete="tel" data-spin-lead-phone />
+</div>
+
+
+<!-- ======================= 4. Email address ======================= -->
+<!-- Email address -->
+<div class="fc-field">
+  <input class="fc-field-input" type="email" inputmode="email" placeholder="Email address" autocomplete="email" data-spin-lead-email />
+</div>
+
+
+<!-- ========================= 5. ID number ========================= -->
+<!-- ID / passport number. The placeholder stays generic because the label
+     above it is what changes with the toggle (put data-spin-lead-idlabel on
+     that label and the script rewrites it). -->
+<div class="fc-field">
+  <input class="fc-field-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="ID Number" data-spin-lead-idnumber />
+</div>
+
+
+<!-- ====================== 6. The error message ======================
+     ONE box for the whole form, not one per field — the script writes a
+     single message and hides the box while it is empty. Put it just above
+     the submit button. Styled like the onboarding .fc-error. -->
+<div class="fc-error" data-spin-lead-error style="display:none"></div>
+
+
+<!-- ============================================================
+     THE ID / PASSPORT TOGGLE — build this in the Designer, not here.
+
+     Two plain divs, exactly like the onboarding gender pills:
+
+       Doc Type Row            (your flex wrapper)
+       ├── Doc Option          data-spin-lead-idtype="id"
+       │   ├── Radio Dot       (your styled circle)
+       │   └── Text            "ID"
+       └── Doc Option          data-spin-lead-idtype="passport"
+           ├── Radio Dot
+           └── Text            "Passport"
+
+     Put the attribute on the WHOLE clickable row, not the dot — the script
+     delegates clicks and walks up from whatever was tapped, so the label and
+     the dot both work as hit targets.
+
+     The selected option gets a class toggled on it plus aria-checked:
+       • class defaults to `is-selected`
+       • override per element:  data-selected-class="YourComboClass"
+       • to put the class on an INNER element (the dot) while keeping the
+         whole row clickable:  data-selected-target=".your-dot-class"
+
+     Style the "on" state on that class in the Designer. "id" is selected by
+     default, so style that one as selected while you build.
+
+     A native <input type="radio"> also works if you ever want one — the
+     script syncs its checked state — but divs are the intended path here.
+     ============================================================ -->

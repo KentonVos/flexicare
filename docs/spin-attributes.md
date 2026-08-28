@@ -181,7 +181,7 @@ session in `sessionStorage`, so a reload does not re-ask.
 | `[data-spin-lead-surname]` | required | `<input>`. |
 | `[data-spin-lead-phone]` | required | `<input>`. Prefilled from `session.phone_number`; normalised to E.164 before sending. |
 | `[data-spin-lead-email]` | required | `<input>`. Prefilled from `session.email`. |
-| `[data-spin-lead-idtype]` | required | On **both** options, valued `id` / `passport`. Clicks are delegated, so a styled div works as well as a radio. Gets `aria-checked`; the wrapper gets `data-spin-lead-type`. |
+| `[data-spin-lead-idtype]` | required | On **both** options, valued `id` / `passport`. Plain Webflow divs, like the onboarding gender pills — put it on the whole clickable row. The selected one gets a class (`is-selected`, override with `data-selected-class`, or target an inner element with `data-selected-target`) plus `aria-checked`. A native radio is synced too. The wrapper gets `data-spin-lead-type`. |
 | `[data-spin-lead-idnumber]` | required | `<input>`. 13 digits for `id`, 6–20 alphanumerics for `passport`. |
 | `[data-spin-lead-submit]` | required | The button. `aria-disabled` while in flight. |
 | `[data-spin-lead-error]` | optional | Message box, written as TEXT, hidden when empty. |
@@ -194,7 +194,8 @@ session in `sessionStorage`, so a reload does not re-ask.
 > temporary: the form was built ahead of the backend. When the endpoints land,
 > `submitLead()` in `flexicare-spin.js` is the one function to change.
 
-Build it with `?spindemo=form`.
+Build it with `?spindemo=form`. Paste-ready per-field embeds, matching how
+`/onboarding` is built: `demo/spin-lead-embed.html`.
 
 #### Panel motion
 
