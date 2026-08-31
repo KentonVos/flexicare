@@ -56,6 +56,7 @@ Site: **Discovery Flexicare** — `6a54e16eeed40a39998fba5b`
 | `/meet-your-two-selves` | `6a845c558b9b9e92b6e1b2a6` | flexicare-reveal.js |
 | `/flexicare-product` | `6a8c2acb0fa9581e69c1de79` | flexicare-product.js |
 | `/spin-to-win` | `6a8eb63ff4b08c0d19710342` | flexicare-spin.js |
+| `/kiosk` | `6a912f2f5785c05d31e845fc` | flexicare-kiosk.js (pairing UI) |
 
 Ids are stable, but re-run `list_pages` rather than trusting this table blindly.
 
@@ -147,3 +148,17 @@ call the connector can inform.
   guess: bottom edge inside the square wheel stage. Restyle freely.
 - Before go-live: swap the staging API base in `flexicare-core.js`, and drop
   `slider.js` / `orb-tuner.js` from the footer.
+- The spin page's lead form collects **surname, ID type and ID number with no
+  backend endpoint to send them to** (buffered in memory, lost on reload). The
+  CTA says "Call me back". Chase the backend before go-live.
+- `/spin-to-win` still has two stray `.fc-error` divs (from the copied onboarding
+  component) containing the literal text "data-onboarding-error", plus an empty
+  `.fc-field` div at the bottom of `form-stage`. Their attributes are stripped so
+  they are inert, but the text will render — they need DELETING in the Designer
+  (element removal, so it needs Kenton's explicit yes).
+- `/kiosk`'s error box still holds Webflow's default div text. Harmless since
+  `flexicare-kiosk.js` clears it on boot, but misleading on the canvas.
+- Two combo classes created from here on 2026-08-28, both placeholders to restyle:
+  `.field-glass.is-invalid` (red ring on an invalid lead field) and
+  `.fc-error.is-lead-copy` (the lead error message). The red `#FF6B6B` is a guess —
+  the palette is lime/indigo/teal and has no error colour.

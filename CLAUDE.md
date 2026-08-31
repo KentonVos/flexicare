@@ -36,6 +36,8 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
 7. `src/flexicare-kiosk.js` — `window.Flexicare.kiosk`. Device pairing, heartbeat and
    idle reset for the in-store tablets. **Must load before onboarding** — it owns the
    device token that `POST /sessions` needs. Completely inert on the public site.
+   Its pairing UI is the **`/kiosk` page** (built 2026-08-28, duplicated from
+   `/onboarding` so the shell matches). Operator-only, linked from nowhere.
 8. `src/flexicare-onboarding.js` — `/onboarding` page controller.
 9. `src/flexicare-selfie.js` — selfie-capture page controller.
 10. `src/flexicare-avatar.js` — avatar-picker page controller (the alternative to the
@@ -56,7 +58,8 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
     a `WEB` session gets a hard 409 from `POST /spin`. Draws the wheel as SVG from
     `GET /prizes/wheel` (segment count/order/labels/colours are all admin data) and
     animates to the `segment_index` the SERVER returns — there is no client-side
-    randomness here and there must never be.
+    randomness here and there must never be. Also owns the **lead form** that gates
+    the wheel (state `form`, before `ready`) — see the bullet below.
 15. `src/slider.js` — **NOT a content slider.** This is the "Liquid Glass Tuner", a dev-only control panel gated behind `?tune` in the URL. Ignore it for production changes unless the task is about tuning glass presets.
 16. `src/orb-tuner.js` — dev-only orb-motion control panel, gated behind `?orbtune`
     (or `?tune`, so it can sit beside the glass tuner). Writes the `data-orb-*` attributes
@@ -158,6 +161,30 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
   `barba.go()` — the destination ran its entrance animation, init and skeleton twice.
   Rules: resolve within the incoming container (or `state.wrap`), filter to nodes that are
   actually attached, and never navigate to the page you are already on (`samePath()`).
+- **A lead form gates the spin wheel, and four of its fields go nowhere yet.**
+  State `form` sits between `loading` and `ready`; the wheel renders behind the panel
+  and only unlocks once the form is submitted (remembered per session in
+  `sessionStorage`). Phone and email are PATCHed to real endpoints. **`name`,
+  `surname`, `id_type` and `id_number` have NO endpoint in `docs/api-contract.md`** —
+  they are buffered on `Flexicare.lead` in memory and lost on a hard reload. Agreed as
+  temporary, but the button says "Call me back", so nothing downstream can honour that
+  yet. `submitLead()` is the one function to change when the endpoints land. The
+  `[data-spin-go]` CTA doubles as the form's submit and relabels itself — it lives in
+  the persistent nav, outside every panel, so it is already on screen during `form`.
+- **`el.style.display = ""` reveals a panel by falling back to CSS — so a class that
+  says `display:none` wins, silently.** This is how the panel mechanism keeps your
+  Webflow styling authoritative, and it is also a trap in both directions: a blanket
+  `[data-spin-when]{display:none}` would strand every panel the script wants visible,
+  and the lead form's error box was written correctly but invisible for exactly this
+  reason (`.fc-error` is `display:none`, so clearing the inline value re-hid it). The
+  fix pattern is `leadShowDisplay()` in `flexicare-spin.js`: capture the display the
+  Designer intends ONCE, before the element is ever hidden, and restore that. The
+  guarded pre-boot rules in the site head are `:not([data-spin-state])` /
+  `:not([data-kiosk-state])` for the same reason — never write the blanket version.
+- **When a panel looks wrong, `Flexicare.spin.panels()` before anything else.** It
+  prints every panel, its state list, whether the script thinks it is on, and its
+  COMPUTED display. A row reading `visible: true` with `display: none` means CSS is
+  beating the script. Note it does not flag that contradiction for you yet.
 - **The prize spin is decided at /onboarding, not at /spin-to-win.** A session can only
   spin if `POST /sessions` carried `X-Kiosk-Token` (`channel: "KIOSK"`); on a `WEB`
   session `POST /spin` is a hard 409. So the kiosk layer is a CHAIN — pair the tablet →
@@ -201,6 +228,11 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
   `applyVisibility` collapsing or reopening the nav a second time one page later. It
   returns in exactly one case — the state goes back to `ready` (429 cooldown, retryable
   error) — because the CTA is inside it.
+- **The connector reads the DESIGNER, the browser shows the PUBLISHED site.** Every
+  style and attribute I report is the unpublished Designer state. "Webflow says flex
+  but live says none" is almost always a stale publish, not a bug — this burned a
+  whole debugging round on 2026-08-31. Before chasing any visual bug on the live URL,
+  confirm the site has been published since the change.
 - **The Webflow MCP connector can WRITE, but CONFIRM EVERY CHANGE FIRST.** Full
   guide — page ids, which tool does what, and the traps — in `docs/webflow-mcp.md`;
   read it before using the connector. Reading needs

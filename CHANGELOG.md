@@ -6,6 +6,27 @@ knows the current state without re-reading every file.
 
 Format:
 ```
+## 2026-08-31 — Docs caught up before the glass phase
+
+Documentation only — no behaviour change. Closing the gaps a fresh session would
+have fallen into:
+
+- `CLAUDE.md` — the `/kiosk` page under the kiosk script; the lead-form gate under
+  `flexicare-spin.js`; and three new "will bite you" bullets: the four lead fields
+  with no backend, the `style.display = ""` fallback trap (which cost the invisible
+  error box), and **the connector reads the Designer while the browser shows the
+  published site** — a stale publish burned a whole debugging round today.
+- `docs/webflow-mcp.md` — `/kiosk` added to the page-id table; open items updated
+  with the unbacked lead fields, the two stray `.fc-error` divs still to delete on
+  `/spin-to-win`, and the two placeholder combo classes created from the connector.
+- `docs/kiosk-and-spin.md` — §4 marked as built and wired, with the page id.
+
+Still open, carried forward: the `/spin-to-win` stray divs need deleting in the
+Designer (element removal, needs an explicit yes), and a pairing code from the
+backend admin is needed before the kiosk chain can be tested end to end.
+
+---
+
 ## YYYY-MM-DD — short title
 - file(s) touched
 - what changed and why

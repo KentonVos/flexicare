@@ -245,6 +245,11 @@ Designer without a push.
 
 ## 4. Kiosk pairing — the `/kiosk` page
 
+> **Built and wired on 2026-08-28** (page id `6a912f2f5785c05d31e845fc`, duplicated
+> from `/onboarding` so the persistent shell structure matches — see CLAUDE.md on why
+> a blank page would break Barba). The markup below is the contract, kept as
+> reference. What remains is a pairing code from the backend admin to test with.
+
 Build this **once**, on a page the public never sees (or as a full-screen overlay
 in the persistent shell). It runs an operator through pairing a tablet.
 
