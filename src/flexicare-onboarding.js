@@ -109,10 +109,10 @@
      • Glass CANNOT go on an <input> (glass.js inserts an overlay child, and
        inputs can't hold children). Put data-liquid-glass on the field WRAPPER
        and data-onboarding-name/-whatsapp on the <input> inside it (transparent
-       background so the glass shows). Use data-lg-press="0" data-lg-tilt="0"
+       background so the glass shows). Use data-lg-press="0"
        (or data-lg-preset="nav") on fields so tapping to focus doesn't spring.
      • Gender pills / consent box / submit / back are divs or links — glass goes
-       directly on them; press/tilt is fine there. On glass buttons use
+       directly on them; press is fine there. On glass buttons use
        data-anim-fade (NOT data-anim) — glass owns transform.
 
    PROGRESS BAR (owned by transition.js, not this script): set

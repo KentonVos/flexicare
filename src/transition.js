@@ -35,7 +35,7 @@
      data-anim-distance="40"         px, default 40
      data-anim-fade="1"              opacity-only fade in/out (no transform).
                                      Use INSTEAD of data-anim on elements that
-                                     have a glass press/tilt, so the fade and
+                                     have a glass press, so the fade and
                                      the press don't fight over transform.
 
    PERSISTENT SHELL CLASSES (automatic — no attribute needed):
@@ -134,7 +134,7 @@
   }
 
   // Opacity-only fade elements: fade in/out with NO transform, so they don't
-  // fight a glass press/tilt (which owns transform) on the same element.
+  // fight a glass press (which owns transform) on the same element.
   function fadeEls(scope) {
     var els = Array.prototype.slice.call(
       scope.querySelectorAll("[data-anim-fade]")

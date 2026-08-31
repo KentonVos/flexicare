@@ -567,8 +567,8 @@ Which gives:
 | `[data-spin-pointer]` | **No** if it is `clip-path`'d: glass bakes its rim from the layout *box*, so a triangular pointer gets a rectangular refraction rim. |
 | A separate dome over the wheel | **No.** It would distort every prize label into illegibility, and re-sample a large moving backdrop every frame — on the one animation that most needs to be smooth. |
 
-The hub and the wheel canvas both use `data-lg-preset="nav"` (`press:0, tilt:0`).
-Glass owns `transform` the moment press or tilt is on, and the hub is positioned
+The hub and the wheel canvas both use `data-lg-preset="nav"` (`press: 0`).
+Glass owns `transform` the moment press is on, and the hub is positioned
 with `translate(-50%,-50%)` — they would fight and it would jump off centre on tap.
 
 ### The trap: a `filter` on an ancestor kills refraction

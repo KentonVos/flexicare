@@ -145,7 +145,7 @@ Attribute-driven liquid-glass effect. Hook: `data-liquid-glass`. Optional preset
 `data-lg-preset="cta|nav|panel|pill"` and many `data-lg-*` knobs (refraction, lighting,
 surface, interaction) — see the header comment in the file for the full list and defaults.
 - Refraction (the real distortion) is **Chrome/Edge only**; Safari/Firefox get a plain
-  backdrop blur instead. Lighting, surface, press and tilt work everywhere.
+  backdrop blur instead. Lighting, surface and press work everywhere.
 - **`data-lg-blur` is a real px radius, applied as a native `blur()` in front of the
   displacement `url()`** — `backdrop-filter: blur(8px) url(#lg-3)`. It is deliberately
   NOT an `feGaussianBlur` in the SVG chain: that filter's region is pinned to the
@@ -172,8 +172,17 @@ surface, interaction) — see the header comment in the file for the full list a
   and `data-lg-tintamount` were removed on 2026-08-31 — glass takes the colour of what
   is behind it. `frost` (milky white overlay) and `glow` (inner caustic band) are what
   remain on the surface layer.
-- `press`/`tilt` animate the element's `transform`. Don't combine with a Webflow
-  transform interaction on the same node (set `data-lg-press="0"` if you must).
+- **There is no press tilt and no elevation knob.** `data-lg-tilt` and
+  `data-lg-elevation` were removed on 2026-08-31. Press is now a straight `scale()` —
+  it no longer rotates toward the tap under a `perspective()`, so the spring does not
+  read the pointer position at all.
+- **Glass casts NO drop shadow.** Every box-shadow layer `applyChrome` writes is
+  `inset` (rim + specular); the two outer cast layers that `elevation` scaled are gone.
+  If a glass element needs to lift off the page, put the shadow on a **wrapper** in
+  Webflow — box-shadow on the host itself is rebuilt from scratch on every refresh and
+  will be wiped.
+- `press` animates the element's `transform`. Don't combine with a Webflow transform
+  interaction on the same node (set `data-lg-press="0"` if you must).
 - API: `scan()` (attach to any new `[data-liquid-glass]`), `refresh(el)`, `refreshAll()`,
   `lightSpin(seconds)` (0 = stop the sweep and restore authored angles),
   `freeze()`/`unfreeze(rebuild)` (pause displacement-map rebuilds during a size animation),
@@ -359,7 +368,7 @@ On a glass node use `data-orb-squish-radius="0"` plus
 read as a warping blob rather than an ellipse that merely grows), and put the blob morph on
 the soft glow layers via `data-orb-float-radius` (which writes `border-radius`, not
 `transform`, so it composes with the wander). The module warns if you get this wrong. Never put path/float on a node with
-`data-lg-press`/`data-lg-tilt` or `data-anim` — both also write `transform`; use
+`data-lg-press` or `data-anim` — both also write `transform`; use
 `data-anim-fade`. Respects `prefers-reduced-motion`. API: `refresh(scope)`, `stop()`,
 `start()`, `kill(el)`. Knobs documented in the file header.
 
@@ -412,7 +421,7 @@ toggles `is-checked`/`data-checked-class`, optional `data-checked-target`), `-su
 (URL value → forced destination, else `history.back()`). Values: `-next` (default
 `/archetype`), `-busy-label`, `[data-onboarding-label]` inner text node,
 `[data-onboarding-form-error]`. Glass can't go on an `<input>` — put it on the field
-wrapper and use `data-lg-preset="nav"` (no press/tilt). On submit it fires the photo send
+wrapper and use `data-lg-preset="nav"` (no press). On submit it fires the photo send
 (selfie upload **or** `PATCH …/photo/avatar`) and `PATCH …/contact/phone` in parallel,
 both non-blocking. The gender pills are pre-filled from `Flexicare.avatarGender` when the
 user came via the avatar picker.

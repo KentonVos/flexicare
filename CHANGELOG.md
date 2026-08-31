@@ -14,6 +14,32 @@ Format:
 
 ---
 
+## 2026-08-31 — Glass: press tilt and elevation removed, no more drop shadows
+
+`src/glass.js` + `src/slider.js`, plus stale references in three sibling modules.
+
+- **`data-lg-tilt` removed.** Press is now a straight `scale()`. It used to also
+  `rotateX`/`rotateY` toward the tap under `perspective(600px)`, so the spring no
+  longer reads the pointer position at all — `wirePress` dropped the
+  `getBoundingClientRect` and the `st.nx`/`st.ny` maths with it.
+- **`data-lg-elevation` removed, and glass casts NO drop shadow.** `applyChrome` used
+  to open with two cast layers (`0 24px 48px -16px` and `0 4px 12px -6px`, both
+  `rgba(4,8,28,…)`) scaled by `elevation`. Both are gone; every layer it writes is now
+  `inset` — the rim and the two specular highlights.
+  - **A glass host's `box-shadow` is rebuilt from scratch on every refresh**, so a
+    shadow added to that element in Webflow is wiped. If something needs to lift off
+    the page, put the shadow on a **wrapper**.
+- Both keys are out of `DEFAULTS`, `pressBoost`, all four built-in presets and the
+  tuner. Presets saved in `localStorage` that still carry them are ignored, not broken
+  — `readOpts` only copies keys that exist in `DEFAULTS`.
+- Comment/doc references to `press/tilt` corrected in `transition.js`,
+  `flexicare-onboarding.js`, `orb-motion.js`, `ARCHITECTURE.md`, `CLAUDE.md` and
+  `docs/kiosk-and-spin.md`. Note `flexicare-onboarding.js` told you to put
+  `data-lg-press="0" data-lg-tilt="0"` on field wrappers — any `data-lg-tilt` still
+  sitting in the Designer is now inert, not harmful, but can be cleaned up.
+
+---
+
 ## 2026-08-31 — Glass: chromatic aberration removed, light angle now sweeps on a loop
 
 `src/glass.js` + `src/slider.js`.

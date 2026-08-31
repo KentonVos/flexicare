@@ -22,13 +22,11 @@
      data-lg-specsize    highlight softness, px    (default 1)
      data-lg-rim         edge-light brightness     (default 0.13)
      data-lg-rimwidth    edge thickness, px        (default 1)
-     data-lg-elevation   drop-shadow depth mult    (default 1)
    SURFACE knobs (new):
      data-lg-frost       milky overlay 0-1         (default 0)
      data-lg-glow        inner caustic band 0-1    (default 0)
    INTERACTION knobs:
      data-lg-press       press-spring depth 0-2    (default 0 = off)
-     data-lg-tilt        press tilt max, degrees   (default 0 = off)
 
    POSITIONING: glass needs a non-static host so its overlay is contained.
          If your element is already absolute / fixed / sticky it is LEFT
@@ -36,8 +34,12 @@
 
    API: LiquidGlass.scan(), LiquidGlass.refresh(el),
         LiquidGlass.lightSpin(seconds)  0 = stop the light sweep
-   NOTE: refraction is Chrome/Edge only; lighting, surface,
-         press and tilt work in every browser.
+   NOTE: refraction is Chrome/Edge only; lighting, surface
+         and press work in every browser.
+   NOTE: glass casts NO drop shadow. Every box-shadow layer it
+         writes is `inset` (rim + specular). If a glass element
+         needs to sit off the page, that is a Webflow shadow on
+         a WRAPPER, not a glass knob.
    CAVEAT: the press effect animates the element's transform.
          If you also animate transform with Webflow
          interactions on the same element, set
@@ -57,11 +59,9 @@
     specsize: 1,
     rim: 0.13,
     rimwidth: 1,
-    elevation: 1,
     frost: 0,
     glow: 0,
     press: 0,
-    tilt: 0,
   };
   var REFRACT_KEYS = ["strength", "bevel", "magnify"];
   var NS = "http://www.w3.org/2000/svg";
@@ -123,10 +123,10 @@
        are merged in on top (see loadStoredPresets), so a look you
        save in the tuner becomes usable by name too.               */
   var PRESETS = {
-    cta: { press: 1.5, tilt: 12, glow: 0.4, specular: 0.85 },
-    nav: { press: 0, tilt: 0, strength: 30 },
-    panel: { press: 0.6, tilt: 4, frost: 0.1, glow: 0.3, strength: 34 },
-    pill: { press: 1, tilt: 8, glow: 0.35 },
+    cta: { press: 1.5, glow: 0.4, specular: 0.85 },
+    nav: { press: 0, strength: 30 },
+    panel: { press: 0.6, frost: 0.1, glow: 0.3, strength: 34 },
+    pill: { press: 1, glow: 0.35 },
   };
   var STORE_KEY = "lgTunerPresets";
   function loadStoredPresets() {
@@ -163,7 +163,6 @@
     b.magnify = o.magnify + 8 * p * m;
     b.blur = Math.max(0, o.blur + 2.5 * p * m);
     b.specular = Math.min(1, o.specular * (1 + 0.5 * p * m));
-    b.elevation = Math.max(0, o.elevation * (1 - 0.45 * p * m));
     b.glow = Math.min(1, o.glow + 0.3 * p * m);
     return b;
   }
@@ -183,23 +182,13 @@
     var oy = (Math.cos(a) * dist).toFixed(2);
     var blur = Math.max(0.3, o.specsize).toFixed(2);
     var spec = o.specular,
-      spec2 = spec * 0.5,
-      e = o.elevation;
+      spec2 = spec * 0.5;
+    /* INSET LAYERS ONLY. There used to be two cast shadows here scaled by
+       data-lg-elevation; both were removed on 2026-08-31 along with the knob.
+       Glass no longer lifts itself off the page — if an element needs to, put
+       a shadow on a WRAPPER in Webflow, because anything written to box-shadow
+       on the host itself is rebuilt from scratch on every refresh. */
     el.style.boxShadow = [
-      "0 " +
-        (24 * e).toFixed(1) +
-        "px " +
-        (48 * e).toFixed(1) +
-        "px -16px rgba(4,8,28," +
-        (0.4 * e).toFixed(3) +
-        ")",
-      "0 " +
-        (4 * e).toFixed(1) +
-        "px " +
-        (12 * e).toFixed(1) +
-        "px -6px rgba(4,8,28," +
-        (0.3 * e).toFixed(3) +
-        ")",
       "inset 0 0 0 " +
         o.rimwidth +
         "px rgba(255,255,255," +
@@ -457,15 +446,12 @@
       }
       var o = readOpts(el);
       var scale = 1 - 0.06 * st.p * o.press;
-      var rx = (-(st.ny || 0) * o.tilt * st.p).toFixed(3);
-      var ry = ((st.nx || 0) * o.tilt * st.p).toFixed(3);
+      // Press is a straight scale. It used to also rotateX/rotateY toward the
+      // tap under perspective(600px) — data-lg-tilt, removed 2026-08-31 — which
+      // is why nothing here needs the pointer position any more.
       el.style.transform =
         (st.baseTransform ? st.baseTransform + " " : "") +
-        "perspective(600px) rotateX(" +
-        rx +
-        "deg) rotateY(" +
-        ry +
-        "deg) scale(" +
+        "scale(" +
         scale.toFixed(4) +
         ")";
       refresh(el);
@@ -484,19 +470,8 @@
   }
 
   function wirePress(el, st) {
-    el.addEventListener("pointerdown", function (e) {
-      var o = readOpts(el);
-      if (o.press <= 0 && o.tilt <= 0) return;
-      // where was the tap, relative to center? (-1..1 each axis)
-      var r = el.getBoundingClientRect();
-      st.nx = Math.max(
-        -1,
-        Math.min(1, (e.clientX - (r.left + r.width / 2)) / (r.width / 2))
-      );
-      st.ny = Math.max(
-        -1,
-        Math.min(1, (e.clientY - (r.top + r.height / 2)) / (r.height / 2))
-      );
+    el.addEventListener("pointerdown", function () {
+      if (readOpts(el).press <= 0) return;
       st.down = true;
       springLoop(el, st);
     });

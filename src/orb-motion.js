@@ -304,7 +304,7 @@
    Respects prefers-reduced-motion (all motion disabled).
 
    GOTCHAS
-   - Glass owns transform on any node with data-lg-press/data-lg-tilt.
+   - Glass owns transform on any node with data-lg-press.
      Never put data-orb-path / data-orb-float on such a node.
    - transition.js's data-anim also writes transform. On an orb
      element use data-anim-fade (opacity only) instead.

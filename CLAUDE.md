@@ -133,8 +133,12 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
   glass is added, that's the old behaviour and it's a bug, not a constraint.
 - **Glass owns `transform`.** On any element with `data-liquid-glass` that also needs
   to animate in, use `data-anim-fade` (opacity only), never `data-anim` (which moves
-  it). And never put `data-lg-press`/`data-lg-tilt` on the same element as a Webflow
+  it). And never put `data-lg-press` on the same element as a Webflow
   transform interaction.
+- **Glass casts no drop shadow, and there is no `data-lg-elevation` or `data-lg-tilt`
+  any more** (removed 2026-08-31). Every box-shadow layer glass writes is `inset`.
+  A glass host's `box-shadow` is rebuilt from scratch on every refresh, so a shadow you
+  add to that element in Webflow is wiped — put it on a WRAPPER instead.
 - **Only the container swaps; the whole shell persists.** Anything outside
   `data-barba="container"` is whatever the FIRST page loaded shipped — including its
   per-page CLASSES. `transition.js` fixes this (`syncShellClasses` + a leave-transition

@@ -93,14 +93,6 @@
       group: "Lighting",
     },
     {
-      key: "elevation",
-      label: "Elevation",
-      min: 0,
-      max: 2,
-      step: 0.05,
-      group: "Lighting",
-    },
-    {
       key: "frost",
       label: "Frost",
       min: 0,
@@ -124,14 +116,6 @@
       step: 0.05,
       group: "Interaction",
     },
-    {
-      key: "tilt",
-      label: "Press tilt",
-      min: 0,
-      max: 20,
-      step: 0.5,
-      group: "Interaction",
-    },
   ];
   var DEFAULTS = {
     strength: 42,
@@ -143,11 +127,9 @@
     specsize: 1,
     rim: 0.13,
     rimwidth: 1,
-    elevation: 1,
     frost: 0,
     glow: 0,
     press: 1,
-    tilt: 7,
   };
   var SELECTOR = "[data-liquid-glass]";
   var STORE_KEY = "lgTunerPresets";
