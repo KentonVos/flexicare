@@ -412,8 +412,21 @@ The persistent brain. Holds:
 - `FC.config.kiosk` — fallback kiosk settings (`tokenKey`, `attractUrl`,
   `heartbeatSeconds`, `idleTimeoutSeconds`, `appVersion`). The server's per-device config
   overrides all of them once paired.
-- `FC.resetJourney()` — wipes per-run state (including `FC.award`); fires automatically on
-  entering `[data-journey-start]`.
+- `FC.resetJourney()` — wipes per-run state (session id, selfie/avatar, answers,
+  archetype, echo, result, images, `FC.award`, `FC.lead`, `FC.contact`, and the
+  `flx_spin_lead_*` sessionStorage keys). Fires automatically on entering
+  `[data-journey-start]`.
+  - **`[data-journey-start]` MUST be inside `data-barba="container"`.** On a navigation
+    the check is scoped to the incoming container, so an attribute on `<body>` or
+    anywhere else in the persistent shell is an ancestor and can never be found — the
+    reset then fires on a hard load but NOT when the user navigates in, which is the
+    "start over" path and the only one that matters. It sat on `<body>` until
+    2026-08-31. `maybeResetJourney` now warns when it finds it stranded outside.
+  - Two things it deliberately does NOT clear: the **kiosk device token**
+    (`localStorage flx_kiosk_token` — a device credential; wiping it strands a paired
+    tablet mid-shift) and the **`?demo` flag** (`sessionStorage fcSpinDemo` — armed once,
+    meant to survive arriving back at the landing page for another lap). Hence the
+    prefix-scoped sweep rather than `sessionStorage.clear()`.
 
 ### flexicare-onboarding.js
 `/onboarding` controller. Attribute contract (all `data-onboarding-*` unless noted):

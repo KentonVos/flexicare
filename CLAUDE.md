@@ -139,6 +139,19 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
   any more** (removed 2026-08-31). Every box-shadow layer glass writes is `inset`.
   A glass host's `box-shadow` is rebuilt from scratch on every refresh, so a shadow you
   add to that element in Webflow is wiped — put it on a WRAPPER instead.
+- **`[data-journey-start]` must live INSIDE `data-barba="container"`**, like anything
+  else page-specific. `maybeResetJourney` is scoped to the incoming container on a
+  navigation, so an attribute on `<body>` is an ancestor and invisible to it: the
+  journey reset then fires on a hard load of the landing page but NOT when the user
+  navigates back to it — so "start over" silently keeps the last run's data. It sat on
+  `<body>` until 2026-08-31. Do NOT "fix" this by checking `document` on navigation:
+  the body is whatever the FIRST page shipped, so it keeps the attribute for the rest
+  of the tab and every navigation would wipe the journey mid-run.
+- **`resetJourney()` must never clear the kiosk token or the `?demo` flag.** The token
+  (`localStorage flx_kiosk_token`) is a device credential — wiping it strands a paired
+  tablet on the unpaired screen mid-shift. The demo flag (`sessionStorage fcSpinDemo`)
+  is armed once and has to survive arriving back at the landing page for another lap.
+  That is why the sessionStorage sweep is prefix-scoped and never `.clear()`.
 - **`data-nav-reveal` and `data-show-except` must be on the SAME element.**
   `applyVisibility` only uses the height/reserve-space mode when it finds both on the
   one node; with `data-show-except` alone it falls back to fading opacity, which

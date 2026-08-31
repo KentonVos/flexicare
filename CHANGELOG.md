@@ -14,6 +14,48 @@ Format:
 
 ---
 
+## 2026-08-31 — Journey reset: close the gaps, and warn when the trigger is stranded
+
+`src/flexicare-core.js`. **Needs a Webflow attribute move to actually take effect —
+see below.**
+
+Reported symptom: arriving back at the landing page sometimes still carried the last
+run's data.
+
+**Cause (Webflow, not code):** `data-journey-start="true"` is on `<body>`, which is the
+Barba *wrapper*. On a navigation `maybeResetJourney` is scoped to the incoming
+container, so the body is an ANCESTOR and can never be matched from it. Net effect: a
+hard load of `/` resets correctly (scope is `document`, which does contain the body),
+while arriving through the funnel silently does not — so "start over", the one path
+that needs it, is the one path that doesn't get it. `/archetype`'s body does not carry
+the attribute, so there was no mid-journey wipe.
+
+**Webflow fix required:** move `data-journey-start="true"` off `<body>` and onto the
+landing page's `glass-content-wrapper` (the `data-barba="container"` element itself —
+`maybeResetJourney` checks `root.matches()` as well as `querySelector`, so the
+container node itself is a valid home and works on both paths).
+
+What changed in code:
+
+- **`maybeResetJourney` now warns** when `[data-journey-start]` exists in the document
+  but outside the incoming container, naming the element it found. This was a silent
+  failure; now it says so. Deliberately does NOT fall back to checking `document` on a
+  navigation — the body is whatever the FIRST page shipped, so after a hard load of `/`
+  it keeps the attribute for the rest of the tab and every navigation would wipe the
+  journey mid-run.
+- **`resetJourney()` closes two gaps:** `FC.lead` (the spin page's buffered lead form)
+  and `FC.contact` (whatsapp + consent from onboarding) were never cleared.
+- It also **sweeps the `flx_spin_lead_*` sessionStorage keys.** They are keyed by
+  session id so a stale one could never gate the wrong journey, but on a kiosk running
+  hundreds of sessions a day they accumulated forever.
+- **Two things it must never clear**, now stated in the code and in `CLAUDE.md`: the
+  kiosk device token (`localStorage flx_kiosk_token` — wiping it strands a paired
+  tablet mid-shift) and the `?demo` flag (`sessionStorage fcSpinDemo` — armed once, and
+  arriving at the landing page for another lap is exactly when this runs). Hence the
+  prefix-scoped sweep and never `sessionStorage.clear()`.
+
+---
+
 ## 2026-08-31 — Demo spins once, like a real session
 
 `src/flexicare-spin.js`. Reverses the "unlimited prizes" behaviour added earlier today.

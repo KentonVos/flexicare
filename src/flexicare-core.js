@@ -292,6 +292,18 @@
          before any selfie/answers are captured). Fires on first load and on every
          Barba navigation into that page, so "start over" is always fresh without a
          hard reload. You can also call Flexicare.resetJourney() manually. */
+  /* Two things this must NOT clear, both deliberate:
+
+       • the KIOSK DEVICE TOKEN (localStorage flx_kiosk_token). It is a device
+         credential, not journey data — a tablet stays paired across hundreds
+         of shoppers, and wiping it here would strand it on the unpaired
+         screen mid-shift with no way back but an admin pairing code.
+       • the DEMO FLAG (sessionStorage fcSpinDemo). ?demo is armed once and is
+         meant to survive the whole journey — including arriving back at the
+         landing page to start another lap, which is exactly when this runs.
+
+     Which is why the sessionStorage sweep below is prefix-scoped and never a
+     sessionStorage.clear(). */
   FC.resetJourney = function () {
     FC.clearSession();
     FC.clearPhoto();
@@ -306,6 +318,23 @@
     FC.result = null;
     FC.images = null;
     FC.award = null; // the prize spin's result (flexicare-spin.js)
+    FC.lead = null; // the spin page's lead form (flexicare-spin.js)
+    FC.contact = null; // whatsapp + consent (flexicare-onboarding.js)
+
+    /* The spin page remembers "this session already did the lead form" under
+       flx_spin_lead_<session id>. Keyed by session, so a stale one can never
+       gate the wrong journey — but on a kiosk running hundreds of sessions a
+       day they accumulate forever, so drop them here. Prefix-scoped on
+       purpose: see the note above. */
+    try {
+      var kill = [];
+      for (var i = 0; i < sessionStorage.length; i++) {
+        var k = sessionStorage.key(i);
+        if (k && k.indexOf("flx_spin_lead_") === 0) kill.push(k);
+      }
+      for (var j = 0; j < kill.length; j++) sessionStorage.removeItem(kill[j]);
+    } catch (e) {}
+
     return FC;
   };
 
@@ -314,7 +343,40 @@
     var hit =
       (root.matches && root.matches("[data-journey-start]") && root) ||
       (root.querySelector && root.querySelector("[data-journey-start]"));
-    if (hit) FC.resetJourney();
+    if (hit) {
+      FC.resetJourney();
+      return;
+    }
+
+    /* NOT FOUND — and there is one way for that to be a mistake rather than
+       "this isn't the landing page", so say so out loud.
+
+       On a Barba navigation `scope` is the INCOMING CONTAINER. Barba swaps
+       only the container, so an attribute parked on <body> or anywhere else in
+       the persistent shell is an ANCESTOR of that scope and can never be
+       found from it. The result is the worst kind of bug: a hard load of the
+       landing page resets correctly (scope is `document`, which does contain
+       the body), while arriving through the funnel silently does not — so the
+       "start over" path is the one path that keeps the old journey's data.
+
+       That is not hypothetical: data-journey-start sat on <body> until
+       2026-08-31. Checking the document here instead would be far worse — the
+       body is whatever the FIRST page shipped, so after a hard load of the
+       landing page it keeps the attribute for the rest of the tab and EVERY
+       navigation would wipe the journey mid-run. The attribute has to move
+       inside the container; this warning is here to make that obvious the
+       next time it happens. */
+    if (scope && scope !== document && document.querySelector) {
+      var stranded = document.querySelector("[data-journey-start]");
+      if (stranded && !scope.contains(stranded) && window.console)
+        console.warn(
+          "[core] [data-journey-start] is on <" +
+            stranded.tagName.toLowerCase() +
+            ">, which is OUTSIDE data-barba=\"container\" — so the journey " +
+            "reset fires on a hard load but NOT when the user navigates here. " +
+            "Move the attribute onto an element inside the container."
+        );
+    }
   }
 
   // Registered before the page controllers' hooks (core loads first), so the
