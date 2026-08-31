@@ -443,7 +443,7 @@ So the effect is split in two:
    every pane at once. Cheap, static, and it works on iPad where refraction does not.
 
    ```css
-   [data-spin-wheel] { backdrop-filter: blur(14px) saturate(1.25); }
+   [data-spin-wheel] { backdrop-filter: blur(14px); }
    ```
 
 2. **Two cues drawn by the script** that say "separate pieces of glass" at this scale:
@@ -602,8 +602,8 @@ every frame. Nothing on this page does, so no `freeze()` call is needed as built
 
 ### Refraction is Chrome/Edge only
 
-`glass.js` detects Safari and Firefox and falls back to `blur + saturate`. Lighting,
-tint, frost and press still work — only refraction is gone.
+`glass.js` detects Safari and Firefox and falls back to a plain backdrop `blur()`.
+Lighting, frost, glow and press still work — only refraction is gone.
 
 **This matters for the kiosk build**: if the in-store tablets are iPads, every shopper
 sees the fallback. The design above survives it (the colour layer, the hairlines and

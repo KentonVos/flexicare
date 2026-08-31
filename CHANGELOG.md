@@ -6,6 +6,44 @@ knows the current state without re-reading every file.
 
 Format:
 ```
+## YYYY-MM-DD — short title
+- file(s) touched
+- what changed and why
+- any Webflow-side change needed (new attribute, head snippet, etc.)
+```
+
+---
+
+## 2026-08-31 — Glass: saturation and tint out, blur made real, tuner names targets by attribute
+
+Site-wide changes to the glass effect, all in `src/glass.js` + `src/slider.js`.
+
+- **Saturation removed.** `data-lg-saturate` is gone from the defaults, the preset
+  knobs, the press boost, the SVG chain and the Safari/Firefox fallback. Glass now
+  takes the colour of whatever is behind it, unaltered.
+- **Tint removed.** `data-lg-tinthue` / `data-lg-tintamount` are gone; the surface
+  overlay is `frost` + `glow` only.
+- **Blur actually blurs now.** It was an `feGaussianBlur` inside the displacement
+  filter at `stdDeviation = blur * 0.5`, and that filter's region is pinned to the
+  element box — so it sampled transparent past the edge and ate its own rim, which is
+  why the knob looked inert. It is now a native `blur()` applied in front of the
+  displacement filter (`backdrop-filter: blur(8px) url(#lg-3)`), so `data-lg-blur` is a
+  true pixel radius. **Default raised 2 → 8** and the tuner's range widened to 0–40;
+  the `nav` preset's `blur: 1.5` override was dropped so it takes the new default.
+  Blur no longer feeds the displacement map, so it is out of `REFRACT_KEYS` — changing
+  it re-applies the backdrop-filter string without a map rebuild.
+- **Tuner target dropdown lists the attribute contract**, not the div. Rows now read
+  `data-lg-preset="button-glass"`, or the element's explicit `data-lg-*` overrides, or
+  `data-liquid-glass (no overrides)` — numbered when several elements share one. The
+  old labels were tag names and text snippets, which said nothing about what you were
+  about to tune.
+
+Note for Webflow: the wheel-stage rule in Site Settings → Custom Code still reads
+`backdrop-filter: blur(14px) saturate(1.25)`. That is hand-written CSS, not glass.js —
+drop the `saturate(1.25)` there by hand. Documented in `docs/kiosk-and-spin.md`.
+
+---
+
 ## 2026-08-31 — Docs caught up before the glass phase
 
 Documentation only — no behaviour change. Closing the gaps a fresh session would
@@ -24,15 +62,6 @@ have fallen into:
 Still open, carried forward: the `/spin-to-win` stray divs need deleting in the
 Designer (element removal, needs an explicit yes), and a pairing code from the
 backend admin is needed before the kiosk chain can be tested end to end.
-
----
-
-## YYYY-MM-DD — short title
-- file(s) touched
-- what changed and why
-- any Webflow-side change needed (new attribute, head snippet, etc.)
-```
-
 ---
 
 ## 2026-08-28 — Error-state styling for the lead form (Webflow)

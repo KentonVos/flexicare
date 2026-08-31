@@ -144,8 +144,19 @@ only) — hence `barba.go()` everywhere.
 Attribute-driven liquid-glass effect. Hook: `data-liquid-glass`. Optional preset
 `data-lg-preset="cta|nav|panel|pill"` and many `data-lg-*` knobs (refraction, lighting,
 surface, interaction) — see the header comment in the file for the full list and defaults.
-- Refraction (the real distortion) is **Chrome/Edge only**; Safari/Firefox get a
-  blur+saturate fallback. Lighting, tint, press and tilt work everywhere.
+- Refraction (the real distortion) is **Chrome/Edge only**; Safari/Firefox get a plain
+  backdrop blur instead. Lighting, surface, press and tilt work everywhere.
+- **`data-lg-blur` is a real px radius, applied as a native `blur()` in front of the
+  displacement `url()`** — `backdrop-filter: blur(8px) url(#lg-3)`. It is deliberately
+  NOT an `feGaussianBlur` in the SVG chain: that filter's region is pinned to the
+  element box, so a blur there samples transparent past the edge and eats its own rim,
+  which is why the knob used to look inert at every value. Because blur no longer feeds
+  the displacement map it is not in `REFRACT_KEYS`, so changing it re-applies the
+  backdrop-filter string without rebuilding the map.
+- **There is no saturation and no tint knob.** `data-lg-saturate`, `data-lg-tinthue`
+  and `data-lg-tintamount` were removed on 2026-08-31 — glass takes the colour of what
+  is behind it. `frost` (milky white overlay) and `glow` (inner caustic band) are what
+  remain on the surface layer.
 - `press`/`tilt` animate the element's `transform`. Don't combine with a Webflow
   transform interaction on the same node (set `data-lg-press="0"` if you must).
 - API: `scan()` (attach to any new `[data-liquid-glass]`), `refresh(el)`, `refreshAll()`,

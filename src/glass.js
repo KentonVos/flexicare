@@ -13,8 +13,7 @@
      data-lg-bevel       width of the rim band     (default 34)
      data-lg-magnify     whole-face zoom           (default 8)
      data-lg-ca          chromatic aberration      (default 1.5)
-     data-lg-blur        softening                 (default 2)
-     data-lg-saturate    colour boost              (default 1.5)
+     data-lg-blur        backdrop blur, px         (default 8)
    LIGHTING knobs:
      data-lg-lightangle  specular direction, deg   (default 315)
      data-lg-specular    highlight brightness      (default 0.75)
@@ -23,8 +22,6 @@
      data-lg-rimwidth    edge thickness, px        (default 1)
      data-lg-elevation   drop-shadow depth mult    (default 1)
    SURFACE knobs (new):
-     data-lg-tinthue     tint hue 0-360            (default 90)
-     data-lg-tintamount  tint opacity 0-1          (default 0)
      data-lg-frost       milky overlay 0-1         (default 0)
      data-lg-glow        inner caustic band 0-1    (default 0)
    INTERACTION knobs:
@@ -52,22 +49,19 @@
     bevel: 34,
     magnify: 8,
     ca: 1.5,
-    blur: 2,
-    saturate: 1.5,
+    blur: 8,
     lightangle: 315,
     specular: 0.75,
     specsize: 1,
     rim: 0.13,
     rimwidth: 1,
     elevation: 1,
-    tinthue: 90,
-    tintamount: 0,
     frost: 0,
     glow: 0,
     press: 0,
     tilt: 0,
   };
-  var REFRACT_KEYS = ["strength", "bevel", "magnify", "ca", "blur", "saturate"];
+  var REFRACT_KEYS = ["strength", "bevel", "magnify", "ca"];
   var NS = "http://www.w3.org/2000/svg";
 
   var ua = navigator.userAgent;
@@ -128,7 +122,7 @@
        save in the tuner becomes usable by name too.               */
   var PRESETS = {
     cta: { press: 1.5, tilt: 12, glow: 0.4, specular: 0.85 },
-    nav: { press: 0, tilt: 0, strength: 30, blur: 1.5 },
+    nav: { press: 0, tilt: 0, strength: 30 },
     panel: { press: 0.6, tilt: 4, frost: 0.1, glow: 0.3, strength: 34 },
     pill: { press: 1, tilt: 8, glow: 0.35, ca: 0 },
   };
@@ -166,7 +160,6 @@
     b.strength = o.strength * (1 + 0.9 * p * m);
     b.magnify = o.magnify + 8 * p * m;
     b.blur = Math.max(0, o.blur + 2.5 * p * m);
-    b.saturate = o.saturate + 0.35 * p * m;
     b.specular = Math.min(1, o.specular * (1 + 0.5 * p * m));
     b.elevation = Math.max(0, o.elevation * (1 - 0.45 * p * m));
     b.glow = Math.min(1, o.glow + 0.3 * p * m);
@@ -225,7 +218,7 @@
     ].join(",");
   }
 
-  /* ---------- surface overlay (tint / frost / inner glow) ---------- */
+  /* ---------- surface overlay (frost / inner glow) ---------- */
   function applySurface(st, o) {
     var bgs = [];
     if (o.frost > 0)
@@ -234,18 +227,6 @@
           (o.frost * 0.35).toFixed(3) +
           "),rgba(255,255,255," +
           (o.frost * 0.35).toFixed(3) +
-          "))"
-      );
-    if (o.tintamount > 0)
-      bgs.push(
-        "linear-gradient(hsla(" +
-          o.tinthue +
-          ",85%,60%," +
-          (o.tintamount * 0.35).toFixed(3) +
-          "),hsla(" +
-          o.tinthue +
-          ",85%,60%," +
-          (o.tintamount * 0.35).toFixed(3) +
           "))"
       );
     st.overlay.style.background = bgs.join(",") || "none";
@@ -376,7 +357,6 @@
   function fillFilter(filter, map, w, h, o) {
     while (filter.firstChild) filter.removeChild(filter.firstChild);
     filter.appendChild(feImage(map.url, w, h));
-    var last;
     if (o.ca > 0) {
       filter.appendChild(feDisplace(map.scale + 2 * o.ca, "dr"));
       filter.appendChild(feChannel("dr", 0, "cr"));
@@ -386,25 +366,8 @@
       filter.appendChild(feChannel("db", 2, "cb"));
       filter.appendChild(feAdd("cr", "cg", "rg"));
       filter.appendChild(feAdd("rg", "cb", "rgb"));
-      last = "rgb";
     } else {
       filter.appendChild(feDisplace(map.scale, "rgb"));
-      last = "rgb";
-    }
-    if (o.blur > 0) {
-      var fb = document.createElementNS(NS, "feGaussianBlur");
-      fb.setAttribute("in", last);
-      fb.setAttribute("stdDeviation", o.blur * 0.5);
-      fb.setAttribute("result", "soft");
-      filter.appendChild(fb);
-      last = "soft";
-    }
-    if (o.saturate !== 1) {
-      var fs = document.createElementNS(NS, "feColorMatrix");
-      fs.setAttribute("in", last);
-      fs.setAttribute("type", "saturate");
-      fs.setAttribute("values", String(o.saturate));
-      filter.appendChild(fs);
     }
   }
 
@@ -429,12 +392,7 @@
     // frame. LiquidGlass.unfreeze() + refreshAll() rebuilds once at the end.
     if (frozen) return;
     if (st.fallback) {
-      var f =
-        "blur(" +
-        Math.max(o.blur, 2.5) +
-        "px) saturate(" +
-        o.saturate.toFixed(3) +
-        ")";
+      var f = o.blur > 0 ? "blur(" + o.blur.toFixed(2) + "px)" : "none";
       el.style.webkitBackdropFilter = f;
       el.style.backdropFilter = f;
       return;
@@ -451,10 +409,27 @@
         })
       )
       .join("|");
-    if (key === st.key) return;
-    st.key = key;
-    fillFilter(st.filter, buildMap(w, h, r, o), w, h, o);
-    el.style.backdropFilter = "url(#" + st.id + ")";
+    if (key !== st.key) {
+      st.key = key;
+      fillFilter(st.filter, buildMap(w, h, r, o), w, h, o);
+      st.bf = ""; // the filter's contents changed — re-assert the reference
+    }
+    // Blur runs as a native backdrop-filter function BEFORE the displacement
+    // url(), so the glass refracts an already-softened backdrop. It cannot live
+    // inside the SVG chain: that filter's region is pinned to the element box,
+    // so an feGaussianBlur there samples transparent past the edge and eats its
+    // own rim. Native blur clamps at the edge instead, so the knob reads in
+    // real pixels at any value.
+    var bf =
+      (o.blur > 0 ? "blur(" + o.blur.toFixed(2) + "px) " : "") +
+      "url(#" +
+      st.id +
+      ")";
+    if (bf !== st.bf) {
+      st.bf = bf;
+      el.style.webkitBackdropFilter = bf;
+      el.style.backdropFilter = bf;
+    }
   }
 
   function schedule(el) {

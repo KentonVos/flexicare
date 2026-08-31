@@ -53,18 +53,10 @@
     },
     {
       key: "blur",
-      label: "Blur",
+      label: "Blur (px)",
       min: 0,
-      max: 10,
-      step: 0.1,
-      group: "Refraction",
-    },
-    {
-      key: "saturate",
-      label: "Saturate",
-      min: 0.5,
-      max: 3,
-      step: 0.05,
+      max: 40,
+      step: 0.5,
       group: "Refraction",
     },
     {
@@ -117,23 +109,6 @@
       group: "Lighting",
     },
     {
-      key: "tinthue",
-      label: "Tint hue",
-      min: 0,
-      max: 360,
-      step: 1,
-      group: "Surface",
-      hue: true,
-    },
-    {
-      key: "tintamount",
-      label: "Tint amount",
-      min: 0,
-      max: 1,
-      step: 0.01,
-      group: "Surface",
-    },
-    {
       key: "frost",
       label: "Frost",
       min: 0,
@@ -171,16 +146,13 @@
     bevel: 34,
     magnify: 8,
     ca: 1.5,
-    blur: 2,
-    saturate: 1.5,
+    blur: 8,
     lightangle: 315,
     specular: 0.75,
     specsize: 1,
     rim: 0.13,
     rimwidth: 1,
     elevation: 1,
-    tinthue: 90,
-    tintamount: 0,
     frost: 0,
     glow: 0,
     press: 1,
@@ -223,8 +195,7 @@
     return o;
   }
   function fmt(k, v) {
-    if (k.key === "lightangle" || k.key === "tinthue")
-      return Math.round(v) + "\u00B0";
+    if (k.key === "lightangle") return Math.round(v) + "\u00B0";
     return k.step < 1 ? (+v).toFixed(k.step < 0.1 ? 2 : 1) : String(v);
   }
 
@@ -286,16 +257,33 @@
     panel.setAttribute("data-js-injected", ""); // see note on the fab above
     document.body.appendChild(panel);
 
+    /* Name each target by its ATTRIBUTE CONTRACT, not by what Webflow called
+       the div. The contract is the thing being tuned and the thing that gets
+       pasted back into the Designer, so a list of tag/text snippets told you
+       nothing about which row to drag. A preset wins outright; otherwise the
+       explicit data-lg-* overrides are listed; a bare host says so. */
+    function targetName(el) {
+      var preset = el.getAttribute("data-lg-preset");
+      if (preset) return 'data-lg-preset="' + preset + '"';
+      var parts = [];
+      for (var i = 0; i < el.attributes.length; i++) {
+        var at = el.attributes[i];
+        if (at.name.indexOf("data-lg-") !== 0) continue;
+        if (at.name === "data-lg-static") continue; // ours, not the author's
+        parts.push(at.name + '="' + at.value + '"');
+      }
+      return parts.length ? parts.join(" ") : "data-liquid-glass (no overrides)";
+    }
     var targetOptions = ['<option value="all">All elements at once</option>'];
+    var nameCounts = {};
     els.forEach(function (el, i) {
-      var name =
-        el.id ||
-        el.tagName.toLowerCase() +
-          " — " +
-          (el.textContent || "").trim().slice(0, 22) ||
-        "element " + (i + 1);
+      var name = targetName(el);
+      // Several elements routinely share one preset, so number the repeats —
+      // otherwise the dropdown is five identical rows.
+      nameCounts[name] = (nameCounts[name] || 0) + 1;
+      var label = name + "  #" + nameCounts[name];
       targetOptions.push(
-        '<option value="' + i + '">' + name.replace(/</g, "&lt;") + "</option>"
+        '<option value="' + i + '">' + label.replace(/</g, "&lt;") + "</option>"
       );
     });
 
