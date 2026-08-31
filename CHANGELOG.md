@@ -16,8 +16,8 @@ Format:
 
 ## 2026-08-31 — Journey reset: close the gaps, and warn when the trigger is stranded
 
-`src/flexicare-core.js`. **Needs a Webflow attribute move to actually take effect —
-see below.**
+`src/flexicare-core.js`, plus the Webflow attribute move that actually fixes it
+(**done in the Designer, unpublished** — publish to make it live).
 
 Reported symptom: arriving back at the landing page sometimes still carried the last
 run's data.
@@ -30,10 +30,12 @@ while arriving through the funnel silently does not — so "start over", the one
 that needs it, is the one path that doesn't get it. `/archetype`'s body does not carry
 the attribute, so there was no mid-journey wipe.
 
-**Webflow fix required:** move `data-journey-start="true"` off `<body>` and onto the
-landing page's `glass-content-wrapper` (the `data-barba="container"` element itself —
+**Webflow fix (applied 2026-08-31, Designer only — needs a publish):**
+`data-journey-start="true"` moved off `<body>` and onto the landing page's
+`glass-content-wrapper`, which IS the `data-barba="container"` element.
 `maybeResetJourney` checks `root.matches()` as well as `querySelector`, so the
-container node itself is a valid home and works on both paths).
+container node itself is a valid home and fires on both paths — hard load and
+navigation. Nothing else on the page was touched.
 
 What changed in code:
 
