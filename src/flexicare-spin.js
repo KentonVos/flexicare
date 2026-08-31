@@ -366,12 +366,17 @@
    parked in sessionStorage — not localStorage, so it dies with the tab and a
    kiosk left on overnight is never still in demo mode in the morning.
 
-     ?demo                    → draw the wheel, spin to a random segment,
-                                show a FAKE prize screen. Spin as many times
-                                as you like — see UNLIMITED PRIZES below.
+     ?demo                    → THE WHOLE SEQUENCE: lead form → wheel → fake
+                                prize screen. Spin as many times as you like —
+                                see UNLIMITED PRIZES below. The form arrives
+                                pre-filled with data that passes validation so
+                                you are not retyping six fields every lap; it
+                                still validates on submit, so clear a field to
+                                see the error path.
+     ?demo=wheel              → skip the form, straight to the wheel
+     ?demo=form               → the lead form (same as bare ?demo)
      ?demo=consolation        → jump straight to the consolation panel
      ?demo=redeemed           → …the redeemed panel   (also: expired, voided)
-     ?demo=form               → …the lead form, wheel behind it
      ?demo=nophone            → …the no-phone panel
      ?demo=unavailable        → …the fallback panel
      ?demo=off                → CLEAR the flag and go back to normal operation
@@ -1842,7 +1847,11 @@
     if (raw === null) raw = readParam("demo");
     if (raw === null) return; // no parameter here — leave any stored flag alone
 
-    var kind = (raw || "prize").toLowerCase();
+    /* Bare ?demo means the FULL sequence — lead form, then wheel, then prize.
+       It used to mean "straight to the wheel", which quietly skipped the one
+       step people most wanted to see when walking the journey end to end.
+       That behaviour is still there as ?demo=wheel. */
+    var kind = (raw || "journey").toLowerCase();
     try {
       if (kind === "off" || kind === "0" || kind === "false")
         sessionStorage.removeItem(DEMO_STORE_KEY);
@@ -1889,15 +1898,18 @@
     state.wrap.setAttribute("data-spin-demo", kind);
     if (window.console)
       console.warn(
-        "[spin] ?spindemo is ON (" +
+        "[spin] ?demo is ON (" +
           kind +
-          "). The session is skipped, POST /spin is NEVER called and no award " +
-          "is created. Remove the parameter for real testing."
+          "). The session GATE is skipped, POST /spin is NEVER called and no " +
+          "award is created. It is sticky for this browser tab — clear it with " +
+          "?demo=off or Flexicare.spin.demo(false) before real testing."
       );
 
     // Panels that don't involve the wheel at all — jump straight there.
     if (kind === "nophone") return setState("nophone");
-    if (kind === "form") state.needLead = true;
+    // "journey" (bare ?demo) and "form" both open on the lead form; the only
+    // difference is intent, and "wheel" is how you skip it.
+    if (kind === "journey" || kind === "form") state.needLead = true;
     if (kind === "unavailable" || kind === "error")
       return showError(null, "wheel");
     if (kind === "consolation" || kind === "redeemed" || kind === "expired" || kind === "voided")
@@ -1915,6 +1927,7 @@
         if (!renderWheel(state.segments)) return showError(null, "wheel");
         if (state.needLead) {
           setLeadType(state.leadType);
+          prefillLeadDemo();
           leadError("");
         }
         setState(state.needLead ? "form" : "ready");
@@ -2211,6 +2224,24 @@
     }
     setLeadType(state.leadType);
     leadError("");
+  }
+
+  /* Demo only. Walking the journey end to end more than once means retyping
+     six fields every lap, so the form arrives filled in with data that passes
+     validation. It is NOT a bypass — validateLead still runs on submit, so
+     clear a field (or break the number) and you get the real error path. */
+  function prefillLeadDemo() {
+    var pairs = [
+      ["[data-spin-lead-name]", "Thandi"],
+      ["[data-spin-lead-surname]", "Mokoena"],
+      ["[data-spin-lead-phone]", "071 234 5678"],
+      ["[data-spin-lead-email]", "thandi@example.com"],
+      ["[data-spin-lead-idnumber]", "9001015800086"],
+    ];
+    for (var i = 0; i < pairs.length; i++) {
+      var el = slot(pairs[i][0]);
+      if (el && !el.value) el.value = pairs[i][1];
+    }
   }
 
   function readLead() {

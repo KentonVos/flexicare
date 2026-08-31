@@ -785,9 +785,10 @@ early with `?demo=off`.
 
 | URL | What you get |
 |---|---|
-| `/?demo` then walk the funnel | a real session all the way, a working wheel at the end |
-| `/spin-to-win?demo` | the real wheel, a real spin animation, a fake prize screen |
-| `?demo=form` | the lead form, wheel behind it. Submitting never PATCHes anything |
+| `/?demo` then walk the funnel | a real session all the way, and the full spin sequence at the end |
+| `/spin-to-win?demo` | **lead form → wheel → fake prize screen**, the whole thing |
+| `?demo=wheel` | skip the form, straight to the wheel |
+| `?demo=form` | the lead form (same as bare `?demo`). Submitting never PATCHes anything |
 | `?demo=consolation` | straight to the consolation panel |
 | `?demo=redeemed` | …the redeemed panel (also `expired`, `voided`) |
 | `?demo=nophone` | …the no-phone panel |
@@ -796,6 +797,19 @@ early with `?demo=off`.
 
 From the console mid-journey: `Flexicare.spin.demo()` reports what is armed,
 `Flexicare.spin.demo("prize")` arms it, `Flexicare.spin.demo(false)` clears it.
+
+### The lead form
+
+Bare `?demo` opens on the lead form, because that is the step the end-to-end run is
+usually there to check. It arrives **pre-filled** with data that passes validation —
+walking the journey repeatedly should not mean retyping six fields every lap.
+
+It is a prefill, not a bypass: `validateLead` still runs on submit, so clear a field
+or break the phone number and you get the real error path, error box and all. On
+submit nothing is PATCHed (there is no session to PATCH), the values are buffered on
+`Flexicare.lead`, and the wheel unlocks.
+
+Use `?demo=wheel` when you are tuning the wheel itself and the form is in the way.
 
 ### Unlimited prizes
 

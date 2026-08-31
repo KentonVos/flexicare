@@ -227,7 +227,9 @@
        you like. See §9 of docs/kiosk-and-spin.md.
        ?demo=consolation | redeemed | expired | voided | nophone
                 | unavailable        jump straight to that panel
-       ?demo                          draw the wheel and spin to a fake prize
+       ?demo                          the WHOLE sequence: lead form (pre-filled)
+                                      → wheel → fake prize
+       ?demo=wheel                    skip the form, straight to the wheel
      It never calls POST /spin and never writes a real award. Remove the
      parameter before any real testing.
      ============================================================ -->

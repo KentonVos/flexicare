@@ -14,6 +14,30 @@ Format:
 
 ---
 
+## 2026-08-31 — `?demo` now opens on the lead form, pre-filled
+
+`src/flexicare-spin.js`, plus the local harness.
+
+Bare `?demo` went straight to the wheel, which skipped the lead form — the step an
+end-to-end run most wants to see. `?demo=form` already showed it, but you had to know
+to ask.
+
+- **Bare `?demo` is now the whole sequence: lead form → wheel → prize.** The internal
+  kind is `journey`; `?demo=form` is an alias for the same thing.
+- **`?demo=wheel` is the old behaviour** — skip the form, straight to the wheel. Use it
+  when you're tuning the wheel and the form is in the way. (`?demo=prize` still lands
+  there too, by fall-through.)
+- **The demo form arrives pre-filled** with data that passes validation, so walking the
+  journey repeatedly doesn't mean retyping six fields every lap. It is a prefill, not a
+  bypass: `validateLead` still runs on submit, so clearing a field or breaking the
+  phone number gives you the real error path. Submitting PATCHes nothing (there is no
+  session), buffers to `Flexicare.lead`, and unlocks the wheel — unchanged.
+- `demo/spin.html` now redirects to `?spindemo=wheel` rather than bare, since its
+  respin button waits for state `ready` and the form sits in front of it. Added a
+  **lead form** button to its panel row.
+
+---
+
 ## 2026-08-31 — `?demo`: walk the whole funnel and reach a working wheel, no tablet needed
 
 `src/flexicare-spin.js`, plus one guarded change in `src/flexicare-product.js`.

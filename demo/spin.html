@@ -26,11 +26,18 @@
 
 <script>
   /* The controller's demo gate is the query parameter, so make sure it is
-     there. Done before anything else loads, so there is no flash. */
+     there. Done before anything else loads, so there is no flash.
+
+     "=wheel" explicitly: bare ?demo / ?spindemo now opens on the LEAD FORM
+     (the full end-to-end sequence), and this harness is for tuning the wheel
+     and its panels — the respin button below waits for state "ready", which
+     the form sits in front of. Use the Form panel button to reach it. */
   (function () {
     if (!/[?&]spindemo(=|&|$)/.test(location.search)) {
       var sep = location.search ? "&" : "?";
-      location.replace(location.pathname + location.search + sep + "spindemo" + location.hash);
+      location.replace(
+        location.pathname + location.search + sep + "spindemo=wheel" + location.hash
+      );
     }
   })();
 </script>
@@ -528,7 +535,8 @@
   <fieldset>
     <legend>Jump to a panel</legend>
     <div class="btns">
-      <button data-panel="">wheel</button>
+      <button data-panel="wheel">wheel</button>
+      <button data-panel="form">lead form</button>
       <button data-panel="consolation">consolation</button>
       <button data-panel="redeemed">redeemed</button>
       <button data-panel="expired">expired</button>
@@ -668,7 +676,7 @@
 
     if (b.dataset.panel !== undefined) {
       var url = new URL(location.href);
-      url.searchParams.set("spindemo", b.dataset.panel || "prize");
+      url.searchParams.set("spindemo", b.dataset.panel || "wheel");
       // A panel jump needs a fresh boot; keep the tuning in the URL.
       inputs.forEach(function (el) { url.searchParams.set(el.dataset.attr, el.value); });
       location.href = url.toString();
