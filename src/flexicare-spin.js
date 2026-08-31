@@ -61,10 +61,6 @@
                                   data-spin-lead-label="Submit"  what the CTA
                                      says while the lead form is up; it reverts
                                      to its authored text afterwards
-                                  data-spin-again-label="Spin again"  what
-                                     the CTA says on an award panel in ?demo
-                                     mode. DEV ONLY — it never appears in a
-                                     real session, which awards one prize.
                                   data-spin-turns="1"     extra full rotations
                                      before landing
                                   data-spin-duration="1.5" seconds of the
@@ -367,12 +363,15 @@
    kiosk left on overnight is never still in demo mode in the morning.
 
      ?demo                    → THE WHOLE SEQUENCE: lead form → wheel → fake
-                                prize screen. Spin as many times as you like —
-                                see UNLIMITED PRIZES below. The form arrives
-                                pre-filled with data that passes validation so
-                                you are not retyping six fields every lap; it
-                                still validates on submit, so clear a field to
-                                see the error path.
+                                prize screen. ONE spin, exactly like a real
+                                session — the CTA does not come back and the
+                                nav collapses behind the prize card, so the
+                                only way on is the card's [data-spin-done].
+                                Reload (or Flexicare.spin.reinit()) to go
+                                again. The form arrives pre-filled with data
+                                that passes validation so you are not retyping
+                                six fields every lap; it still validates on
+                                submit, so clear a field to see the error path.
      ?demo=wheel              → skip the form, straight to the wheel
      ?demo=form               → the lead form (same as bare ?demo)
      ?demo=consolation        → jump straight to the consolation panel
@@ -386,14 +385,13 @@
      Flexicare.spin.demo("prize")   → arm it
      Flexicare.spin.demo(false)     → clear it
 
-   UNLIMITED PRIZES
-     A real session gets exactly ONE award, and re-calling POST /spin returns
-     the same one. Demo mode has no award to be idempotent about, so the CTA
-     turns into "Spin again" (data-spin-again-label) on any award panel and
-     puts you back on the wheel. Two taps, not one: the wheel must be on
-     screen before it turns, or the deceleration plays out behind a panel that
-     is still cross-fading. The nav is also NOT collapsed after a demo spin —
-     the CTA lives inside it, so hiding it would end the fun immediately.
+   ONE SPIN, LIKE THE REAL THING
+     A real session gets exactly one award and the wheel never comes back, so
+     demo ends the same way: after the award the nav collapses (taking the
+     spin CTA with it) and the prize card's [data-spin-done] is the only way
+     on. This is deliberate — the point of the demo is walking the journey as
+     a shopper would, and a "spin again" button is not a beat that exists.
+     To run it again: reload the page, or Flexicare.spin.reinit().
 
    What it does NOT do, and must never do:
      • it never calls POST /spin — no award is created, no stock is consumed,
@@ -826,11 +824,6 @@
      Opt out with data-spin-nav-hide="off" on [data-spin]. */
   function syncNav(mode, animate) {
     if (attr(state.wrap, "data-spin-nav-hide", "on") === "off") return;
-    /* Demo mode spins over and over, and the CTA lives IN the nav — collapse
-       it after the first award and there is nothing left to tap. Hiding is
-       also not reversible in the real flow, which is exactly why demo has to
-       opt out of it rather than undo it. */
-    if (state.demo) return;
     var pt = window.PageTransition;
     if (!pt || !pt.nav) return;
 
@@ -873,17 +866,13 @@
     var btn = slot("[data-spin-go]");
     if (!btn) return;
     var submitting = state.mode === "form";
-    var again = !!state.demo && isAwardState(state.mode);
     var enabled = submitting
       ? !state.leadBusy
-      : again || (state.mode === "ready" && !state.busy && !cooling());
+      : state.mode === "ready" && !state.busy && !cooling();
     btn.disabled = !enabled;
     btn.setAttribute("aria-disabled", enabled ? "false" : "true");
     btn.setAttribute("data-spin-busy", (state.busy || state.leadBusy) ? "true" : "false");
-    btn.setAttribute(
-      "data-spin-go-mode",
-      submitting ? "submit" : again ? "again" : "spin"
-    );
+    btn.setAttribute("data-spin-go-mode", submitting ? "submit" : "spin");
 
     // Captured lazily but BEFORE the first swap: every state change calls
     // this, and the first one (loading) is not the form.
@@ -891,8 +880,6 @@
     if (node.__spinGoDefault == null) node.__spinGoDefault = node.textContent;
     var next = submitting
       ? attr(state.wrap, "data-spin-lead-label", "Submit")
-      : again
-      ? attr(state.wrap, "data-spin-again-label", "Spin again")
       : node.__spinGoDefault;
     if (node.textContent !== next) node.textContent = next;
   }
@@ -1934,25 +1921,6 @@
       });
   }
 
-  /* UNLIMITED PRIZES, demo only. The real page awards exactly one prize per
-     session and treats a second 200 from /spin as the SAME award — that rule
-     is the server's and nothing here weakens it, because demo never calls
-     /spin at all.
-
-     Back to `ready`, which cross-fades the wheel panel in over the award
-     panel. It deliberately does NOT spin on this tap: the wheel has to be on
-     screen before it turns, or the deceleration plays out behind a panel that
-     is still fading. So it is two taps — "Spin again" to bring the wheel
-     back, then the CTA reverts to its authored label and spins. */
-  function demoAgain() {
-    if (!state.demo) return;
-    state.award = null;
-    state.busy = false;
-    stopTweens();
-    write("[data-spin-error]", "");
-    setState("ready");
-  }
-
   // The ONLY place a segment is ever chosen client-side, and it exists purely
   // so the deceleration can be watched without a backend. The real spin takes
   // segment_index from the server and nothing else.
@@ -2396,9 +2364,8 @@
     var goBtn = t.closest("[data-spin-go]");
     if (goBtn) {
       e.preventDefault();
-      // Same button, up to three jobs — see refreshButton.
+      // Same button, two jobs — see refreshButton.
       if (state.mode === "form") submitLead();
-      else if (state.demo && isAwardState(state.mode)) demoAgain();
       else onSpin();
       return;
     }
@@ -2628,8 +2595,6 @@
     } catch (e) {}
     return readDemoParam();
   };
-
-  FC.spin.again = demoAgain;
 
   FC.spin.reinit = function () {
     teardown();

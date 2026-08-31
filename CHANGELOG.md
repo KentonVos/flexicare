@@ -14,6 +14,27 @@ Format:
 
 ---
 
+## 2026-08-31 — Demo spins once, like a real session
+
+`src/flexicare-spin.js`. Reverses the "unlimited prizes" behaviour added earlier today.
+
+A "Spin again" CTA is not a beat that exists in the real journey, and the demo exists
+to walk that journey as a shopper would — so the ending read wrong. Demo now finishes
+exactly like production:
+
+- **`syncNav` no longer exempts demo mode.** After the award the nav collapses, taking
+  the spin CTA with it — the same `PageTransition.nav.hide()` a real session gets.
+- **`refreshButton` is back to two jobs** (spin / submit). The `again` branch, the
+  `data-spin-go-mode="again"` value and the **`data-spin-again-label` attribute are
+  removed** — if you added that attribute in the Designer it is now inert and can go.
+- **`demoAgain()` and `Flexicare.spin.again()` are gone.** To run the journey again:
+  reload, or `Flexicare.spin.reinit()` — which already existed for `demo/spin.html`.
+
+The prize card's `[data-spin-done]` is now the only way on, pointing at
+`data-spin-done` on `[data-spin]`. Make sure that is set to wherever "finish" should go.
+
+---
+
 ## 2026-08-31 — Fix: collapsing the nav never returned its space (a min-height floored it)
 
 `src/transition.js`.

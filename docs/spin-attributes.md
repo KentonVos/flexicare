@@ -196,7 +196,6 @@ and its label changes. It reverts the moment the form is accepted.
 | Attribute | Where | |
 |---|---|---|
 | `data-spin-lead-label` | `[data-spin]` | What the CTA says while the form is up. Default `Submit`. |
-| `data-spin-again-label` | `[data-spin]` | What the CTA says on an award panel in `?demo` mode. Default `Spin again`. **Dev only** — a real session awards one prize and never shows this. |
 | `[data-spin-go-text]` | the CTA's inner text element | Webflow buttons wrap their label in a div — mark it so the right node is relabelled. Without it the button's own text is used. |
 
 The button also gets `data-spin-go-mode="submit"` / `"spin"`, so the two jobs can

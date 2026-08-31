@@ -811,16 +811,19 @@ submit nothing is PATCHed (there is no session to PATCH), the values are buffere
 
 Use `?demo=wheel` when you are tuning the wheel itself and the form is in the way.
 
-### Unlimited prizes
+### One spin, like the real thing
 
-A real session gets exactly **one** award, and re-calling `POST /spin` returns the
-same one. Demo has no award to be idempotent about, so on any award panel the CTA
-becomes **"Spin again"** (`data-spin-again-label`) and puts you back on the wheel.
+A real session gets exactly **one** award and the wheel never comes back, so demo ends
+the same way. After the award:
 
-Two taps, not one: the wheel has to be on screen before it turns, or the deceleration
-plays out behind a panel that is still cross-fading. The nav is also **not** collapsed
-after a demo spin — the CTA lives inside it, so hiding it would end the fun
-immediately.
+- the nav collapses, taking the spin CTA with it (`syncNav`, same as production);
+- the prize card's **`[data-spin-done]`** is the only way on, pointing at
+  `data-spin-done` on `[data-spin]` — set it to wherever "finish" should go.
+
+This is deliberate. The demo exists to walk the journey as a shopper would, and a
+"spin again" button is not a beat that exists in that journey — it made the ending
+read wrong. To run it again: reload the page, or `Flexicare.spin.reinit()` in the
+console.
 
 ### What it never does
 
