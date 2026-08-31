@@ -44,14 +44,6 @@
       group: "Refraction",
     },
     {
-      key: "ca",
-      label: "Chromatic",
-      min: 0,
-      max: 8,
-      step: 0.1,
-      group: "Refraction",
-    },
-    {
       key: "blur",
       label: "Blur (px)",
       min: 0,
@@ -145,7 +137,6 @@
     strength: 42,
     bevel: 34,
     magnify: 8,
-    ca: 1.5,
     blur: 8,
     lightangle: 315,
     specular: 0.75,
@@ -200,6 +191,13 @@
   }
 
   function init() {
+    // Glass sweeps its light angle on an 8s loop by default. Leave that running
+    // and the "Light angle" dial is overwritten 60 times a second — you drag it
+    // and nothing appears to happen. Opening the tuner parks the sweep; reload
+    // without ?tune to see it again.
+    if (window.LiquidGlass && window.LiquidGlass.lightSpin)
+      window.LiquidGlass.lightSpin(0);
+
     var els = Array.prototype.slice.call(document.querySelectorAll(SELECTOR));
 
     var style = document.createElement("style");

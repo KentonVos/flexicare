@@ -14,6 +14,36 @@ Format:
 
 ---
 
+## 2026-08-31 — Glass: chromatic aberration removed, light angle now sweeps on a loop
+
+`src/glass.js` + `src/slider.js`.
+
+- **Chromatic aberration removed.** `data-lg-ca` is gone. The displacement filter used
+  to run three passes at different scales (one per colour channel) and recomposite
+  them; it is now a single pass, and the `feChannel`/`feAdd` helpers that only existed
+  for the split were deleted with it. `ca` is out of `DEFAULTS`, `REFRACT_KEYS`, the
+  `pill` preset and the tuner. Cheaper as well as cleaner — three fewer filter
+  primitives per host.
+- **The light angle sweeps 0 → 360 on an 8-second loop, site-wide.** One global
+  `lightPhase` is ADDED to each host's `data-lg-lightangle`, so it reads as a single
+  light source travelling across the page and any authored offset between two pieces
+  of glass is preserved. `lightangle` only feeds `applyChrome` (a box-shadow string),
+  so the sweep never rebuilds a displacement map or re-writes a backdrop-filter — but
+  it is a box-shadow repaint per host per frame, so watch it on a page with many glass
+  elements. Skipped under `prefers-reduced-motion`.
+  - Opt out per element: **`data-lg-lightspin="0"`** (new attribute — set it in the
+    Designer on anything that should hold a fixed angle).
+  - Opt out globally: **`LiquidGlass.lightSpin(seconds)`**, 0 to stop and restore
+    authored angles. The tuner calls `lightSpin(0)` on open, or the light-angle dial
+    would be overwritten 60 times a second and appear dead.
+  - Hosts are now tracked in a plain `hosts` array beside the `states` WeakMap (a
+    WeakMap can't be walked), pruned by `isConnected` in the loop — Barba removes an
+    outgoing container's nodes without telling us.
+- Header comment: `press`/`tilt` were documented as defaulting to 1 and 7; both have
+  actually defaulted to 0 (off). Corrected — no code change.
+
+---
+
 ## 2026-08-31 — Glass: saturation and tint out, blur made real, tuner names targets by attribute
 
 Site-wide changes to the glass effect, all in `src/glass.js` + `src/slider.js`.

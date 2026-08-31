@@ -153,6 +153,21 @@ surface, interaction) — see the header comment in the file for the full list a
   which is why the knob used to look inert at every value. Because blur no longer feeds
   the displacement map it is not in `REFRACT_KEYS`, so changing it re-applies the
   backdrop-filter string without rebuilding the map.
+- **The light angle sweeps.** `lightPhase` rotates 0 → 360 on an 8-second loop and is
+  added to every host's `data-lg-lightangle`, so the page reads as ONE light source
+  travelling across it rather than each element holding its own fixed angle — any
+  authored offset between two pieces of glass survives. Cheap: `lightangle` only feeds
+  `applyChrome` (a box-shadow string), so the sweep never touches the displacement map
+  or the backdrop-filter. It is still a box-shadow repaint per host per frame, so it is
+  the first thing to turn down on a page carrying dozens of glass elements. Skipped
+  entirely under `prefers-reduced-motion`. Opt out per element with
+  `data-lg-lightspin="0"`, or globally with `LiquidGlass.lightSpin(0)` — which is what
+  the tuner does on open, since otherwise the dial fights the animation for the same
+  property.
+- **There is no chromatic aberration knob.** `data-lg-ca` was removed on 2026-08-31.
+  The filter used to split R/G/B into three displacement passes at different scales and
+  recomposite them; it is now a single pass, and the `feColorMatrix`/`feComposite`
+  helpers the split needed are gone with it.
 - **There is no saturation and no tint knob.** `data-lg-saturate`, `data-lg-tinthue`
   and `data-lg-tintamount` were removed on 2026-08-31 — glass takes the colour of what
   is behind it. `frost` (milky white overlay) and `glow` (inner caustic band) are what
@@ -160,6 +175,7 @@ surface, interaction) — see the header comment in the file for the full list a
 - `press`/`tilt` animate the element's `transform`. Don't combine with a Webflow
   transform interaction on the same node (set `data-lg-press="0"` if you must).
 - API: `scan()` (attach to any new `[data-liquid-glass]`), `refresh(el)`, `refreshAll()`,
+  `lightSpin(seconds)` (0 = stop the sweep and restore authored angles),
   `freeze()`/`unfreeze(rebuild)` (pause displacement-map rebuilds during a size animation),
   `reloadPresets()`, `exportPresets()`, `presets`.
 - Presets saved by the tuner live in `localStorage` under `lgTunerPresets` and merge on

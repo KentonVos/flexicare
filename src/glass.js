@@ -12,10 +12,12 @@
      data-lg-strength    edge bend amount         (default 42)
      data-lg-bevel       width of the rim band     (default 34)
      data-lg-magnify     whole-face zoom           (default 8)
-     data-lg-ca          chromatic aberration      (default 1.5)
      data-lg-blur        backdrop blur, px         (default 8)
    LIGHTING knobs:
      data-lg-lightangle  specular direction, deg   (default 315)
+                         NOTE: a global 8s sweep is ADDED to this, so the
+                         angle is an offset, not a fixed direction.
+     data-lg-lightspin   "0" opts this element out of the sweep
      data-lg-specular    highlight brightness      (default 0.75)
      data-lg-specsize    highlight softness, px    (default 1)
      data-lg-rim         edge-light brightness     (default 0.13)
@@ -25,14 +27,15 @@
      data-lg-frost       milky overlay 0-1         (default 0)
      data-lg-glow        inner caustic band 0-1    (default 0)
    INTERACTION knobs:
-     data-lg-press       press-spring depth 0-2    (default 1, 0 = off)
-     data-lg-tilt        press tilt max, degrees   (default 7, 0 = off)
+     data-lg-press       press-spring depth 0-2    (default 0 = off)
+     data-lg-tilt        press tilt max, degrees   (default 0 = off)
 
    POSITIONING: glass needs a non-static host so its overlay is contained.
          If your element is already absolute / fixed / sticky it is LEFT
          ALONE; only a static one is made relative (marked data-lg-static).
 
-   API: LiquidGlass.scan(), LiquidGlass.refresh(el)
+   API: LiquidGlass.scan(), LiquidGlass.refresh(el),
+        LiquidGlass.lightSpin(seconds)  0 = stop the light sweep
    NOTE: refraction is Chrome/Edge only; lighting, surface,
          press and tilt work in every browser.
    CAVEAT: the press effect animates the element's transform.
@@ -48,7 +51,6 @@
     strength: 42,
     bevel: 34,
     magnify: 8,
-    ca: 1.5,
     blur: 8,
     lightangle: 315,
     specular: 0.75,
@@ -61,7 +63,7 @@
     press: 0,
     tilt: 0,
   };
-  var REFRACT_KEYS = ["strength", "bevel", "magnify", "ca"];
+  var REFRACT_KEYS = ["strength", "bevel", "magnify"];
   var NS = "http://www.w3.org/2000/svg";
 
   var ua = navigator.userAgent;
@@ -124,7 +126,7 @@
     cta: { press: 1.5, tilt: 12, glow: 0.4, specular: 0.85 },
     nav: { press: 0, tilt: 0, strength: 30 },
     panel: { press: 0.6, tilt: 4, frost: 0.1, glow: 0.3, strength: 34 },
-    pill: { press: 1, tilt: 8, glow: 0.35, ca: 0 },
+    pill: { press: 1, tilt: 8, glow: 0.35 },
   };
   var STORE_KEY = "lgTunerPresets";
   function loadStoredPresets() {
@@ -166,9 +168,16 @@
     return b;
   }
 
+  /* ---------- rotating light source ----------
+     Every host is lit by ONE sweeping light rather than each holding a fixed
+     angle: lightPhase is a single global offset added to each element's
+     data-lg-lightangle, so the whole page reads as one source travelling
+     round it. See the spin loop further down. */
+  var lightPhase = 0;
+
   /* ---------- lighting chrome (box-shadow rig) ---------- */
   function applyChrome(el, o) {
-    var a = (o.lightangle * Math.PI) / 180;
+    var a = ((o.lightangle + lightPhase) * Math.PI) / 180;
     var dist = 2.4;
     var ox = (-Math.sin(a) * dist).toFixed(2);
     var oy = (Math.cos(a) * dist).toFixed(2);
@@ -332,47 +341,23 @@
     fe.setAttribute("result", result);
     return fe;
   }
-  function feChannel(inName, row, result) {
-    var m = ["0 0 0 0 0", "0 0 0 0 0", "0 0 0 0 0"];
-    m[row] = row === 0 ? "1 0 0 0 0" : row === 1 ? "0 1 0 0 0" : "0 0 1 0 0";
-    var fe = document.createElementNS(NS, "feColorMatrix");
-    fe.setAttribute("in", inName);
-    fe.setAttribute("type", "matrix");
-    fe.setAttribute("values", m[0] + " " + m[1] + " " + m[2] + " 0 0 0 1 0");
-    fe.setAttribute("result", result);
-    return fe;
-  }
-  function feAdd(a, b, result) {
-    var fe = document.createElementNS(NS, "feComposite");
-    fe.setAttribute("in", a);
-    fe.setAttribute("in2", b);
-    fe.setAttribute("operator", "arithmetic");
-    fe.setAttribute("k1", "0");
-    fe.setAttribute("k2", "1");
-    fe.setAttribute("k3", "1");
-    fe.setAttribute("k4", "0");
-    fe.setAttribute("result", result);
-    return fe;
-  }
-  function fillFilter(filter, map, w, h, o) {
+  /* One displacement pass for all three channels. This used to split R/G/B
+     into three passes at different scales and recomposite them (chromatic
+     aberration, data-lg-ca); that knob was removed on 2026-08-31, and with it
+     the feColorMatrix/feComposite helpers the split needed. */
+  function fillFilter(filter, map, w, h) {
     while (filter.firstChild) filter.removeChild(filter.firstChild);
     filter.appendChild(feImage(map.url, w, h));
-    if (o.ca > 0) {
-      filter.appendChild(feDisplace(map.scale + 2 * o.ca, "dr"));
-      filter.appendChild(feChannel("dr", 0, "cr"));
-      filter.appendChild(feDisplace(map.scale, "dg"));
-      filter.appendChild(feChannel("dg", 1, "cg"));
-      filter.appendChild(feDisplace(Math.max(0, map.scale - 2 * o.ca), "db"));
-      filter.appendChild(feChannel("db", 2, "cb"));
-      filter.appendChild(feAdd("cr", "cg", "rg"));
-      filter.appendChild(feAdd("rg", "cb", "rgb"));
-    } else {
-      filter.appendChild(feDisplace(map.scale, "rgb"));
-    }
+    filter.appendChild(feDisplace(map.scale, "rgb"));
   }
 
   /* ---------- core refresh ---------- */
   var states = new WeakMap();
+  // A WeakMap can't be walked, and the spin loop has to re-light every host on
+  // every frame, so keep a plain list alongside it. It is pruned in the loop by
+  // isConnected rather than on teardown: Barba removes the outgoing container's
+  // nodes without telling us, exactly as orb-motion has to handle.
+  var hosts = [];
   var raf = 0,
     pending = new Set();
   var frozen = false; // when true, skip displacement-map rebuilds
@@ -385,6 +370,10 @@
     if (!w || !h) return;
     var p = st.p || 0;
     var o = pressBoost(readOpts(el), p);
+    // The spin loop re-lights from this snapshot every frame, so it never has
+    // to re-read attributes off the DOM 60 times a second.
+    st.lastO = o;
+    st.noSpin = el.getAttribute("data-lg-lightspin") === "0";
     applyChrome(el, o);
     applySurface(st, o);
     // While frozen (e.g. during a size-animating transition) keep the cheap
@@ -411,7 +400,7 @@
       .join("|");
     if (key !== st.key) {
       st.key = key;
-      fillFilter(st.filter, buildMap(w, h, r, o), w, h, o);
+      fillFilter(st.filter, buildMap(w, h, r, o), w, h);
       st.bf = ""; // the filter's contents changed — re-assert the reference
     }
     // Blur runs as a native backdrop-filter function BEFORE the displacement
@@ -566,6 +555,7 @@
     if (!REFRACT) {
       st.fallback = true;
       states.set(el, st);
+      hosts.push(el);
       makeLayers(el, st);
       wirePress(el, st);
       if (ro) ro.observe(el);
@@ -585,6 +575,7 @@
     st.id = id;
     st.filter = filter;
     states.set(el, st);
+    hosts.push(el);
     makeLayers(el, st);
     wirePress(el, st);
     if (ro) ro.observe(el);
@@ -604,6 +595,69 @@
   window.addEventListener("resize", function () {
     document.querySelectorAll(SELECTOR).forEach(schedule);
   });
+
+  /* ---------- the light sweep ----------
+     Rotates lightPhase 0 -> 360 on an 8-second loop, re-lighting every host
+     from its cached opts. This is deliberately NOT a per-element animation:
+     one shared phase means one light travelling across the page, and adding
+     it to each element's own data-lg-lightangle keeps any authored offset
+     between two pieces of glass intact.
+
+     It is cheap because lightangle only feeds applyChrome (a box-shadow
+     string). It touches neither the displacement map nor the backdrop-filter,
+     so nothing here triggers a rebuild — but it IS a box-shadow repaint per
+     host per frame, so if a page ever carries dozens of glass elements this
+     is the first thing to turn down.
+
+     Opt out per element with data-lg-lightspin="0" (it keeps its fixed
+     angle), or globally with LiquidGlass.lightSpin(0). */
+  var SPIN_SECONDS = 8;
+  var spinMs = SPIN_SECONDS * 1000;
+  var spinRaf = 0,
+    spinT0 = 0;
+
+  function spinStep(now) {
+    if (!spinT0) spinT0 = now;
+    lightPhase = ((((now - spinT0) / spinMs) * 360) % 360 + 360) % 360;
+    for (var i = hosts.length - 1; i >= 0; i--) {
+      var el = hosts[i];
+      if (!el.isConnected) {
+        hosts.splice(i, 1); // gone with an outgoing Barba container
+        continue;
+      }
+      var st = states.get(el);
+      if (!st || !st.lastO || st.noSpin) continue;
+      applyChrome(el, st.lastO);
+    }
+    spinRaf = requestAnimationFrame(spinStep);
+  }
+
+  function startSpin() {
+    if (spinRaf || spinMs <= 0) return;
+    spinT0 = 0;
+    spinRaf = requestAnimationFrame(spinStep);
+  }
+
+  // seconds per full revolution; 0 stops the sweep and hands every host back
+  // its authored angle. The tuner calls lightSpin(0) on open, or the light-angle
+  // dial would be fighting the animation for the same property.
+  function lightSpin(seconds) {
+    spinMs = (+seconds || 0) * 1000;
+    if (spinRaf) {
+      cancelAnimationFrame(spinRaf);
+      spinRaf = 0;
+    }
+    if (spinMs > 0) return startSpin();
+    lightPhase = 0;
+    for (var i = 0; i < hosts.length; i++) {
+      var st = states.get(hosts[i]);
+      if (st && st.lastO) applyChrome(hosts[i], st.lastO);
+    }
+  }
+
+  var reduced =
+    window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)");
+  if (!reduced || !reduced.matches) startSpin();
 
   function refreshAll() {
     document.querySelectorAll(SELECTOR).forEach(function (el) {
@@ -663,6 +717,7 @@
     freeze: freeze,
     unfreeze: unfreeze,
     reloadPresets: reloadPresets,
+    lightSpin: lightSpin,
     exportPresets: exportPresets,
     presets: PRESETS,
   };
