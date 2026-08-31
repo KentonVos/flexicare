@@ -139,6 +139,18 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
   any more** (removed 2026-08-31). Every box-shadow layer glass writes is `inset`.
   A glass host's `box-shadow` is rebuilt from scratch on every refresh, so a shadow you
   add to that element in Webflow is wiped — put it on a WRAPPER instead.
+- **`data-nav-reveal` and `data-show-except` must be on the SAME element.**
+  `applyVisibility` only uses the height/reserve-space mode when it finds both on the
+  one node; with `data-show-except` alone it falls back to fading opacity, which
+  deliberately never reflows, so the nav goes invisible but keeps its space. They are
+  both on `button-navigation-wrapper` — don't split them.
+- **A `min-height` on the nav wrapper silently defeats the collapse.** `navReveal`
+  animates `height` to 0, and a box with `min-height` simply does not go to 0: the
+  buttons fade and slide away correctly while the SPACE stays, so the glass panel above
+  never grows into it. `.button-navigation-wrapper` has `min-height: 5.5rem`, which cost
+  a real bug (fixed 2026-08-31 by tweening `minHeight` alongside `height`). If you add
+  a `min-height`, `padding` or `margin` to that wrapper in Webflow, `navReveal` has to
+  animate it too — it currently handles height, min-height and vertical padding.
 - **Only the container swaps; the whole shell persists.** Anything outside
   `data-barba="container"` is whatever the FIRST page loaded shipped — including its
   per-page CLASSES. `transition.js` fixes this (`syncShellClasses` + a leave-transition

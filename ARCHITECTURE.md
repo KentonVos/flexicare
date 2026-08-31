@@ -218,7 +218,11 @@ Barba + GSAP page transitions. **Calls `barba.init()` — the only place.** Mark
   everything else = "page" — unless the incoming container carries
   `data-page-id="<identity>"`, which overrides it and is how a non-root page borrows the
   landing chrome, e.g. the reveal page keeping the nav collapsed),
-  `data-nav-reveal` (animate height instead of just opacity),
+  `data-nav-reveal` (animate height instead of just opacity — it must be on the SAME
+  element as `data-show-except`, or `applyVisibility` falls back to the opacity mode
+  and the space is never returned; note it collapses `height`, `min-height` and
+  vertical `padding`, so any OTHER box property that keeps the wrapper tall — a
+  `margin`, a `border` — would need adding there too),
   `data-progress-bar` + `data-progress="0..1"` per container.
 - Tunables in `window.PageTransition.config`.
 - `window.PageTransition.nav.hide(instant)` / `.show(instant)` / `.isHidden()` — the same
@@ -648,7 +652,8 @@ body
                   top-section-wrapper          (the logo + progress bar)
                   glass-content-wrapper        data-barba="container"
         button-navigation-wrapper       data-barba-sync="nav", data-nav-reveal,
-          button-navigation-glass-wrapper      data-show-except="landing"
+                                          data-show-except="landing"
+          button-navigation-glass-wrapper      (the glass host)
       background-gradients
 ```
 

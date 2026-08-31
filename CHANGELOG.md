@@ -14,6 +14,46 @@ Format:
 
 ---
 
+## 2026-08-31 — Fix: collapsing the nav never returned its space (a min-height floored it)
+
+`src/transition.js`.
+
+On the landing page the nav's buttons faded and slid away correctly, but the glass
+panel above never grew into the vacated space — leaving a black band along the bottom
+of every page where the nav is hidden.
+
+**Cause:** `navReveal` animates the wrapper's `height` to 0, and
+`.button-navigation-wrapper` carries **`min-height: 5.5rem`**. A box with a min-height
+does not go to 0 — it floors at 88px. So the collapse *looked* like it ran (the
+contents are a separate tween) while the layout never moved. Add
+`.content-wrapper`'s 1rem bottom padding and that is the gap.
+
+**Fix:** `navReveal` now tweens `minHeight` alongside `height`, in both directions, and
+drops the inline value on `onComplete` so the stylesheet owns it again. The authored
+min-height is captured once via `navMinHeight()` **before** anything writes to the
+element — the same "read what the Designer intended before hiding it" pattern as
+`leadShowDisplay()` in `flexicare-spin.js`, and for the same reason: after the first
+collapse the inline `0` is all you could read back.
+
+On show, min-height is restored *as part of* the tween rather than cleared up front —
+clearing it first snaps the wrapper to 88px before the tween has moved, which is the
+jump the function exists to prevent.
+
+This also fixes the same collapse on `/spin-to-win`, which routes through the same
+`navReveal()` via `PageTransition.nav.hide()`.
+
+Docs: `ARCHITECTURE.md`'s canonical shell tree showed `data-show-except` on
+`button-navigation-glass-wrapper`; in the Designer it is on `button-navigation-wrapper`
+alongside `data-nav-reveal`, which is what `applyVisibility` requires (it only uses the
+height mode when it finds both on one node). Corrected, and both traps are now
+"will bite you" bullets in `CLAUDE.md`.
+
+**Not** related to the glass changes earlier today — those touched two comments in this
+file and nothing else. The removal of glass's cast drop shadow is likely why the gap
+became obvious: the container used to throw a soft shadow down into it.
+
+---
+
 ## 2026-08-31 — `?demo` now opens on the lead form, pre-filled
 
 `src/flexicare-spin.js`, plus the local harness.

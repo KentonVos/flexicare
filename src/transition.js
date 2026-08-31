@@ -765,18 +765,35 @@
     });
   }
 
+  /* The authored min-height, captured ONCE before we ever write to the
+     element — the same "read what the Designer intended, before hiding it"
+     pattern as leadShowDisplay() in flexicare-spin.js, and for the same
+     reason: after the first collapse the inline 0 is all we could read back.
+
+     It has to be captured at all because animating `height` to 0 does NOT
+     collapse a box that has a min-height. .button-navigation-wrapper carries
+     min-height: 5.5rem, so the wrapper floored at 88px: the buttons faded and
+     slid away correctly, but the SPACE was never returned and the glass panel
+     above it could not grow into it. */
+  function navMinHeight(el) {
+    if (el.__navMinHeight == null)
+      el.__navMinHeight = window.getComputedStyle(el).minHeight || "0px";
+    return el.__navMinHeight;
+  }
+
   function navReveal(el, hide, instant) {
     var kids = navContent(el);
+    var minH = navMinHeight(el); // BEFORE anything below writes to the element
     el.style.overflow = "hidden";
     clearStuckOpacity(el);
     if (instant) {
       if (hide) {
-        gsap.set(el, { height: 0, paddingTop: 0, paddingBottom: 0 });
+        gsap.set(el, { height: 0, minHeight: 0, paddingTop: 0, paddingBottom: 0 });
         gsap.set(kids, { y: config.navSlide, opacity: 0 });
       } else {
         gsap.set(el, {
           height: "auto",
-          clearProps: "height,paddingTop,paddingBottom,overflow",
+          clearProps: "height,minHeight,paddingTop,paddingBottom,overflow",
         });
         gsap.set(kids, { y: 0, opacity: 1, clearProps: "transform,opacity" });
       }
@@ -794,6 +811,7 @@
       onComplete: function () {
         if (!hide) {
           el.style.height = "auto";
+          el.style.minHeight = ""; // hand min-height back to the stylesheet
           el.style.overflow = "";
           gsap.set(kids, { clearProps: "transform,opacity" });
         }
@@ -815,6 +833,7 @@
         el,
         {
           height: 0,
+          minHeight: 0,
           paddingTop: 0,
           paddingBottom: 0,
           duration: config.navReveal,
@@ -824,12 +843,21 @@
       );
     } else {
       el.style.pointerEvents = "";
-      gsap.set(el, { height: 0 });
+      gsap.set(el, { height: 0, minHeight: 0 });
       gsap.set(kids, { y: config.navSlide, opacity: 0 });
-      // whole content fades in together as the wrapper grows
+      /* min-height comes back WITH the height rather than being cleared up
+         front — restore it first and the wrapper snaps to 88px before the
+         tween has moved, which is the jump this whole function exists to
+         avoid. onComplete drops the inline value so the stylesheet owns it
+         again. */
       tl.to(
         el,
-        { height: "auto", duration: config.navReveal, ease: config.navEase },
+        {
+          height: "auto",
+          minHeight: minH,
+          duration: config.navReveal,
+          ease: config.navEase,
+        },
         0
       ).to(
         kids,
