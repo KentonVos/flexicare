@@ -14,6 +14,46 @@ Format:
 
 ---
 
+## 2026-08-31 — `?demo`: walk the whole funnel and reach a working wheel, no tablet needed
+
+`src/flexicare-spin.js`, plus one guarded change in `src/flexicare-product.js`.
+
+The spin page already had `?spindemo`, but it only worked if you landed on
+`/spin-to-win` directly — arrive through the funnel and the query string is gone,
+because every controller navigates with `barba.go(path)`. So the one page that most
+needed demoing was the one you couldn't reach.
+
+- **`?demo` (alias of `?spindemo`) is now sticky for the browser tab.** Set it once
+  anywhere — `/?demo` on the landing page — and it survives the whole journey.
+  `flexicare-spin.js` is loaded site-wide, so its new `captureDemoFlag()` runs at
+  script load on **every** page and parks the flag in `sessionStorage`. `init()` reads
+  the stored value rather than the URL.
+  - **`sessionStorage`, not `localStorage`** — it dies with the tab, so a kiosk tablet
+    left on overnight is never still in demo mode in the morning.
+  - `?demo=off` clears it. So do `Flexicare.spin.demo(false)`, and closing the tab.
+  - `Flexicare.spin.demo()` reports what is armed; `demo("prize")` arms it.
+- **Unlimited prizes.** On any award panel in demo mode the CTA becomes "Spin again"
+  (**new attribute `data-spin-again-label`**, default `Spin again`) and returns you to
+  the wheel. Two taps by design: the wheel has to be on screen before it turns, or the
+  deceleration plays out behind a panel that is still cross-fading.
+  - The nav is **not** collapsed after a demo spin — `syncNav` returns early. The CTA
+    lives inside the nav, and hiding it is deliberately not reversible in the real
+    flow, so demo opts out rather than undoing it.
+- **`flexicare-product.js` ignores `data-product-next-web` while `?demo` is armed.**
+  That escape hatch exists so web traffic skips the kiosk-only wheel — which would
+  route the one visitor who explicitly asked for the wheel straight past it.
+
+Unchanged, and worth restating: demo **never** calls `POST /spin`, so no award is
+created and no prize stock moves. The one-prize-per-session rule is the server's and
+is untouched. It skips only this page's session *gate* — **onboarding still creates a
+real `WEB` session, so a demo run IS recorded.** Runs that leave no trace at all would
+mean canning data in all eight controllers; not done, and not planned.
+
+Webflow: nothing required. Optionally set `data-spin-again-label` on `[data-spin]` if
+"Spin again" isn't the wording you want.
+
+---
+
 ## 2026-08-31 — Glass: press tilt and elevation removed, no more drop shadows
 
 `src/glass.js` + `src/slider.js`, plus stale references in three sibling modules.

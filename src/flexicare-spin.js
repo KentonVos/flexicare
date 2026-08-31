@@ -61,6 +61,10 @@
                                   data-spin-lead-label="Submit"  what the CTA
                                      says while the lead form is up; it reverts
                                      to its authored text afterwards
+                                  data-spin-again-label="Spin again"  what
+                                     the CTA says on an award panel in ?demo
+                                     mode. DEV ONLY — it never appears in a
+                                     real session, which awards one prize.
                                   data-spin-turns="1"     extra full rotations
                                      before landing
                                   data-spin-duration="1.5" seconds of the
@@ -341,37 +345,69 @@
      | "rate-limit" | "network" | "unknown"
 
    ------------------------------------------------------------
-   DEV-ONLY DEMO MODE  —  ?spindemo   (gated exactly like ?tune / ?orbtune)
+   DEV-ONLY DEMO MODE  —  ?demo   (alias: ?spindemo)
 
    The real page needs a COMPLETED session on a PAIRED tablet, which needs a
    pairing code from the admin UI. That is the right gate for production and a
    miserable one for building the page: until a tablet is paired there is
-   nothing on screen to style.
+   nothing on screen to style. Worse, it makes the WHOLE funnel undemoable —
+   a web visitor can complete every other step and then hits a dead end here.
 
-   ?spindemo skips the session entirely so the wheel, the spin animation and
-   every panel can be built and tuned in the Designer's published preview.
+   ?demo skips the session check on this page entirely, so the wheel, the spin
+   animation and every panel work with no session, a WEB session, or a real
+   KIOSK one.
 
-     ?spindemo                → draw the wheel, spin to a random segment,
-                                show a FAKE prize screen
-     ?spindemo=consolation    → jump straight to the consolation panel
-     ?spindemo=redeemed       → …the redeemed panel   (also: expired, voided)
-     ?spindemo=form           → …the lead form, wheel behind it
-     ?spindemo=nophone        → …the no-phone panel
-     ?spindemo=unavailable    → …the fallback panel
+   IT IS STICKY, AND THAT IS THE POINT. Add ?demo ONCE, anywhere — the landing
+   page will do — and it is remembered for the rest of the browser tab, so you
+   can walk the entire journey and still reach a working wheel at the end. It
+   has to be: the controllers navigate with barba.go(path), which carries no
+   query string, so the parameter would otherwise be gone by the third page.
+   The flag is captured at script load on EVERY page (captureDemoFlag) and
+   parked in sessionStorage — not localStorage, so it dies with the tab and a
+   kiosk left on overnight is never still in demo mode in the morning.
+
+     ?demo                    → draw the wheel, spin to a random segment,
+                                show a FAKE prize screen. Spin as many times
+                                as you like — see UNLIMITED PRIZES below.
+     ?demo=consolation        → jump straight to the consolation panel
+     ?demo=redeemed           → …the redeemed panel   (also: expired, voided)
+     ?demo=form               → …the lead form, wheel behind it
+     ?demo=nophone            → …the no-phone panel
+     ?demo=unavailable        → …the fallback panel
+     ?demo=off                → CLEAR the flag and go back to normal operation
+
+   From the console, mid-journey:
+     Flexicare.spin.demo()          → what is armed, if anything
+     Flexicare.spin.demo("prize")   → arm it
+     Flexicare.spin.demo(false)     → clear it
+
+   UNLIMITED PRIZES
+     A real session gets exactly ONE award, and re-calling POST /spin returns
+     the same one. Demo mode has no award to be idempotent about, so the CTA
+     turns into "Spin again" (data-spin-again-label) on any award panel and
+     puts you back on the wheel. Two taps, not one: the wheel must be on
+     screen before it turns, or the deceleration plays out behind a panel that
+     is still cross-fading. The nav is also NOT collapsed after a demo spin —
+     the CTA lives inside it, so hiding it would end the fun immediately.
 
    What it does NOT do, and must never do:
-     • it never calls POST /spin — no award is created, no stock is consumed
+     • it never calls POST /spin — no award is created, no stock is consumed,
+       and the one-prize-per-session rule is the SERVER's and is untouched
      • it never writes Flexicare.award, so a demo prize cannot leak into a real
        session's state
-     • it is unreachable without the query parameter
+     • it changes nothing on any other page — onboarding still creates a real
+       session, the quiz still answers to the real API. Only this page's
+       session GATE is skipped. A demo run IS recorded as a normal WEB session.
+     • it is unreachable without the parameter having been set in this tab
 
    The segments still come from the real GET /prizes/wheel (that endpoint is
    public and needs no session), so the colours and labels you style against
    are the live ones. If it is unreachable it falls back to a placeholder set
    so the page is still buildable offline.
 
-   REMOVE THE PARAMETER BEFORE ANY REAL TESTING. A demo spin proves the
-   animation works; it proves nothing about the backend.
+   CLEAR THE FLAG BEFORE ANY REAL TESTING (?demo=off, or just close the tab).
+   A demo spin proves the animation works; it proves nothing about the
+   backend, and the wrapper carries data-spin-demo the whole time to say so.
    ============================================================ */
 (function () {
   "use strict";
@@ -785,6 +821,11 @@
      Opt out with data-spin-nav-hide="off" on [data-spin]. */
   function syncNav(mode, animate) {
     if (attr(state.wrap, "data-spin-nav-hide", "on") === "off") return;
+    /* Demo mode spins over and over, and the CTA lives IN the nav — collapse
+       it after the first award and there is nothing left to tap. Hiding is
+       also not reversible in the real flow, which is exactly why demo has to
+       opt out of it rather than undo it. */
+    if (state.demo) return;
     var pt = window.PageTransition;
     if (!pt || !pt.nav) return;
 
@@ -827,13 +868,17 @@
     var btn = slot("[data-spin-go]");
     if (!btn) return;
     var submitting = state.mode === "form";
+    var again = !!state.demo && isAwardState(state.mode);
     var enabled = submitting
       ? !state.leadBusy
-      : state.mode === "ready" && !state.busy && !cooling();
+      : again || (state.mode === "ready" && !state.busy && !cooling());
     btn.disabled = !enabled;
     btn.setAttribute("aria-disabled", enabled ? "false" : "true");
     btn.setAttribute("data-spin-busy", (state.busy || state.leadBusy) ? "true" : "false");
-    btn.setAttribute("data-spin-go-mode", submitting ? "submit" : "spin");
+    btn.setAttribute(
+      "data-spin-go-mode",
+      submitting ? "submit" : again ? "again" : "spin"
+    );
 
     // Captured lazily but BEFORE the first swap: every state change calls
     // this, and the first one (loading) is not the form.
@@ -841,6 +886,8 @@
     if (node.__spinGoDefault == null) node.__spinGoDefault = node.textContent;
     var next = submitting
       ? attr(state.wrap, "data-spin-lead-label", "Submit")
+      : again
+      ? attr(state.wrap, "data-spin-again-label", "Spin again")
       : node.__spinGoDefault;
     if (node.textContent !== next) node.textContent = next;
   }
@@ -1766,16 +1813,49 @@
      Everything below is dev-only and unreachable without ?spindemo. See the
      header comment for the rules it holds to. */
 
-  function readDemoParam() {
-    var raw = null;
+  var DEMO_STORE_KEY = "fcSpinDemo";
+
+  function readParam(name) {
     try {
-      raw = new URL(location.href).searchParams.get("spindemo");
+      return new URL(location.href).searchParams.get(name);
     } catch (e) {
-      var m = /[?&]spindemo(?:=([^&]*))?/.exec(location.search || "");
-      if (m) raw = m[1] == null ? "" : decodeURIComponent(m[1]);
+      var m = new RegExp("[?&]" + name + "(?:=([^&]*))?").exec(
+        location.search || ""
+      );
+      if (!m) return null;
+      return m[1] == null ? "" : decodeURIComponent(m[1]);
     }
-    if (raw === null) return null; // parameter absent → normal operation
-    return (raw || "prize").toLowerCase();
+  }
+
+  /* STICKY, and it has to be. The point of ?demo is walking the WHOLE funnel,
+     but the controllers navigate with barba.go(path) — no query string — so by
+     the time the shopper reaches /spin-to-win the parameter set on the landing
+     page is long gone. So the flag is captured at SCRIPT LOAD (see the call
+     below, which runs on every page, not just this one) and parked in
+     sessionStorage; init() then reads the stored value.
+
+     sessionStorage, deliberately, not localStorage: it dies with the tab. A
+     kiosk tablet left on overnight must not still be in demo mode in the
+     morning. Clear it early with ?demo=off. */
+  function captureDemoFlag() {
+    var raw = readParam("spindemo");
+    if (raw === null) raw = readParam("demo");
+    if (raw === null) return; // no parameter here — leave any stored flag alone
+
+    var kind = (raw || "prize").toLowerCase();
+    try {
+      if (kind === "off" || kind === "0" || kind === "false")
+        sessionStorage.removeItem(DEMO_STORE_KEY);
+      else sessionStorage.setItem(DEMO_STORE_KEY, kind);
+    } catch (e) {}
+  }
+
+  function readDemoParam() {
+    try {
+      return sessionStorage.getItem(DEMO_STORE_KEY) || null;
+    } catch (e) {
+      return null;
+    }
   }
 
   function demoAward(kind) {
@@ -1839,6 +1919,25 @@
         }
         setState(state.needLead ? "form" : "ready");
       });
+  }
+
+  /* UNLIMITED PRIZES, demo only. The real page awards exactly one prize per
+     session and treats a second 200 from /spin as the SAME award — that rule
+     is the server's and nothing here weakens it, because demo never calls
+     /spin at all.
+
+     Back to `ready`, which cross-fades the wheel panel in over the award
+     panel. It deliberately does NOT spin on this tap: the wheel has to be on
+     screen before it turns, or the deceleration plays out behind a panel that
+     is still fading. So it is two taps — "Spin again" to bring the wheel
+     back, then the CTA reverts to its authored label and spins. */
+  function demoAgain() {
+    if (!state.demo) return;
+    state.award = null;
+    state.busy = false;
+    stopTweens();
+    write("[data-spin-error]", "");
+    setState("ready");
   }
 
   // The ONLY place a segment is ever chosen client-side, and it exists purely
@@ -2266,8 +2365,9 @@
     var goBtn = t.closest("[data-spin-go]");
     if (goBtn) {
       e.preventDefault();
-      // Same button, two jobs — see refreshButton.
+      // Same button, up to three jobs — see refreshButton.
       if (state.mode === "form") submitLead();
+      else if (state.demo && isAwardState(state.mode)) demoAgain();
       else onSpin();
       return;
     }
@@ -2484,6 +2584,22 @@
     return rows;
   };
 
+  /* Turn the journey-wide demo flag on or off from the console, for when you
+     are already deep in the funnel and don't want to retype the URL.
+     Flexicare.spin.demo() reports; demo("prize"|"form"|…) arms; demo(false)
+     clears. Takes effect on the next arrival at /spin-to-win. */
+  FC.spin.demo = function (kind) {
+    if (kind === undefined) return readDemoParam();
+    try {
+      if (kind === false || kind === null || kind === "off")
+        sessionStorage.removeItem(DEMO_STORE_KEY);
+      else sessionStorage.setItem(DEMO_STORE_KEY, String(kind).toLowerCase());
+    } catch (e) {}
+    return readDemoParam();
+  };
+
+  FC.spin.again = demoAgain;
+
   FC.spin.reinit = function () {
     teardown();
     init(document);
@@ -2504,6 +2620,12 @@
   function boot() {
     init(document);
   }
+  /* Runs on EVERY page in the funnel, not just this one — that is the whole
+     point. This script is loaded site-wide, so ?demo typed on the landing page
+     is captured here and stored before the shopper ever navigates. It MUST
+     come before boot(): on an already-loaded document boot() runs synchronously
+     on the next line, and init() reads the stored flag. */
+  captureDemoFlag();
   if (document.readyState === "loading")
     document.addEventListener("DOMContentLoaded", boot);
   else boot();

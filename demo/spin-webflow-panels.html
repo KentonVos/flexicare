@@ -220,10 +220,14 @@
          A shopper reading a claim code off a tablet must not have it yanked
          away at 90 seconds. Doubles the kiosk idle timeout on this page.
 
-     BUILD/TEST WITHOUT A PAIRED TABLET  —  ?spindemo
-       ?spindemo=consolation | redeemed | expired | voided | nophone
+     BUILD/TEST WITHOUT A PAIRED TABLET  —  ?demo   (alias: ?spindemo)
+       Sticky for the whole browser tab, so ?demo set on the landing page
+       survives the funnel and you reach a working wheel. ?demo=off clears it.
+       On an award panel the CTA becomes "Spin again" — spin as often as
+       you like. See §9 of docs/kiosk-and-spin.md.
+       ?demo=consolation | redeemed | expired | voided | nophone
                 | unavailable        jump straight to that panel
-       ?spindemo                      draw the wheel and spin to a fake prize
+       ?demo                          draw the wheel and spin to a fake prize
      It never calls POST /spin and never writes a real award. Remove the
      parameter before any real testing.
      ============================================================ -->

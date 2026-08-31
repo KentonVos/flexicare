@@ -750,42 +750,84 @@ data-spin-onboarding="/onboarding"        where to bounce if there's no session
 
 ### Step 6 — check it
 
-Load `/spin-to-win?spindemo` on the published URL. You should get a drawn wheel and a
-working spin with no backend and no paired tablet. Then `?spindemo=consolation`,
+Load `/spin-to-win?demo` on the published URL. You should get a drawn wheel and a
+working spin with no backend and no paired tablet. Then `?demo=consolation`,
 `=redeemed`, `=expired`, `=voided`, `=nophone`, `=unavailable` to check each panel you
 built. Open the console — the script warns about a non-square stage and a misplaced
-wrapper.
+wrapper. Clear it with `?demo=off` when you're done.
 
 ---
 
-## 9. Building the page in Webflow before a tablet exists — `?spindemo`
+## 9. Demoing the whole journey without a tablet — `?demo`
 
 The real page needs a `COMPLETED` session on a **paired** tablet, and pairing needs
 a code from the admin UI. That is the right gate for production and a miserable one
 for building the page: until a tablet is paired there is nothing on screen to style.
+It also makes the whole funnel undemoable — a web visitor can complete every other
+step and then hits a dead end at the wheel.
 
-`?spindemo` skips the session entirely. Gated exactly like `?tune` and `?orbtune`.
+`?demo` skips this page's session gate. (`?spindemo` still works — same flag.)
+
+### It is sticky, and that is the point
+
+Add `?demo` **once, anywhere** — the landing page will do — and it is remembered for
+the rest of the browser tab. So you can walk the entire journey, on any browser, with
+no paired tablet, and still reach a working wheel at the end.
+
+It has to be sticky: every controller navigates with `barba.go(path)`, which carries
+no query string, so the parameter would be gone by the third page. `flexicare-spin.js`
+is loaded site-wide, so its `captureDemoFlag()` runs on **every** page at script load
+and parks the flag in `sessionStorage`.
+
+**`sessionStorage`, not `localStorage`, deliberately** — it dies with the tab, so a
+kiosk tablet left on overnight is never still in demo mode in the morning. Clear it
+early with `?demo=off`.
 
 | URL | What you get |
 |---|---|
-| `/spin-to-win?spindemo` | the real wheel, a real spin animation, a fake prize screen |
-| `?spindemo=form` | the lead form, wheel behind it. Submitting never PATCHes anything |
-| `?spindemo=consolation` | straight to the consolation panel |
-| `?spindemo=redeemed` | …the redeemed panel (also `expired`, `voided`) |
-| `?spindemo=nophone` | …the no-phone panel |
-| `?spindemo=unavailable` | …the fallback panel |
+| `/?demo` then walk the funnel | a real session all the way, a working wheel at the end |
+| `/spin-to-win?demo` | the real wheel, a real spin animation, a fake prize screen |
+| `?demo=form` | the lead form, wheel behind it. Submitting never PATCHes anything |
+| `?demo=consolation` | straight to the consolation panel |
+| `?demo=redeemed` | …the redeemed panel (also `expired`, `voided`) |
+| `?demo=nophone` | …the no-phone panel |
+| `?demo=unavailable` | …the fallback panel |
+| `?demo=off` | clear the flag, back to normal |
+
+From the console mid-journey: `Flexicare.spin.demo()` reports what is armed,
+`Flexicare.spin.demo("prize")` arms it, `Flexicare.spin.demo(false)` clears it.
+
+### Unlimited prizes
+
+A real session gets exactly **one** award, and re-calling `POST /spin` returns the
+same one. Demo has no award to be idempotent about, so on any award panel the CTA
+becomes **"Spin again"** (`data-spin-again-label`) and puts you back on the wheel.
+
+Two taps, not one: the wheel has to be on screen before it turns, or the deceleration
+plays out behind a panel that is still cross-fading. The nav is also **not** collapsed
+after a demo spin — the CTA lives inside it, so hiding it would end the fun
+immediately.
+
+### What it never does
+
+- It never calls `POST /spin`, never creates an award, never consumes stock, and never
+  writes `Flexicare.award` — so a demo prize cannot leak into a real session's state.
+  **The one-prize-per-session rule is the server's and is completely untouched.**
+- It changes nothing on any other page. Onboarding still creates a real session, the
+  quiz still answers to the real API. Only this page's session *gate* is skipped —
+  which means **a demo run IS recorded, as a normal `WEB` session.** If you need runs
+  that leave no trace at all, that is a different (much larger) job.
+- The one exception, and it is a routing one: while `?demo` is armed the product page
+  ignores `data-product-next-web`, because that escape hatch would route the one
+  visitor who asked for the wheel straight past it.
 
 The segments still come from the real `GET /prizes/wheel` (public, no session), so
 you are styling against live colours and labels. If that endpoint is unreachable it
 falls back to a placeholder set, so the page is buildable with no backend at all.
 
-What it never does: it never calls `POST /spin`, never creates an award, never
-consumes stock, and never writes `Flexicare.award` — so a demo prize cannot leak
-into a real session's state. Without the parameter the page behaves exactly as it
-does in production.
-
 **A demo spin proves the animation works. It proves nothing about the backend** —
-drop the parameter before any real testing.
+clear the flag before any real testing. The wrapper carries `data-spin-demo` the whole
+time to say so, and the console warns on every arrival.
 
 ---
 

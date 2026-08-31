@@ -62,6 +62,8 @@
                                      409 from POST /spin), so this is how web
                                      visitors skip /spin-to-win. Leave it unset
                                      and everyone goes to data-product-next.
+                                     IGNORED while ?demo is armed — see the
+                                     demo-mode notes in flexicare-spin.js.
                                   data-product-onboarding="/onboarding"  bounce
                                      target when there's no session id
                                   data-product-quiz="/flexicare"  bounce target
@@ -1402,7 +1404,16 @@
        Unset, behaviour is unchanged (everyone goes to data-product-next and
        the spin page explains itself), which is the right default while the
        site is web-only and no tablet has been paired yet. */
+    /* ...unless ?demo is armed. The whole point of the journey-wide demo flag
+       is to reach the wheel WITHOUT a paired tablet, and this escape hatch
+       would route the one visitor who asked for it straight past the page
+       they were trying to see. FC.spin is defined by flexicare-spin.js, which
+       loads after this file — fine, because nextUrl() runs at click time. */
+    var demoing = !!(FC.spin && FC.spin.demo && FC.spin.demo());
+    if (demoing) dbg("?demo is armed — ignoring data-product-next-web");
+
     if (
+      !demoing &&
       FC.kiosk &&
       typeof FC.kiosk.isKiosk === "function" &&
       !FC.kiosk.isKiosk()

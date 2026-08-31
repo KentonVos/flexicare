@@ -196,6 +196,7 @@ and its label changes. It reverts the moment the form is accepted.
 | Attribute | Where | |
 |---|---|---|
 | `data-spin-lead-label` | `[data-spin]` | What the CTA says while the form is up. Default `Submit`. |
+| `data-spin-again-label` | `[data-spin]` | What the CTA says on an award panel in `?demo` mode. Default `Spin again`. **Dev only** — a real session awards one prize and never shows this. |
 | `[data-spin-go-text]` | the CTA's inner text element | Webflow buttons wrap their label in a div — mark it so the right node is relabelled. Without it the button's own text is used. |
 
 The button also gets `data-spin-go-mode="submit"` / `"spin"`, so the two jobs can
@@ -208,7 +209,7 @@ look different if you want them to.
 > temporary: the form was built ahead of the backend. When the endpoints land,
 > `submitLead()` in `flexicare-spin.js` is the one function to change.
 
-Build it with `?spindemo=form`. Paste-ready per-field embeds, matching how
+Build it with `?demo=form`. Paste-ready per-field embeds, matching how
 `/onboarding` is built: `demo/spin-lead-embed.html`.
 
 #### Panel motion

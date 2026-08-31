@@ -189,6 +189,14 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
   prints every panel, its state list, whether the script thinks it is on, and its
   COMPUTED display. A row reading `visible: true` with `display: none` means CSS is
   beating the script. Note it does not flag that contradiction for you yet.
+- **`?demo` is sticky for the whole browser tab, and it is the ONLY way to see the
+  wheel without a paired tablet.** Set it once anywhere (`/?demo`), walk the funnel,
+  reach a working wheel with unlimited re-spins. `flexicare-spin.js` loads site-wide
+  and captures the flag at script load on every page into `sessionStorage` — it must
+  be sticky because `barba.go(path)` carries no query string. It skips only this
+  page's session GATE: onboarding still creates a real `WEB` session, so **a demo run
+  IS recorded**. It never calls `POST /spin`, so no award and no stock. Clear it with
+  `?demo=off` (or by closing the tab) before real testing. `docs/kiosk-and-spin.md` §9.
 - **The prize spin is decided at /onboarding, not at /spin-to-win.** A session can only
   spin if `POST /sessions` carried `X-Kiosk-Token` (`channel: "KIOSK"`); on a `WEB`
   session `POST /spin` is a hard 409. So the kiosk layer is a CHAIN — pair the tablet →
