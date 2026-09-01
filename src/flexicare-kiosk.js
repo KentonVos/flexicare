@@ -14,6 +14,9 @@
        3. Only a KIOSK session may spin the prize wheel (flexicare-spin.js).
        4. A tablet heartbeats so the admin sees it online, and resets itself
           to the attract screen when a shopper walks away.
+       5. A tablet goes FULLSCREEN on the first tap (Chrome Android hides the
+          address bar and the status bar), which is how the kiosk look is
+          achieved without a PWA. See the fullscreen section below.
 
      A web visitor never pairs, so isKiosk() is false, authHeaders() is empty,
      no heartbeat runs, and no idle timer runs. This file is inert on the
@@ -86,6 +89,12 @@
                                Multiplies idle_timeout_seconds on this page.
                                Put 2 (or more) on the PRIZE page — the shopper
                                may need time to photograph the claim code.
+     [data-kiosk-fullscreen="off"]
+                               Opts a PAIRED device out of the fullscreen-on-
+                               tap behaviour. Read document-wide (one device,
+                               one answer) and only consulted when a token
+                               exists, so it does nothing on the public site.
+                               Default on. See docs/kiosk-tablet-setup.md.
 
    STATE (drive your CSS off this — it is set on BOTH <html> and the panel):
      data-kiosk-state = "web"      no token: a normal web visitor
@@ -692,6 +701,102 @@
       (el && attr(el, "data-kiosk-attract", null)) || CFG.attractUrl || "/"
     );
   }
+
+  /* ---------------------------- fullscreen ----------------------------
+     Chrome on Android goes truly edge-to-edge on requestFullscreen() — no
+     address bar AND no system status bar. That is the whole reason this
+     exists: it gets the kiosk look with no manifest, no service worker and
+     no change to how the site is hosted.
+
+     Which matters, because the PWA route is not available to us. A web app
+     manifest's start_url must be same-origin as the manifest, and a service
+     worker must be same-origin as the pages it controls with no CORS escape
+     hatch — so both need files at the SITE root, and Webflow has nowhere to
+     put them. See docs/kiosk-tablet-setup.md.
+
+     WHY ONE TAP IS ENOUGH FOR THE WHOLE JOURNEY
+       Fullscreen is dropped on a document reload, not on a same-document
+       navigation — and Barba never reloads. So one tap on the landing page
+       ("Tap anywhere to begin" is already a full-bleed target) holds for the
+       entire funnel, and the idle reset holds it too because that navigates
+       with barba.go() rather than location.reload(). If you ever swap either
+       for a hard redirect, the tablet drops out of fullscreen on every lap.
+
+     KIOSK ONLY. A web visitor must never have their browser hijacked, so
+     this is gated on the device token exactly like the heartbeat and the
+     idle timer. Opt out on a paired device with data-kiosk-fullscreen="off"
+     on the [data-kiosk-pair] panel (or any element — it is read
+     document-wide, since the tablet is one device with one answer). */
+
+  function fullscreenWanted() {
+    if (!state.token) return false; // web visitor, or not yet paired
+    var el = document.querySelector("[data-kiosk-fullscreen]");
+    return !el || attr(el, "data-kiosk-fullscreen", "on") !== "off";
+  }
+
+  function isFullscreen() {
+    return !!(
+      document.fullscreenElement ||
+      document.webkitFullscreenElement ||
+      document.mozFullScreenElement
+    );
+  }
+
+  /* Must be called from inside a user-gesture handler or the browser rejects
+     it — hence the pointerdown listener below rather than a call on pair() or
+     on arrival. The rejection is expected and routine (an unsupported
+     browser, a gesture the engine did not credit), so it is swallowed rather
+     than surfaced: failing to go fullscreen must never break the journey. */
+  function enterFullscreen() {
+    if (!fullscreenWanted() || isFullscreen()) return;
+    var el = document.documentElement;
+    var req =
+      el.requestFullscreen ||
+      el.webkitRequestFullscreen ||
+      el.mozRequestFullScreen;
+    if (!req) return;
+    try {
+      var r = req.call(el, { navigationUI: "hide" });
+      if (r && typeof r.catch === "function")
+        r.catch(function (err) {
+          dbg("fullscreen refused:", (err && err.message) || err);
+        });
+    } catch (e) {
+      dbg("fullscreen threw:", e && e.message);
+    }
+  }
+
+  /* Every tap re-arms it, not just the first. A system dialog, a forced
+     rotation or a stray swipe can drop the tablet out mid-shift, and the next
+     shopper's first touch quietly puts it back — nobody has to notice. It is
+     a no-op when already fullscreen. */
+  document.addEventListener(
+    "pointerdown",
+    function () {
+      enterFullscreen();
+    },
+    { passive: true, capture: true }
+  );
+
+  K.fullscreen = function () {
+    return {
+      active: isFullscreen(),
+      wanted: fullscreenWanted(),
+      supported: !!(
+        document.documentElement.requestFullscreen ||
+        document.documentElement.webkitRequestFullscreen ||
+        document.documentElement.mozRequestFullScreen
+      ),
+    };
+  };
+  // Manual exit, for an operator who needs the browser back without unpinning.
+  K.exitFullscreen = function () {
+    var fn =
+      document.exitFullscreen ||
+      document.webkitExitFullscreen ||
+      document.mozCancelFullScreen;
+    if (fn && isFullscreen()) fn.call(document);
+  };
 
   var IDLE_EVENTS = [
     "pointerdown",

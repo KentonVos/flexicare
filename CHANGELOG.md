@@ -14,6 +14,61 @@ Format:
 
 ---
 
+## 2026-09-01 — Kiosk tablets run fullscreen (Fullscreen API, not a PWA)
+
+`src/flexicare-kiosk.js`, `docs/kiosk-tablet-setup.md` (new),
+`docs/webflow-head-snippet.md`.
+
+Reviewed an external brief that proposed installing the site as a PWA. **That route is
+not available to us** and the doc now records why: a manifest's `start_url` must be
+same-origin as the manifest, and a service worker must be same-origin as the pages it
+controls with no CORS escape hatch — so both need files at the SITE root, and Webflow
+has nowhere to put them. The Cloudflare Worker serves `/src/*` but is not a reverse
+proxy in front of the site, so it cannot inject root-path files on the site's origin.
+
+**The Fullscreen API does the job instead**, with no hosting change: Chrome Android
+hides the address bar *and* the system status bar on `requestFullscreen()`.
+
+- **New in `flexicare-kiosk.js`:** a capture-phase `pointerdown` listener on `document`
+  enters fullscreen on `<html>`. Kiosk-gated on the device token like the heartbeat and
+  the idle timer, so it is inert on the public site. Rejections are swallowed — failing
+  to go fullscreen must never break the journey.
+- **Every** tap re-arms it, not just the first: a system dialog or a stray swipe can drop
+  the tablet out mid-shift, and the next shopper's touch quietly restores it.
+- **New attribute `data-kiosk-fullscreen="off"`** opts a paired device out. Read
+  document-wide — one device, one answer.
+- **New API:** `Flexicare.kiosk.fullscreen()` → `{ active, wanted, supported }`, and
+  `Flexicare.kiosk.exitFullscreen()` for an operator who needs the browser back without
+  unpinning.
+
+**One tap covers the whole shift**, and that is a property of this codebase rather than
+luck: fullscreen survives same-document navigation and Barba never reloads, and the idle
+reset navigates with `barba.go()` rather than `location.reload()`. Swapping either for a
+hard redirect drops the tablet out of fullscreen on every lap — now a "will bite you"
+bullet in `CLAUDE.md`, alongside the existing buffered-selfie reason.
+
+**Head snippet changed — needs re-pasting in Webflow.** The viewport string now ends
+`, viewport-fit=cover` (content can reach into a display cutout once fullscreen).
+Appended inside the snippet's own `apply()` rather than as a second `<meta name=viewport>`
+tag: the snippet replaces `content` wholesale, so a second tag is either silently
+overwritten or cancels the tablet width pin. `maximum-scale`/`user-scalable` deliberately
+NOT added — they fight the fit-to-width scaling on the forced branch; pinch-zoom is killed
+with `touch-action` in CSS instead.
+
+**Two things NOT done, both needing a human:**
+1. The touch-hardening CSS block is written out in `docs/kiosk-tablet-setup.md` §3 but
+   not applied — it goes in Site Settings → Custom Code (site-level, never page-level).
+   It includes the `user-select: text` exemption the onboarding and spin lead-form inputs
+   need.
+2. Re-paste the head snippet.
+
+Also rejected from the brief: its own idle-reset implementation. `flexicare-kiosk.js` has
+owned that since the kiosk work — server-tunable `idle_timeout_seconds`,
+`[data-kiosk-idle-factor]`, `resetJourney()` then `barba.go()`. A second timer would
+double-fire, drop fullscreen every cycle and discard the buffered selfie.
+
+---
+
 ## 2026-09-01 — `?demo=prize` jumps straight to the awarded panel
 
 `src/flexicare-spin.js`.

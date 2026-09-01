@@ -6,6 +6,11 @@ head snippet, which lives in Webflow, NOT sourced from the CDN:
 
 > Webflow → **Site Settings → Custom Code → Head Code** → paste the whole block → Save → Publish
 
+> **Changed 2026-09-01** — the viewport string now ends `, viewport-fit=cover` (for the
+> fullscreen kiosk tablets). The copy in Webflow is the one that runs, so **re-paste the
+> block below** or the change has no effect. Verify with
+> `document.querySelector('meta[name=viewport]').content` on the live site.
+
 It must run in the `<head>` before first paint because it rewrites the viewport meta tag
 (so the page doesn't visibly reflow) and sets the layout mode. It's site-wide (not
 per-page) so it's present whichever page the visitor lands on first; Barba then keeps it
@@ -129,10 +134,21 @@ If `forced` is `false` on a large tablet/iPad, the snippet isn't in place.
     var w = naturalWidth();
     var force = tablet && w > TABLET_MAX;
 
-    // No initial-scale when forcing — it cancels the fit-to-width scaling.
+    /* No initial-scale when forcing — it cancels the fit-to-width scaling.
+
+       viewport-fit=cover lets content reach into a display cutout, which the
+       kiosk tablets need once they run fullscreen. It is appended HERE rather
+       than added as a second <meta name="viewport"> tag: this function owns
+       that tag and replaces `content` wholesale, so a separate tag is either
+       silently overwritten or — if it wins the race — cancels the tablet pin.
+
+       Do NOT add maximum-scale/user-scalable here. On the forced branch they
+       fight the fit-to-width scaling; pinch-zoom is better killed with
+       `touch-action: manipulation` in CSS (see docs/kiosk-tablet-setup.md). */
     meta.setAttribute(
       "content",
-      force ? "width=" + TABLET_MAX : "width=device-width, initial-scale=1"
+      (force ? "width=" + TABLET_MAX : "width=device-width, initial-scale=1") +
+        ", viewport-fit=cover"
     );
 
     // Hooks for CSS and JS. Style with html[data-layout="tablet"] { ... }

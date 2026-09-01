@@ -832,7 +832,7 @@ CSS (`data-js-injected`), marked on `beforeEnter` before the page is visible, cl
 the result is usually already in memory; it exists for the hard-reload path.
 
 ### flexicare-kiosk.js → `window.Flexicare.kiosk`
-Device pairing, heartbeat and idle reset for the in-store tablets. **Loads after core and
+Device pairing, heartbeat, idle reset and fullscreen for the in-store tablets. **Loads after core and
 before onboarding** — it owns the device token that `POST /sessions` needs, and load order
 is what guarantees the token is available by the time onboarding submits.
 
@@ -845,6 +845,28 @@ not a person. `localStorage` (it must outlive sessions — the session id stays 
 the cached `kiosk` and `config` so the attract screen renders before the first network
 call and still renders when the store wifi is down. Shown by the server exactly once, at
 pairing; there is no endpoint to read it back.
+
+**Fullscreen** comes from the Fullscreen API on a capture-phase `pointerdown`, not from a
+PWA — a manifest's `start_url` must be same-origin as the manifest and a service worker
+must be same-origin as its pages, so both need root-path files Webflow cannot serve. Chrome
+Android hides the address bar *and* the status bar, which is the whole kiosk look.
+- Gated on the token, like everything else here, so a web visitor's browser is never
+  hijacked. Opt out on a paired device with `data-kiosk-fullscreen="off"` (read
+  document-wide — one device, one answer).
+- **Every** tap re-arms it, not just the first: a system dialog can drop the tablet out
+  mid-shift and the next touch restores it. No-op when already fullscreen.
+- **One tap covers the whole journey**, because fullscreen survives same-document
+  navigation and Barba never reloads — and it survives the idle reset for the same reason
+  (`barba.go()`, not `location.reload()`). Swapping either for a hard redirect drops the
+  tablet out of fullscreen on every lap.
+- `kiosk.fullscreen()` reports `{ active, wanted, supported }`; `kiosk.exitFullscreen()`
+  is the manual escape without unpinning. Full device setup: `docs/kiosk-tablet-setup.md`.
+
+**The idle reset** drops the session id (no server call — an abandoned session needs no
+cleanup), calls `resetJourney()` and navigates to the attract screen with `barba.go()`.
+`idle_timeout_seconds` (90 default) is server-tunable per device; `[data-kiosk-idle-factor]`
+multiplies it on a page and belongs on the prize page, where the shopper is photographing
+a claim code. Don't add a second idle timer anywhere.
 
 **Which calls carry `X-Kiosk-Token`** (and no others): `POST /sessions`,
 `POST /sessions/{id}/spin`, `GET /kiosks/me`, `POST /kiosks/heartbeat`.

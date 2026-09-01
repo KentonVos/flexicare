@@ -229,6 +229,21 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
   link means the shopper completes the whole journey and is refused at the wheel. If the
   spin page keeps saying "unavailable", the session was started on an unpaired browser;
   fix it there, not on the spin page. `docs/kiosk-and-spin.md` has the whole chain.
+- **The tablets go fullscreen via the Fullscreen API on tap, NOT a PWA.** A manifest's
+  `start_url` must be same-origin as the manifest and a service worker must be
+  same-origin as its pages, so both need root-path files Webflow cannot serve. The
+  consequence to protect: **fullscreen survives same-document navigation but not a
+  reload**, so swapping any `barba.go()` for a `location.reload()` drops the tablet out
+  of fullscreen on every idle reset. Same rule that protects the buffered selfie, second
+  reason. `docs/kiosk-tablet-setup.md`.
+- **`flexicare-kiosk.js` already owns the idle reset** (server-tunable
+  `idle_timeout_seconds`, `[data-kiosk-idle-factor]`, `resetJourney()` then `barba.go()`).
+  Don't add a second idle timer — a hand-rolled `location.reload()` one would double-fire,
+  drop fullscreen and discard the buffered selfie.
+- **The head snippet OWNS `<meta name="viewport">`.** It replaces `content` wholesale, so
+  a second viewport tag is either silently overwritten or cancels the tablet width pin.
+  Add to the snippet's string, never a new tag — and never `maximum-scale`/`user-scalable`
+  there, which fight the fit-to-width scaling on the forced branch.
 - **Never retry a kiosk call without the header after a 401.** That silently creates a
   `WEB` session on a tablet. A 401 means the token was revoked: clear it and show the
   unpaired screen. And the inverse — **never clear the token on a network error or a
@@ -327,6 +342,8 @@ Barba both need a real `https` page. Hard-refresh (Cmd/Ctrl+Shift+R) after publi
 
 - Kiosk mode and the prize wheel have their own guide: `docs/kiosk-and-spin.md` (the
   Webflow structure, the wheel rendering decision, and the testing checklist).
+  Running the tablets full screen — the Fullscreen API, why a PWA is not possible on
+  Webflow, and the device setup — is `docs/kiosk-tablet-setup.md`.
 - For anything non-trivial, read `ARCHITECTURE.md` first — it has the module details,
   data flow, and the full Webflow attribute contracts.
 - Keep changes small and reviewable. There is no paste step any more — a push is the
