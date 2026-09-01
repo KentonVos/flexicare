@@ -67,14 +67,18 @@
    The backdrop-filter is the real glass: one blur over whatever you put
    behind the wheel, frosting every segment at once. It has to live here
    because backdrop-filter cannot be applied to an SVG shape, so the panes
-   themselves can never carry it. */
+   themselves can never carry it.
+
+   No saturate(): glass takes the colour of what is behind it. Dropped
+   2026-08-31 with data-lg-saturate, so the hand-written glass here and
+   glass.js agree. */
 [data-spin-wheel] {
   position: absolute;
   inset: 0;
   border-radius: 50%;
   overflow: hidden;
-  -webkit-backdrop-filter: blur(14px) saturate(1.25);
-  backdrop-filter: blur(14px) saturate(1.25);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
 }
 
 /* ---------- 4. The dial ----------
@@ -82,8 +86,8 @@
    second gentler blur reads as a thicker piece of glass resting on top.
    Position, size and border-radius: do those in the Designer. */
 [data-spin-hub] {
-  -webkit-backdrop-filter: blur(10px) saturate(1.2);
-  backdrop-filter: blur(10px) saturate(1.2);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
 }
 
 /* ---------- 5. The pointer ----------

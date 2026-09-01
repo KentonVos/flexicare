@@ -14,6 +14,38 @@ Format:
 
 ---
 
+## 2026-09-01 — Webflow site head: viewport-fit, touch hardening, and the last saturate
+
+**Webflow Site Settings → Custom Code → Head. Applied in the Designer, NOT published.**
+Repo copies synced to match: `docs/webflow-head-snippet.md`, `demo/spin-webflow.css`,
+`docs/kiosk-tablet-setup.md`.
+
+The head is one freeform block and the API replaces it wholesale, so it was read in
+full, edited surgically, and the write-back was diffed against what went in. All four
+existing blocks (font smoothing, the tablet-breakpoint snippet, the spin CSS, the kiosk
+pairing CSS) are byte-identical apart from the changes below.
+
+1. **`viewport-fit=cover`** appended inside the tablet snippet's `apply()`, so content
+   can reach into a display cutout once the kiosk tablets run fullscreen. Inside the
+   snippet, not as a second `<meta name=viewport>` — the snippet replaces `content`
+   wholesale, so a second tag is either silently overwritten or cancels the width pin.
+2. **A fifth block: kiosk touch hardening** — `overscroll-behavior`, `touch-action`,
+   `user-select`, `-webkit-touch-callout`, with the `user-select: text` exemption the
+   onboarding and spin lead-form inputs need. Site-level, since page-level head code
+   only exists if that page was loaded first.
+3. **The last `saturate()` on the site is gone.** `[data-spin-wheel]` was
+   `blur(14px) saturate(1.25)` and `[data-spin-hub]` was `blur(10px) saturate(1.2)` —
+   hand-written CSS, which is why the 2026-08-31 removal of `data-lg-saturate` never
+   reached it. Both are now blur-only, so the hand-written glass and `glass.js` agree.
+   `demo/spin-webflow.css` (the documented source of truth) updated to match.
+
+`grep -rn saturate src docs demo` is now clean apart from one explanatory comment.
+
+**Still needs a publish** to reach the live site — as does the `data-journey-start`
+move from 2026-08-31.
+
+---
+
 ## 2026-09-01 — Kiosk tablets run fullscreen (Fullscreen API, not a PWA)
 
 `src/flexicare-kiosk.js`, `docs/kiosk-tablet-setup.md` (new),

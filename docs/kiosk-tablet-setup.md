@@ -115,10 +115,12 @@ Flexicare.layout.forced   // → true
 
 ## 3. Webflow — touch hardening CSS
 
-**Site Settings → Custom Code → Head Code**, inside a `<style>` block. Site-level, never
-page-level: page-level head code only exists if that page was the first one loaded, so
-arriving through the funnel it is simply absent. That trap already cost a real bug on
-the spin wheel.
+**Applied 2026-09-01** as a fourth block in Site Settings → Custom Code → Head Code
+(Designer only — needs a publish). Reproduced here as the source of truth.
+
+Site-level, never page-level: page-level head code only exists if that page was the
+first one loaded, so arriving through the funnel it is simply absent. That trap already
+cost a real bug on the spin wheel.
 
 ```css
 /* Kiosk touch hardening. Safe on the public site: it only removes gestures
