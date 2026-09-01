@@ -374,7 +374,9 @@
                                 submit, so clear a field to see the error path.
      ?demo=wheel              → skip the form, straight to the wheel
      ?demo=form               → the lead form (same as bare ?demo)
-     ?demo=consolation        → jump straight to the consolation panel
+     ?demo=prize              → jump straight to the AWARDED panel, no spin
+                                (alias: awarded)
+     ?demo=consolation        → …the consolation panel
      ?demo=redeemed           → …the redeemed panel   (also: expired, voided)
      ?demo=nophone            → …the no-phone panel
      ?demo=unavailable        → …the fallback panel
@@ -1873,7 +1875,9 @@
       is_consolation: consolation,
       claim_code: "FLX-DEMO-CODE",
       status: status,
-      expires_at: "2026-09-25T09:20:31Z",
+      // Relative, not a literal: a hard-coded date silently goes into the past
+      // and the awarded panel starts demoing an already-expired prize.
+      expires_at: new Date(Date.now() + 21 * 864e5).toISOString(),
       instructions: null, // exercise the authored-copy fallback
       location: { id: "demo", name: "Clicks Sandton City", code: "demo" },
       first_name: FC.firstName || "Thandi",
@@ -1899,7 +1903,17 @@
     if (kind === "journey" || kind === "form") state.needLead = true;
     if (kind === "unavailable" || kind === "error")
       return showError(null, "wheel");
-    if (kind === "consolation" || kind === "redeemed" || kind === "expired" || kind === "voided")
+    /* "prize" is the AWARDED panel — the main one, and the only award status
+       that had no shortcut: it used to fall through to the wheel, so the one
+       state people most want to look at was the one you had to spin for. */
+    if (
+      kind === "prize" ||
+      kind === "awarded" ||
+      kind === "consolation" ||
+      kind === "redeemed" ||
+      kind === "expired" ||
+      kind === "voided"
+    )
       return paintAward(demoAward(kind));
 
     loadWheel()

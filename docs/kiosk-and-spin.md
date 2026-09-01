@@ -789,6 +789,7 @@ early with `?demo=off`.
 | `/spin-to-win?demo` | **lead form → wheel → fake prize screen**, the whole thing |
 | `?demo=wheel` | skip the form, straight to the wheel |
 | `?demo=form` | the lead form (same as bare `?demo`). Submitting never PATCHes anything |
+| `?demo=prize` | straight to the **awarded** panel, no spin (alias `?demo=awarded`) |
 | `?demo=consolation` | straight to the consolation panel |
 | `?demo=redeemed` | …the redeemed panel (also `expired`, `voided`) |
 | `?demo=nophone` | …the no-phone panel |

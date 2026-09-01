@@ -14,6 +14,26 @@ Format:
 
 ---
 
+## 2026-09-01 — `?demo=prize` jumps straight to the awarded panel
+
+`src/flexicare-spin.js`.
+
+Every award status had a demo shortcut except the main one: `consolation`, `redeemed`,
+`expired` and `voided` jumped straight to their panel, while `prize` fell through to
+the wheel — so the state people most want to look at was the one you had to spin for.
+
+- **`?demo=prize`** (alias **`?demo=awarded`**) now paints the AWARDED panel directly,
+  no wheel and no spin. Claim code, prize name, store and expiry all populated.
+- The demo award's `expires_at` was the literal `2026-09-25T09:20:31Z`. It is now
+  `now + 21 days` — a hard-coded date silently goes into the past and the panel starts
+  demoing an already-expired prize.
+- Added a **prize** button to `demo/spin.html`'s panel row.
+
+Nothing relied on the old fall-through: the harness's panel buttons name their kind
+explicitly and its default is `wheel`.
+
+---
+
 ## 2026-08-31 — Journey reset: close the gaps, and warn when the trigger is stranded
 
 `src/flexicare-core.js`, plus the Webflow attribute move that actually fixes it
