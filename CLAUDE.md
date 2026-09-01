@@ -229,6 +229,13 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
   link means the shopper completes the whole journey and is refused at the wheel. If the
   spin page keeps saying "unavailable", the session was started on an unpaired browser;
   fix it there, not on the spin page. `docs/kiosk-and-spin.md` has the whole chain.
+- **Fullscreen and the touch hardening are gated on `data-kiosk-locked`, not on
+  pairing.** A device being SET UP is not paired yet and still needs both, so
+  `?fullscreen` (localStorage, device-level) arms it — gating on the token alone made
+  fullscreen look broken until the last setup step. And the touch-hardening CSS in the
+  site head is scoped to `html[data-kiosk-locked]` because `overscroll-behavior: none`
+  kills pull-to-refresh: unscoped it took that away from every developer and phone
+  visitor too. Never write that block unscoped.
 - **The tablets go fullscreen via the Fullscreen API on tap, NOT a PWA.** A manifest's
   `start_url` must be same-origin as the manifest and a service worker must be
   same-origin as its pages, so both need root-path files Webflow cannot serve. The

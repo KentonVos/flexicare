@@ -14,6 +14,44 @@ Format:
 
 ---
 
+## 2026-09-01 — Fix: fullscreen needed pairing first, and the touch CSS was unscoped
+
+`src/flexicare-kiosk.js` + the Webflow site head (Designer, unpublished).
+
+Two problems reported from the actual tablet.
+
+**1. Fullscreen never fired.** `fullscreenWanted()` required a device token, so an
+unpaired tablet attempted nothing at all — and you cannot pair a device until it is set
+up, which is exactly when you want fullscreen. It looked broken rather than gated.
+
+- **New: `?fullscreen`** arms it on a device with no token. `localStorage`, not
+  sessionStorage — this describes a DEVICE, so it outlives the tab and a reboot, like
+  the pairing token beside it. `?fullscreen=off` clears; `Flexicare.kiosk.armFullscreen()`
+  / `(false)` does the same from the console.
+- Still opt-in and still cannot touch a passing web visitor: someone has to type it,
+  the same model as `?tune` and `?demo`.
+- **`Flexicare.kiosk.fullscreen()` now explains itself**: `{ active, wanted, supported,
+  paired, armed, optedOut, why }`. `why` is a sentence — *"not paired and not armed —
+  add ?fullscreen to the URL once"*. Not having that is why this took a round trip.
+
+**2. Pull-to-refresh was gone site-wide.** `overscroll-behavior: none` was doing exactly
+what it says, but the block was unscoped, so it hit every developer and every phone
+visitor. Only a pinned tablet wants that.
+
+- **New hook: `data-kiosk-locked="true"` on `<html>`**, set when the device is paired
+  **or** armed. Deliberately broader than `isKiosk()` — a device being configured is
+  not paired but is still a kiosk.
+- The head block is now scoped `html[data-kiosk-locked]`, so pull-to-refresh, text
+  selection and long-press are all back to normal everywhere else. Applied in Webflow
+  and mirrored in `docs/kiosk-tablet-setup.md` §3.
+
+Also added §5b to that doc: a "still not fullscreen" list, including the cases where
+`active` is `true` and a bar remains anyway (Android's bottom nav bar, the app-pinning
+hint, a cutout needing `env(safe-area-inset-*)`) — those are not browser chrome and no
+amount of `requestFullscreen` removes them.
+
+---
+
 ## 2026-09-01 — Webflow site head: viewport-fit, touch hardening, and the last saturate
 
 **Webflow Site Settings → Custom Code → Head. Applied in the Designer, NOT published.**

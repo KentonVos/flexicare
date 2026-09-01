@@ -58,8 +58,13 @@ Nothing to do here; this is what is in the repo.
 - **Every** tap re-arms it, not just the first: a system dialog or a stray swipe can
   drop the tablet out mid-shift, and the next shopper's touch quietly restores it. It
   is a no-op when already fullscreen.
-- **Kiosk only.** Gated on the device token, exactly like the heartbeat and the idle
-  timer, so a web visitor's browser is never hijacked. Inert on the public site.
+- **Kiosk devices only**, so a web visitor's browser is never hijacked. Two ways in:
+  - the device is **paired** (automatic), or
+  - **`?fullscreen`** has been added to the URL once on this device. Stored in
+    `localStorage`, so it survives the tab closing and a reboot — this describes a
+    *device*, like the pairing token beside it. Clear with `?fullscreen=off`.
+  - You need the flag while **setting the tablet up**: gating on the token alone meant
+    fullscreen did not arrive until the last step and looked broken until then.
 - Rejections are swallowed and logged to the debug channel only. Failing to go
   fullscreen must never break the journey.
 - Opt out on a paired device with **`data-kiosk-fullscreen="off"`** on any element
@@ -68,9 +73,17 @@ Nothing to do here; this is what is in the repo.
 Console:
 
 ```js
-Flexicare.kiosk.fullscreen()      // { active, wanted, supported }
-Flexicare.kiosk.exitFullscreen()  // manual exit, without unpinning
+Flexicare.kiosk.fullscreen()
+// { active, wanted, supported, paired, armed, optedOut, why }
+// `why` says in words why nothing happened — read it first.
+
+Flexicare.kiosk.armFullscreen()       // arm without retyping the URL
+Flexicare.kiosk.armFullscreen(false)  // clear
+Flexicare.kiosk.exitFullscreen()      // manual exit, without unpinning
 ```
+
+**If tapping does nothing, run `Flexicare.kiosk.fullscreen()` and read `why`.** The
+common answer is `"not paired and not armed"` — add `?fullscreen` once.
 
 ### The idle reset — already existed, do not add a second one
 
@@ -115,17 +128,22 @@ Flexicare.layout.forced   // → true
 
 ## 3. Webflow — touch hardening CSS
 
-**Applied 2026-09-01** as a fourth block in Site Settings → Custom Code → Head Code
+**Applied 2026-09-01** as a fifth block in Site Settings → Custom Code → Head Code
 (Designer only — needs a publish). Reproduced here as the source of truth.
 
-Site-level, never page-level: page-level head code only exists if that page was the
-first one loaded, so arriving through the funnel it is simply absent. That trap already
-cost a real bug on the spin wheel.
+In the head site-wide (page-level head code only exists if that page was loaded first),
+but **scoped by the selector to `html[data-kiosk-locked]`** — which
+`flexicare-kiosk.js` sets when the device is paired or armed with `?fullscreen`.
+
+⚠️ **That scope is load-bearing.** `overscroll-behavior: none` kills pull-to-refresh, and
+the first version of this block was unscoped, which took pull-to-refresh away from every
+developer and every phone visitor too. Only a pinned tablet wants it.
 
 ```css
-/* Kiosk touch hardening. Safe on the public site: it only removes gestures
-   nothing in the funnel uses. */
-html, body {
+/* Kiosk touch hardening. Inert unless flexicare-kiosk.js has marked the
+   device: paired, or armed with ?fullscreen. */
+html[data-kiosk-locked],
+html[data-kiosk-locked] body {
   overscroll-behavior: none;   /* no pull-to-refresh, no scroll chaining */
   touch-action: manipulation;  /* no double-tap-to-zoom (keeps pan + pinch) */
   -webkit-user-select: none;
@@ -135,7 +153,7 @@ html, body {
 
 /* Text selection has to come BACK on anything typed into, or the onboarding
    form and the spin lead form (six fields) behave strangely under a caret. */
-input, textarea, [contenteditable="true"] {
+html[data-kiosk-locked] :is(input, textarea, [contenteditable="true"]) {
   -webkit-user-select: text;
   user-select: text;
 }
@@ -149,7 +167,9 @@ input, textarea, [contenteditable="true"] {
    → tap Build number ×7. Then Settings → Developer options → **Stay awake**. This is
    the only native way past Samsung's 10-minute screen-timeout ceiling. **Requires
    mains power.**
-2. **Open the funnel in Chrome** at the published URL and leave it on that tab.
+2. **Open the funnel in Chrome** at the published URL **with `?fullscreen` on the end**,
+   once. That arms fullscreen on this device before it is paired — you want it during
+   setup, not only at the end. Leave the tab open.
 3. **Pair the device.** Go to `/kiosk`, enter the code from the admin UI. The panel
    should flip to "Paired" with the store name. Confirm:
    ```js
@@ -189,6 +209,33 @@ input, textarea, [contenteditable="true"] {
 
 ---
 
+## 5b. If it is still not fully fullscreen
+
+Work down this list — the first two are what actually goes wrong.
+
+1. **`Flexicare.kiosk.fullscreen().why`** — if it says *not paired and not armed*,
+   nothing was ever attempted. Add `?fullscreen` once, or run
+   `Flexicare.kiosk.armFullscreen()`.
+2. **You have to TAP after the page loads.** `requestFullscreen()` is only allowed from
+   inside a user gesture, so it cannot fire on load. The listener is on `pointerdown`,
+   so any tap anywhere does it.
+3. **Check the browser.** This is verified on **Chrome**. Samsung Internet's fullscreen
+   behaviour differs and it may keep a bar; if you are on it, switch to Chrome.
+4. **`supported: false`** means the browser has no `requestFullscreen` at all. Nothing
+   in this document will help — that is the PWA/kiosk-browser case (§7).
+5. **`active: true` but a bar is still visible.** Then the bar is not browser chrome:
+   - Android's **navigation** bar (or gesture pill) at the *bottom* can persist. Locking
+     rotation and using a stand that covers the edge is the usual answer.
+   - **App pinning** shows its own hint on entry. It clears on its own.
+   - A **notch/cutout** area is now painted into thanks to `viewport-fit=cover`, but
+     content near the edge may need `env(safe-area-inset-*)` padding in Webflow.
+
+If `active` is `true` and the top status bar is still there on Chrome, that is worth
+reporting back — it would be new information, and it changes the recommendation toward
+§7.
+
+---
+
 ## 6. Known limitations, and what to tell on-site staff
 
 **The pinning does not survive a reboot. The pairing does.** This distinction matters
@@ -199,6 +246,7 @@ and is easy to get wrong:
 | App pinning | **Lost.** Re-pin (§4 step 8). |
 | Fullscreen | **Lost.** One tap restores it. |
 | Device pairing | **Kept.** The token is in `localStorage` precisely so it outlives sessions and restarts. |
+| The `?fullscreen` arming | **Kept.** Also `localStorage`, for the same reason. |
 
 So a rebooted tablet needs the PIN and two gestures — **not** a new pairing code from
 the admin. Brief staff accordingly, and keep the tablets on mains power.

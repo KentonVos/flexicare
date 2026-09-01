@@ -16,7 +16,9 @@
           to the attract screen when a shopper walks away.
        5. A tablet goes FULLSCREEN on the first tap (Chrome Android hides the
           address bar and the status bar), which is how the kiosk look is
-          achieved without a PWA. See the fullscreen section below.
+          achieved without a PWA. Armed by pairing OR by ?fullscreen once —
+          you need it while SETTING UP, before there is a token. See the
+          fullscreen section below and docs/kiosk-tablet-setup.md.
 
      A web visitor never pairs, so isKiosk() is false, authHeaders() is empty,
      no heartbeat runs, and no idle timer runs. This file is inert on the
@@ -95,6 +97,14 @@
                                one answer) and only consulted when a token
                                exists, so it does nothing on the public site.
                                Default on. See docs/kiosk-tablet-setup.md.
+
+   PRESENTATION HOOK (on <html>, for the site's touch-hardening CSS):
+     data-kiosk-locked="true"  this device is a kiosk: paired, OR armed with
+                               ?fullscreen. Broader than isKiosk() on purpose —
+                               a device being configured is not paired yet but
+                               still wants the hardening. Absent for every web
+                               visitor, which is what keeps pull-to-refresh and
+                               text selection normal on the public site.
 
    STATE (drive your CSS off this — it is set on BOTH <html> and the panel):
      data-kiosk-state = "web"      no token: a normal web visitor
@@ -262,6 +272,20 @@
     return state.status === "DISABLED" ? "disabled" : "active";
   }
 
+  /* One hook for "harden this device's touch behaviour", so the site CSS never
+     has to guess. It is NOT data-kiosk-state="active": a device being set up is
+     armed but unpaired, and it still wants the hardening.
+
+     Why it is scoped at all: overscroll-behavior:none kills pull-to-refresh,
+     and applied site-wide that hits every developer and every web visitor too.
+     Nobody wants that on a phone; only a pinned tablet does. */
+  function applyLocked() {
+    var root = document.documentElement;
+    if (!root) return;
+    if (kioskLocked()) root.setAttribute("data-kiosk-locked", "true");
+    else root.removeAttribute("data-kiosk-locked");
+  }
+
   function applyState() {
     var mode = computeMode();
     var changed = mode !== state.mode;
@@ -269,6 +293,7 @@
 
     var root = document.documentElement;
     if (root) root.setAttribute("data-kiosk-state", mode);
+    applyLocked();
     if (state.panel) state.panel.setAttribute("data-kiosk-state", mode);
 
     paintSlots();
@@ -728,8 +753,57 @@
      on the [data-kiosk-pair] panel (or any element — it is read
      document-wide, since the tablet is one device with one answer). */
 
+  /* ARMING IT WITHOUT PAIRING.  ?fullscreen  (clear with ?fullscreen=off)
+
+     The token gate alone was wrong in practice: you cannot pair a tablet
+     until you have it set up, and you want it running fullscreen WHILE you
+     set it up — so gating purely on the token meant fullscreen did not
+     arrive until the last step, and looked broken until then.
+
+     So there are two ways in: a paired device (automatic), or this explicit
+     flag. localStorage, not sessionStorage — unlike ?demo this describes a
+     DEVICE, so it has to outlive the tab and survive a reboot, exactly like
+     the pairing token beside it.
+
+     It is still opt-in and still cannot touch a passing web visitor: someone
+     has to type it into the URL, the same model as ?tune and ?demo. */
+  var FS_KEY = "flx_kiosk_fullscreen";
+
+  function captureFullscreenFlag() {
+    var raw = null;
+    try {
+      raw = new URL(location.href).searchParams.get("fullscreen");
+    } catch (e) {
+      var m = /[?&]fullscreen(?:=([^&]*))?/.exec(location.search || "");
+      if (m) raw = m[1] == null ? "" : decodeURIComponent(m[1]);
+    }
+    if (raw === null) return; // absent — leave any stored flag alone
+    var on = !/^(off|0|false|no)$/i.test(raw);
+    try {
+      if (on) localStorage.setItem(FS_KEY, "1");
+      else localStorage.removeItem(FS_KEY);
+    } catch (e) {}
+    dbg("fullscreen flag →", on ? "armed" : "cleared");
+  }
+
+  function fullscreenArmed() {
+    try {
+      return localStorage.getItem(FS_KEY) === "1";
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /* True when this device should be treated as a kiosk for PRESENTATION —
+     fullscreen, and the touch hardening that CSS keys off data-kiosk-locked.
+     Deliberately broader than isKiosk(): a device being configured is not
+     paired yet but is still a kiosk. It is never true for a web visitor. */
+  function kioskLocked() {
+    return !!state.token || fullscreenArmed();
+  }
+
   function fullscreenWanted() {
-    if (!state.token) return false; // web visitor, or not yet paired
+    if (!kioskLocked()) return false; // a web visitor, and not armed
     var el = document.querySelector("[data-kiosk-fullscreen]");
     return !el || attr(el, "data-kiosk-fullscreen", "on") !== "off";
   }
@@ -779,15 +853,41 @@
   );
 
   K.fullscreen = function () {
+    var el = document.querySelector("[data-kiosk-fullscreen]");
+    var optedOut = !!el && attr(el, "data-kiosk-fullscreen", "on") === "off";
+    var supported = !!(
+      document.documentElement.requestFullscreen ||
+      document.documentElement.webkitRequestFullscreen ||
+      document.documentElement.mozRequestFullScreen
+    );
     return {
       active: isFullscreen(),
       wanted: fullscreenWanted(),
-      supported: !!(
-        document.documentElement.requestFullscreen ||
-        document.documentElement.webkitRequestFullscreen ||
-        document.documentElement.mozRequestFullScreen
-      ),
+      supported: supported,
+      paired: !!state.token,
+      armed: fullscreenArmed(),
+      optedOut: optedOut,
+      // Says out loud why nothing happened, which is what was missing the
+      // first time this looked broken on a device.
+      why: isFullscreen()
+        ? "already fullscreen"
+        : !supported
+        ? "this browser has no requestFullscreen"
+        : optedOut
+        ? 'data-kiosk-fullscreen="off" is set'
+        : !state.token && !fullscreenArmed()
+        ? "not paired and not armed — add ?fullscreen to the URL once"
+        : "ready — tap the screen",
     };
+  };
+  // Arm/clear from the console instead of retyping the URL.
+  K.armFullscreen = function (on) {
+    try {
+      if (on === false) localStorage.removeItem(FS_KEY);
+      else localStorage.setItem(FS_KEY, "1");
+    } catch (e) {}
+    applyLocked();
+    return fullscreenArmed();
   };
   // Manual exit, for an operator who needs the browser back without unpinning.
   K.exitFullscreen = function () {
@@ -912,6 +1012,10 @@
   /* -------------------------------- boot -------------------------------- */
 
   (function boot() {
+    // Before anything reads kioskLocked(): ?fullscreen has to be honoured on
+    // the very load that carries it, and applyLocked() runs during init().
+    captureFullscreenFlag();
+
     var saved = readStore();
     if (saved) {
       state.token = saved.token;
@@ -928,7 +1032,12 @@
         beat(); // report in immediately, don't wait a full interval
         checkMe();
       }
-      dbg("boot", { paired: !!state.token, mode: state.mode });
+      applyLocked(); // covers the armed-but-unpaired device
+      dbg("boot", {
+        paired: !!state.token,
+        armed: fullscreenArmed(),
+        mode: state.mode,
+      });
     }
 
     if (document.readyState === "loading")
