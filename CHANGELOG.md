@@ -14,6 +14,39 @@ Format:
 
 ---
 
+## 2026-09-02 — The spin lead form prefills from what the shopper already typed
+
+- `src/flexicare-spin.js`, `docs/kiosk-and-spin.md` §9
+
+The demo path pasted a fixed sample set ("Thandi Mokoena", `071 234 5678`,
+`9001015800086`) into the lead form regardless of context. On a dev-paired
+tablet — where the demo journey now runs by default — that meant a shopper who
+had just entered their name and WhatsApp number on `/onboarding` was shown
+someone else's data, which reads as the app having lost their input.
+
+`prefillLead()` and `prefillLeadDemo()` are now one function with a priority
+order, highest first:
+
+1. anything already in the input — never overwritten
+2. `Flexicare.lead` — this form, filled in earlier this journey (including the
+   ID/Passport choice, which is now restored)
+3. the server's session (first name, phone, email)
+4. **the onboarding form**, still in memory: `Flexicare.firstName` and
+   `Flexicare.contact` — the WhatsApp number *as typed*, not its E.164 rewrite,
+   since showing someone their own number rewritten is a needless "did I get
+   that wrong?" moment
+5. sample data — **only when the form would otherwise be entirely blank**, which
+   keeps `?demo=form` usable landed on directly with no journey behind it
+
+The blank check runs across the whole form before anything is written, so one
+real value suppresses sample data in every field. Surname, email and the ID
+number have no earlier source (onboarding does not collect them) so they stay
+empty — a plausible-looking fake in an ID field is worse than a blank one.
+
+**Webflow-side:** nothing.
+
+---
+
 ## 2026-09-02 — Kiosk presentation is tablet-only, and demo panel shortcuts are one-shot
 
 - `src/flexicare-kiosk.js`, `src/flexicare-spin.js`, `ARCHITECTURE.md`, `CLAUDE.md`,

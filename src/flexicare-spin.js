@@ -379,10 +379,11 @@
                                 nav collapses behind the prize card, so the
                                 only way on is the card's [data-spin-done].
                                 Reload (or Flexicare.spin.reinit()) to go
-                                again. The form arrives pre-filled with data
-                                that passes validation so you are not retyping
-                                six fields every lap; it still validates on
-                                submit, so clear a field to see the error path.
+                                again. The form is pre-filled from WHAT THE
+                                SHOPPER ALREADY TYPED (see prefillLead) —
+                                sample data only when there is no journey
+                                behind it. It still validates on submit, so
+                                clear a field to see the error path.
      ?demo=wheel              → skip the form, straight to the wheel
      ?demo=form               → the lead form (same as bare ?demo)
      ?demo=prize              → jump straight to the AWARDED panel, no spin
@@ -1995,11 +1996,7 @@
         if (!alive(token)) return;
         state.segments = segments && segments.length ? segments : DEMO_SEGMENTS;
         if (!renderWheel(state.segments)) return showError(null, "wheel");
-        if (state.needLead) {
-          setLeadType(state.leadType);
-          prefillLeadDemo();
-          leadError("");
-        }
+        if (state.needLead) prefillLead(state.session, true);
         setState(state.needLead ? "form" : "ready");
       });
   }
@@ -2091,7 +2088,7 @@
           setState("nophone");
           return null;
         }
-        prefillLead(session);
+        prefillLead(session, false);
         return loadWheel();
       })
       .then(function (segments) {
@@ -2262,18 +2259,78 @@
   // Fill from what the session already knows, so the shopper is confirming
   // rather than retyping. first_name and phone_number are normally already
   // captured at /onboarding.
-  function prefillLead(session) {
-    if (!session) return;
-    var pairs = [
-      ["[data-spin-lead-name]", session.first_name],
-      ["[data-spin-lead-phone]", session.phone_number],
-      ["[data-spin-lead-email]", session.email],
-    ];
-    for (var i = 0; i < pairs.length; i++) {
-      var el = slot(pairs[i][0]);
-      if (el && !el.value && pairs[i][1]) el.value = pairs[i][1];
+  /* ONE prefill for both paths — the real session and the demo journey.
+     Priority, highest first:
+       1. whatever is already IN the input (never overwritten)
+       2. Flexicare.lead — this form, filled in earlier this journey
+       3. the server's session (first name, phone, email)
+       4. the ONBOARDING form, still in memory (FC.firstName, FC.contact)
+       5. sample data — and ONLY when the form would otherwise be blank
+
+     The shopper has already typed their name and WhatsApp number on
+     /onboarding, so asking again and showing "Thandi Mokoena" reads as the app
+     having lost their input. That is what step 4 fixes. Sample data survives
+     only as a COLD START, for ?demo=form landed on directly with no journey
+     behind it — it must never paste over something real.
+
+     Surname, email and the ID number have no earlier source: onboarding does
+     not collect them, so they stay empty and the shopper fills them in. Empty
+     is the honest answer — a plausible-looking fake in an ID field is worse
+     than a blank one. */
+  var SAMPLE_LEAD = {
+    "[data-spin-lead-name]": "Thandi",
+    "[data-spin-lead-surname]": "Mokoena",
+    "[data-spin-lead-phone]": "071 234 5678",
+    "[data-spin-lead-email]": "thandi@example.com",
+    "[data-spin-lead-idnumber]": "9001015800086",
+  };
+
+  function leadKnown(session) {
+    var lead = FC.lead || {};
+    var contact = FC.contact || {};
+    return {
+      "[data-spin-lead-name]":
+        lead.name || (session && session.first_name) || FC.firstName || "",
+      "[data-spin-lead-surname]": lead.surname || "",
+      /* whatsappRaw before whatsapp: it is what they typed ("071 234 5678"),
+         and showing them the E.164 rewrite of their own number back is a
+         needless "did I get that wrong?" moment. */
+      "[data-spin-lead-phone]":
+        lead.phone ||
+        (session && session.phone_number) ||
+        contact.whatsappRaw ||
+        contact.whatsapp ||
+        "",
+      "[data-spin-lead-email]": lead.email || (session && session.email) || "",
+      "[data-spin-lead-idnumber]": lead.id_number || "",
+    };
+  }
+
+  function prefillLead(session, allowSample) {
+    var known = leadKnown(session);
+    var sel;
+
+    /* "Blank" means nothing known AND nothing typed — checked across the whole
+       form before writing anything, so a form with one real value in it never
+       gets sample data in the other fields. */
+    var blank = true;
+    for (sel in known) {
+      if (!known.hasOwnProperty(sel)) continue;
+      var el = slot(sel);
+      if (known[sel] || (el && el.value)) blank = false;
     }
-    setLeadType(state.leadType);
+
+    for (sel in known) {
+      if (!known.hasOwnProperty(sel)) continue;
+      var input = slot(sel);
+      if (!input || input.value) continue; // never overwrite
+      var v = known[sel] || (allowSample && blank ? SAMPLE_LEAD[sel] : "");
+      if (v) input.value = v;
+    }
+
+    // Restore the ID/Passport choice if they already made one this journey.
+    var lead = FC.lead || {};
+    setLeadType(lead.id_type || state.leadType);
     leadError("");
   }
 
@@ -2281,20 +2338,6 @@
      six fields every lap, so the form arrives filled in with data that passes
      validation. It is NOT a bypass — validateLead still runs on submit, so
      clear a field (or break the number) and you get the real error path. */
-  function prefillLeadDemo() {
-    var pairs = [
-      ["[data-spin-lead-name]", "Thandi"],
-      ["[data-spin-lead-surname]", "Mokoena"],
-      ["[data-spin-lead-phone]", "071 234 5678"],
-      ["[data-spin-lead-email]", "thandi@example.com"],
-      ["[data-spin-lead-idnumber]", "9001015800086"],
-    ];
-    for (var i = 0; i < pairs.length; i++) {
-      var el = slot(pairs[i][0]);
-      if (el && !el.value) el.value = pairs[i][1];
-    }
-  }
-
   function readLead() {
     var phoneRaw = leadValue("[data-spin-lead-phone]");
     return {

@@ -935,8 +935,29 @@ console says which, one lap clears it, and `?demo=off` clears it now.
 ### The lead form
 
 Bare `?demo` opens on the lead form, because that is the step the end-to-end run is
-usually there to check. It arrives **pre-filled** with data that passes validation —
-walking the journey repeatedly should not mean retyping six fields every lap.
+usually there to check.
+
+It arrives **pre-filled from what the shopper already typed** — highest priority
+first:
+
+1. anything already in the input (never overwritten)
+2. `Flexicare.lead` — this form, filled in earlier this journey
+3. the server's session (first name, phone, email)
+4. **the onboarding form**, still in memory (`Flexicare.firstName`,
+   `Flexicare.contact` — the WhatsApp number *as typed*, not its E.164 rewrite)
+5. sample data — **only when the form would otherwise be entirely blank**
+
+**Changed 2026-09-02.** The demo path used to paste a fixed "Thandi Mokoena" set
+over the form regardless, which on a dev-paired tablet meant a shopper who had
+just entered their name and number on `/onboarding` was shown someone else's —
+it reads as the app having lost their input. Sample data now survives only as a
+**cold start**, for `?demo=form` landed on directly with no journey behind it,
+and the blank check looks at the whole form, so one real value suppresses
+samples in every field.
+
+Surname, email and the ID number have no earlier source — onboarding does not
+collect them — so they stay **empty** and the shopper fills them in. Empty is the
+honest answer: a plausible-looking fake in an ID field is worse than a blank one.
 
 It is a prefill, not a bypass: `validateLead` still runs on submit, so clear a field
 or break the phone number and you get the real error path, error box and all. On
