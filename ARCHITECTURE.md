@@ -858,8 +858,11 @@ pairing; there is no endpoint to read it back.
 PWA — a manifest's `start_url` must be same-origin as the manifest and a service worker
 must be same-origin as its pages, so both need root-path files Webflow cannot serve. Chrome
 Android hides the address bar *and* the status bar, which is the whole kiosk look.
-- Gated on `data-kiosk-locked`, which is **tablet-only**: a paired device *and*
-  `FC.isTablet()`, or `?fullscreen` armed. Pairing alone is not enough now that pairing
+- Gated on `kioskDevice()` — **tablet-only**: a paired device *and* `FC.isTablet()`, or
+  `?fullscreen` armed. Note this is *not* `data-kiosk-locked`, which is the same check
+  minus dev pairings: the touch hardening kills pull-to-refresh, so a device being tested
+  on is exempt while still going fullscreen. The exemption beats `?fullscreen` because
+  the setup steps arm that first. Pairing alone is not enough now that pairing
   is compulsory — every phone and laptop that walks the funnel holds a token, and taking
   one of those fullscreen or killing its pull-to-refresh is hijacking a browser that is
   not a kiosk. `?fullscreen` wins outright: it is an explicit per-device statement and

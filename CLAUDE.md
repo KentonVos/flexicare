@@ -292,9 +292,14 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
   escape hatch for a tablet `FC.isTablet()` gets wrong. But **pairing alone is not
   enough** (changed 2026-09-02): now that pairing is compulsory, every phone and laptop
   walking the funnel holds a token, and taking one of those fullscreen or killing its
-  pull-to-refresh hijacks a browser that is not a kiosk. So it is `?fullscreen` OR
-  (token AND tablet). `kiosk.fullscreen().why` names the mode when the tablet check is
-  what said no. And the touch-hardening CSS in the
+  pull-to-refresh hijacks a browser that is not a kiosk. So the hook is
+  `!dev && (?fullscreen || (token && tablet))` — **a DEV pairing is exempt from the
+  hardening on purpose**, because a device being tested on needs pull-to-refresh, and
+  that exemption beats `?fullscreen` (the setup steps arm it first, so honouring it
+  would make the exemption unreachable). **Fullscreen keys off a separate
+  `kioskDevice()` eligibility check, not this hook**, so a dev tablet still goes
+  fullscreen — don't re-merge the two. `kiosk.fullscreen()` reports `why`, `tablet` and
+  `touchHardened`. And the touch-hardening CSS in the
   site head is scoped to `html[data-kiosk-locked]` because `overscroll-behavior: none`
   kills pull-to-refresh: unscoped it took that away from every developer and phone
   visitor too. Never write that block unscoped.

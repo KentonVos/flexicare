@@ -133,11 +133,25 @@ Flexicare.layout.forced   // → true
 
 In the head site-wide (page-level head code only exists if that page was loaded first),
 but **scoped by the selector to `html[data-kiosk-locked]`** — which
-`flexicare-kiosk.js` sets when the device is paired or armed with `?fullscreen`.
+`flexicare-kiosk.js` sets on a device that is paired **on a tablet**, or armed with
+`?fullscreen`, and **not** paired with the dev code.
 
 ⚠️ **That scope is load-bearing.** `overscroll-behavior: none` kills pull-to-refresh, and
 the first version of this block was unscoped, which took pull-to-refresh away from every
 developer and every phone visitor too. Only a pinned tablet wants it.
+
+**Pull-to-refresh on a tablet you are testing on** (added 2026-09-02): pair it with the
+dev code `5555-5555` and `data-kiosk-locked` is not set, so this whole block goes inert
+and pull-to-refresh comes back. Fullscreen-on-tap is unaffected — it keys off
+eligibility, not this hook. On a store tablet (a real pairing) the hardening stays, and
+it should: a reload drops fullscreen *and* the buffered selfie, and neither survives a
+shopper's thumb pulling down mid-journey.
+
+Note the exemption drops the **whole** block, so a dev tablet also gets back
+double-tap-to-zoom, long-press menus and text selection. If you ever need only
+`overscroll-behavior` back on a real pairing, split that one rule into its own selector
+here rather than changing the JS. `Flexicare.kiosk.fullscreen().touchHardened` reports
+which side of this a device is on.
 
 ```css
 /* Kiosk touch hardening. Inert unless flexicare-kiosk.js has marked the

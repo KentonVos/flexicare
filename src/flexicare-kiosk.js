@@ -103,13 +103,16 @@
                                page, so it opts out one screen, not the device.
 
    PRESENTATION HOOK (on <html>, for the site's touch-hardening CSS):
-     data-kiosk-locked="true"  this device is a PINNED TABLET: paired, OR armed
-                               with ?fullscreen. Broader than isKiosk() on
-                               purpose — a device being configured is not paired
-                               yet but still wants the hardening. Deliberately
-                               NOT fed by the pairing gate, which is on for
-                               everyone: that would take pull-to-refresh away
-                               from every phone and every developer.
+     data-kiosk-locked="true"  this device is a PINNED TABLET and should have
+                               its touch behaviour hardened: paired on a TABLET,
+                               or armed with ?fullscreen — and NOT paired with
+                               the dev code (a device being tested on needs
+                               pull-to-refresh, which the hardening kills).
+                               Deliberately NOT fed by the pairing gate, which
+                               is on for everyone: that would take
+                               pull-to-refresh away from every phone and every
+                               developer. Fullscreen keys off eligibility
+                               instead, so a dev tablet still goes fullscreen.
      data-kiosk-dev="true"     this device is paired with the DEV CODE, so the
                                token is fake and no /kiosks/* call is made. A
                                visible marker that the tablet is not real.
@@ -1080,13 +1083,44 @@
     return !!(FC.isTablet && FC.isTablet());
   }
 
-  function kioskLocked() {
+  /* Is this device eligible for the kiosk presentation at all? */
+  function kioskDevice() {
     if (fullscreenArmed()) return true; // explicit, per device — always wins
     return !!state.token && isTabletDevice();
   }
 
+  /* data-kiosk-locked — the hook the site's touch-hardening CSS keys off.
+     Eligible AND not a dev pairing.
+
+     WHY THE DEV EXEMPTION. The hardening sets overscroll-behavior: none, which
+     kills PULL-TO-REFRESH. On a store tablet that is the point: a shopper
+     pulling down mid-journey reloads the page, and a reload drops fullscreen
+     AND the buffered selfie (both survive Barba navigation, neither survives a
+     reload). Nobody wants that behind a shopper's thumb.
+
+     But a device paired with the DEV CODE is, by definition, a device being
+     tested on — and testing without being able to refresh is miserable. The
+     dev code is the one signal that says "a developer is holding this", so it
+     is what turns the hardening off. It beats ?fullscreen deliberately: the
+     setup instructions have you arm ?fullscreen first, so honouring that over
+     the dev pairing would leave the exemption unreachable in the exact case it
+     exists for. A REAL pairing is untouched — store tablets stay hardened.
+
+     Note this drops the WHOLE block, not just the overscroll rule: a dev
+     tablet also gets back double-tap-to-zoom, long-press menus and text
+     selection. Splitting those apart needs a second selector in the Webflow
+     head (docs/kiosk-tablet-setup.md §3), and it is not worth it — a dev
+     tablet does not have to reproduce the production feel exactly, and the
+     fullscreen behaviour, which is what people actually check, is unchanged. */
+  function kioskLocked() {
+    if (state.dev) return false;
+    return kioskDevice();
+  }
+
+  /* Fullscreen keys off ELIGIBILITY, not the CSS hook — a dev-paired tablet
+     still goes fullscreen on tap; only the touch hardening is exempted. */
   function fullscreenWanted() {
-    if (!kioskLocked()) return false; // a web visitor, and not armed
+    if (!kioskDevice()) return false; // a web visitor, and not armed
     var el = document.querySelector("[data-kiosk-fullscreen]");
     return !el || attr(el, "data-kiosk-fullscreen", "on") !== "off";
   }
@@ -1147,6 +1181,8 @@
       active: isFullscreen(),
       wanted: fullscreenWanted(),
       tablet: isTabletDevice(),
+      // false on a dev pairing — that is what gives pull-to-refresh back.
+      touchHardened: kioskLocked(),
       supported: supported,
       paired: !!state.token,
       armed: fullscreenArmed(),

@@ -14,6 +14,37 @@ Format:
 
 ---
 
+## 2026-09-02 — Pull-to-refresh comes back on a dev-paired tablet
+
+- `src/flexicare-kiosk.js`, `docs/kiosk-tablet-setup.md` §3
+
+The kiosk touch hardening in the Webflow head sets `overscroll-behavior: none`,
+which kills pull-to-refresh. On a store tablet that is the point — a shopper
+pulling down mid-journey reloads the page, and a reload drops fullscreen *and*
+the buffered selfie (both survive Barba navigation, neither survives a reload).
+But it also meant a tablet being tested on could not be refreshed.
+
+`data-kiosk-locked` — the hook that CSS keys off — is now **eligibility AND not
+a dev pairing**. So a device paired with `5555-5555` loses the hardening and gets
+pull-to-refresh back; a real pairing is untouched and store tablets stay hardened.
+The dev exemption deliberately beats `?fullscreen`, since the setup instructions
+have you arm that first and honouring it would leave the exemption unreachable in
+the exact case it exists for.
+
+Fullscreen-on-tap is unaffected: it now keys off a separate `kioskDevice()`
+eligibility check rather than the CSS hook, so a dev tablet still goes fullscreen.
+`kiosk.fullscreen().touchHardened` reports which side a device is on.
+
+The exemption drops the whole block, so a dev tablet also gets back
+double-tap-to-zoom, long-press menus and text selection. Splitting those apart
+would need a second selector in the Webflow head; noted there as the option if it
+is ever wanted on a real pairing.
+
+**Webflow-side:** nothing — the existing `html[data-kiosk-locked]` selector is
+unchanged, only when the attribute is set.
+
+---
+
 ## 2026-09-02 — The spin lead form prefills from what the shopper already typed
 
 - `src/flexicare-spin.js`, `docs/kiosk-and-spin.md` §9
