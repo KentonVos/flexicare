@@ -362,6 +362,17 @@
    parked in sessionStorage — not localStorage, so it dies with the tab and a
    kiosk left on overnight is never still in demo mode in the morning.
 
+     A KIOSK DEV PAIRING (code 5555-5555) turns this on by itself, as the full
+     journey — that device's token is fake and never sent, so its session is
+     WEB and could never spin for real. An explicit ?demo=<kind> still wins.
+     See flexicare-kiosk.js. A REAL pairing is untouched and spins for real.
+
+     THE PANEL SHORTCUTS ARE ONE-SHOT. ?demo=prize and friends show their panel
+     once, then the stored flag drops back to the full journey. Left sticky they
+     hijack every later lap: you arrive at the spin page, are handed a prize you
+     never spun for, and the wheel never renders — which reads as a broken wheel
+     rather than as a flag being honoured. journey/form/wheel stay sticky.
+
      ?demo                    → THE WHOLE SEQUENCE: lead form → wheel → fake
                                 prize screen. ONE spin, exactly like a real
                                 session — the CTA does not come back and the
@@ -375,6 +386,7 @@
      ?demo=wheel              → skip the form, straight to the wheel
      ?demo=form               → the lead form (same as bare ?demo)
      ?demo=prize              → jump straight to the AWARDED panel, no spin
+                                (one-shot — see above)
                                 (alias: awarded)
      ?demo=consolation        → …the consolation panel
      ?demo=redeemed           → …the redeemed panel   (also: expired, voided)
@@ -1856,6 +1868,49 @@
     }
   }
 
+  /* The PANEL SHORTCUT kinds (prize, consolation, redeemed, nophone, …) are
+     for LOOKING at one panel, so they are ONE-SHOT: once the panel has been
+     shown, the stored flag drops back to "journey".
+
+     Left sticky they hijack every later lap through the funnel — you ask to
+     see the awarded panel once, and from then on every arrival at the spin
+     page hands you a prize you never spun for, with the wheel never rendering
+     at all. That is not a plausible thing to want twice, and it looks like the
+     wheel is broken rather than like a flag being honoured.
+
+     The FULL-JOURNEY kinds (journey, form, wheel) stay sticky, because those
+     ARE the "walk the funnel repeatedly" case that ?demo exists for.
+
+     Storage only — state.demo keeps the kind for the current page view, so
+     what is on screen still matches exactly what was asked for. */
+  function consumeDemoShortcut() {
+    try {
+      if (sessionStorage.getItem(DEMO_STORE_KEY) !== "journey") {
+        sessionStorage.setItem(DEMO_STORE_KEY, "journey");
+        if (window.console)
+          console.warn(
+            "[spin] ?demo panel shortcuts are one-shot — demo is now back to " +
+              "the full journey (form → wheel → prize). ?demo=off to stop."
+          );
+      }
+    } catch (e) {}
+  }
+
+  /* A device paired with the KIOSK DEV CODE (5555-5555) holds a fake token, so
+     its session is created as WEB and POST /spin would 409 — this page would
+     show the "web session" panel and the wheel would be unreachable. Since the
+     entire point of the dev pairing is walking the funnel end to end, treat it
+     as the full demo journey: lead form → wheel → prize.
+
+     An explicit ?demo=<kind> still wins, so a specific panel can still be
+     inspected on a dev tablet. A REAL pairing is untouched: it spins for real.
+     See flexicare-kiosk.js on why the dev token is never sent. */
+  function devPairingDemo() {
+    return FC.kiosk && typeof FC.kiosk.isDev === "function" && FC.kiosk.isDev()
+      ? "journey"
+      : null;
+  }
+
   function demoAward(kind) {
     var consolation = kind === "consolation";
     var status =
@@ -1886,23 +1941,35 @@
 
   function startDemo(token) {
     var kind = state.demo;
+    var implied = !readDemoParam(); // nobody typed ?demo — the dev pairing did
     state.wrap.setAttribute("data-spin-demo", kind);
     if (window.console)
       console.warn(
-        "[spin] ?demo is ON (" +
+        "[spin] demo mode is ON (" +
           kind +
-          "). The session GATE is skipped, POST /spin is NEVER called and no " +
-          "award is created. It is sticky for this browser tab — clear it with " +
-          "?demo=off or Flexicare.spin.demo(false) before real testing."
+          ") — " +
+          (implied
+            ? "because this device is paired with the KIOSK DEV CODE, whose " +
+              "token is never sent, so the session is WEB and cannot spin for " +
+              "real. Pair with a real code to spin for real."
+            : "from ?demo, sticky for this browser tab. Clear it with " +
+              "?demo=off or Flexicare.spin.demo(false) before real testing.") +
+          " The session GATE is skipped, POST /spin is NEVER called and no " +
+          "award is created."
       );
 
     // Panels that don't involve the wheel at all — jump straight there.
-    if (kind === "nophone") return setState("nophone");
+    if (kind === "nophone") {
+      consumeDemoShortcut();
+      return setState("nophone");
+    }
     // "journey" (bare ?demo) and "form" both open on the lead form; the only
     // difference is intent, and "wheel" is how you skip it.
     if (kind === "journey" || kind === "form") state.needLead = true;
-    if (kind === "unavailable" || kind === "error")
+    if (kind === "unavailable" || kind === "error") {
+      consumeDemoShortcut();
       return showError(null, "wheel");
+    }
     /* "prize" is the AWARDED panel — the main one, and the only award status
        that had no shortcut: it used to fall through to the wheel, so the one
        state people most want to look at was the one you had to spin for. */
@@ -1913,8 +1980,10 @@
       kind === "redeemed" ||
       kind === "expired" ||
       kind === "voided"
-    )
+    ) {
+      consumeDemoShortcut();
       return paintAward(demoAward(kind));
+    }
 
     loadWheel()
       .catch(function () {
@@ -2462,7 +2531,7 @@
 
     var token = ++state.token;
     state.wrap = wrap;
-    state.demo = readDemoParam();
+    state.demo = readDemoParam() || devPairingDemo();
     state.debug = wrap.hasAttribute("data-spin-debug") || !!state.demo;
     state.segments = null;
     state.session = null;

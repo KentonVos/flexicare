@@ -14,6 +14,42 @@ Format:
 
 ---
 
+## 2026-09-02 — Kiosk presentation is tablet-only, and demo panel shortcuts are one-shot
+
+- `src/flexicare-kiosk.js`, `src/flexicare-spin.js`, `ARCHITECTURE.md`, `CLAUDE.md`,
+  `docs/kiosk-and-spin.md` §4/§9
+
+**Fullscreen and the touch hardening are now tablet-only.** `data-kiosk-locked`
+is `?fullscreen` **or** (a token **and** `FC.isTablet()`). Pairing alone stopped
+being a safe signal the moment pairing became compulsory: every phone and laptop
+walking the funnel holds a token, and taking one of those fullscreen on tap — or
+killing its pull-to-refresh — hijacks a browser that is not a kiosk. `?fullscreen`
+still wins outright, both as an explicit per-device statement and as the escape
+hatch for a tablet the layout detection gets wrong. `kiosk.fullscreen().why` now
+names the layout mode when the tablet check is what said no.
+
+**The spin page runs its demo journey on a dev pairing.** A device paired with
+`5555-5555` has a fake token, so its session is `WEB` and `POST /spin` would
+409 — the page showed the "web session" panel and the wheel was unreachable.
+`flexicare-spin.js` now reads `Flexicare.kiosk.isDev()` and runs the full demo
+journey (lead form → wheel → prize), so the whole funnel is walkable on the dev
+code alone with no `?demo` needed. An explicit `?demo=<kind>` still wins, and a
+**real** pairing is untouched — it spins for real.
+
+**`?demo` panel shortcuts are now one-shot.** `?demo=prize` and friends
+(`consolation`, `redeemed`, `expired`, `voided`, `nophone`, `unavailable`) show
+their panel once, then the stored flag drops back to `journey`. Left sticky they
+hijacked every later lap through the funnel: you arrive at the spin page, are
+handed a prize you never spun for, and the wheel never renders at all — which
+reads as a broken wheel rather than as a flag being honoured, and is exactly how
+it was found. The full-journey kinds (`journey`, `form`, `wheel`) stay sticky,
+since those are the walk-the-funnel case `?demo` exists for. The console warning
+now also says whether demo came from `?demo` or from the dev pairing.
+
+**Webflow-side:** nothing.
+
+---
+
 ## 2026-09-02 — Pairing is now required on every screen, plus a dev pairing code
 
 - `src/flexicare-kiosk.js`, `src/flexicare-core.js` (one config default),

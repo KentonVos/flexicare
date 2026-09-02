@@ -259,8 +259,17 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
   prints every panel, its state list, whether the script thinks it is on, and its
   COMPUTED display. A row reading `visible: true` with `display: none` means CSS is
   beating the script. Note it does not flag that contradiction for you yet.
+- **`?demo`'s PANEL SHORTCUTS are one-shot; the journey kinds stay sticky.**
+  `?demo=prize` (and `consolation`, `redeemed`, `expired`, `voided`, `nophone`,
+  `unavailable`) show their panel once, then the stored flag drops back to `journey`.
+  Left sticky they hijacked every later lap: you arrive at the spin page, get handed a
+  prize you never spun for, and the wheel never renders — which reads as a broken wheel,
+  and is exactly how it was found. `journey`/`form`/`wheel` stay sticky, because those
+  ARE the walk-the-funnel case. So when the spin page jumps straight to a prize, a panel
+  shortcut is armed: the console says which, one lap clears it, `?demo=off` clears it
+  now.
 - **`?demo` is sticky for the whole browser tab, and it is the ONLY way to see the
-  wheel without a paired tablet.** Set it once anywhere (`/?demo`), walk the funnel,
+  wheel without a paired tablet** (or a dev pairing, which implies it). Set it once anywhere (`/?demo`), walk the funnel,
   and the spin page runs its whole sequence: lead form (pre-filled) → wheel → prize.
   ONE spin, like a real session. `?demo=prize` jumps straight to the awarded panel,
   `?demo=wheel` skips the form. `flexicare-spin.js` loads site-wide
@@ -276,10 +285,16 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
   link means the shopper completes the whole journey and is refused at the wheel. If the
   spin page keeps saying "unavailable", the session was started on an unpaired browser;
   fix it there, not on the spin page. `docs/kiosk-and-spin.md` has the whole chain.
-- **Fullscreen and the touch hardening are gated on `data-kiosk-locked`, not on
-  pairing.** A device being SET UP is not paired yet and still needs both, so
-  `?fullscreen` (localStorage, device-level) arms it — gating on the token alone made
-  fullscreen look broken until the last setup step. And the touch-hardening CSS in the
+- **Fullscreen and the touch hardening are gated on `data-kiosk-locked`, which is
+  TABLET-ONLY.** A device being SET UP is not paired yet and still needs both, so
+  `?fullscreen` (localStorage, device-level) arms it and wins outright — gating on the
+  token alone made fullscreen look broken until the last setup step, and it is the
+  escape hatch for a tablet `FC.isTablet()` gets wrong. But **pairing alone is not
+  enough** (changed 2026-09-02): now that pairing is compulsory, every phone and laptop
+  walking the funnel holds a token, and taking one of those fullscreen or killing its
+  pull-to-refresh hijacks a browser that is not a kiosk. So it is `?fullscreen` OR
+  (token AND tablet). `kiosk.fullscreen().why` names the mode when the tablet check is
+  what said no. And the touch-hardening CSS in the
   site head is scoped to `html[data-kiosk-locked]` because `overscroll-behavior: none`
   kills pull-to-refresh: unscoped it took that away from every developer and phone
   visitor too. Never write that block unscoped.
@@ -307,7 +322,10 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
   developer. `Flexicare.kiosk.gate()` says why it fired or didn't.
 - **The dev code `5555-5555` pairs locally and its token is NEVER sent.** It exists so
   a tester can get past the compulsory gate without an admin minting a real code, and to
-  exercise fullscreen and the idle reset before real codes exist at all. Sending
+  exercise fullscreen and the idle reset before real codes exist at all. **The spin page
+  reads `isDev()` and runs its demo journey** (form → wheel → prize), because a dev
+  session is `WEB` and could never spin for real — so the whole funnel is walkable on
+  the dev code alone, no `?demo` needed. Sending
   a fake token would `401`, and a `401` means *revoked* — which unpairs the device
   instantly. So `authHeaders()` returns `{}` for it, the heartbeat and `GET /kiosks/me`
   are skipped, the session is `WEB` and the wheel still needs `?demo`. Do not "fix" this

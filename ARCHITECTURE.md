@@ -858,11 +858,15 @@ pairing; there is no endpoint to read it back.
 PWA — a manifest's `start_url` must be same-origin as the manifest and a service worker
 must be same-origin as its pages, so both need root-path files Webflow cannot serve. Chrome
 Android hides the address bar *and* the status bar, which is the whole kiosk look.
-- Gated on `data-kiosk-locked` — a paired device, or one armed with `?fullscreen`.
-  Deliberately *not* the pairing gate, which is on for everyone: routing that into this
-  hook would apply the touch hardening and fullscreen-on-tap to every phone and every
-  developer. Opt out on a paired device with `data-kiosk-fullscreen="off"` (read
-  document-wide — one device, one answer).
+- Gated on `data-kiosk-locked`, which is **tablet-only**: a paired device *and*
+  `FC.isTablet()`, or `?fullscreen` armed. Pairing alone is not enough now that pairing
+  is compulsory — every phone and laptop that walks the funnel holds a token, and taking
+  one of those fullscreen or killing its pull-to-refresh is hijacking a browser that is
+  not a kiosk. `?fullscreen` wins outright: it is an explicit per-device statement and
+  the escape hatch for a tablet the layout detection gets wrong. Also deliberately *not*
+  the pairing gate, which is on for everyone. Opt out on a paired tablet with
+  `data-kiosk-fullscreen="off"` (read document-wide — one device, one answer).
+  `kiosk.fullscreen().why` names the mode when it is the tablet check that said no.
 - **Every** tap re-arms it, not just the first: a system dialog can drop the tablet out
   mid-shift and the next touch restores it. No-op when already fullscreen.
 - **One tap covers the whole journey**, because fullscreen survives same-document

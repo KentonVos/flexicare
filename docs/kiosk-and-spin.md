@@ -313,16 +313,21 @@ It is a real pairing as far as the *front end* is concerned:
 | idle reset | yes | yes |
 | `X-Kiosk-Token` sent | **never** | on the four calls that need it |
 | session `channel` | `WEB` | `KIOSK` |
-| `POST /sessions/{id}/spin` | **409** | awards a prize |
+| `POST /sessions/{id}/spin` | never called — demo journey | awards a prize |
 | heartbeat / `GET /kiosks/me` | skipped | every `heartbeat_seconds` |
 | visible in the admin device list | no | yes |
 
 **Why the token is never sent.** It is not a credential the server has ever
 seen, so it would come back `401` — and a `401` means *revoked*, which unpairs
 the device (§1). Suppressing the header keeps the dev device honest: the session
-is created as `WEB`, exactly as it would be in a browser, and **the wheel is
-reached with `?demo` (§9), not by faking a header.** Do not "improve" this by
-sending it anyway.
+is created as `WEB`, exactly as it would be in a browser. Do not "improve" this
+by sending it anyway.
+
+**The wheel still works on a dev pairing.** `flexicare-spin.js` reads
+`isDev()` and runs its **demo journey** — lead form → wheel → prize — because a
+dev device could never spin for real. So the whole funnel is walkable on the dev
+code alone, **with no `?demo` needed** (§9). Nothing is awarded and no stock
+moves. An explicit `?demo=<kind>` still wins if you want one specific panel.
 
 The device is marked `<html data-kiosk-dev="true">` and warns once in the
 console on pairing, so a dev tablet is never mistaken for a real one. Clear it
@@ -871,6 +876,13 @@ step and then hits a dead end at the wheel.
 
 `?demo` skips this page's session gate. (`?spindemo` still works — same flag.)
 
+**A kiosk dev pairing turns this on by itself.** A device paired with
+`5555-5555` (§4) holds a fake token, so its session is `WEB` and could never
+spin for real — `flexicare-spin.js` reads `Flexicare.kiosk.isDev()` and runs the
+**full demo journey** (lead form → wheel → prize) with no `?demo` needed. An
+explicit `?demo=<kind>` still wins. A **real** pairing is untouched and spins for
+real.
+
 ### It is sticky, and that is the point
 
 Add `?demo` **once, anywhere** — the landing page will do — and it is remembered for
@@ -892,7 +904,7 @@ early with `?demo=off`.
 | `/spin-to-win?demo` | **lead form → wheel → fake prize screen**, the whole thing |
 | `?demo=wheel` | skip the form, straight to the wheel |
 | `?demo=form` | the lead form (same as bare `?demo`). Submitting never PATCHes anything |
-| `?demo=prize` | straight to the **awarded** panel, no spin (alias `?demo=awarded`) |
+| `?demo=prize` | straight to the **awarded** panel, no spin (alias `?demo=awarded`). One-shot — see below |
 | `?demo=consolation` | straight to the consolation panel |
 | `?demo=redeemed` | …the redeemed panel (also `expired`, `voided`) |
 | `?demo=nophone` | …the no-phone panel |
@@ -901,6 +913,24 @@ early with `?demo=off`.
 
 From the console mid-journey: `Flexicare.spin.demo()` reports what is armed,
 `Flexicare.spin.demo("prize")` arms it, `Flexicare.spin.demo(false)` clears it.
+
+### The panel shortcuts are one-shot
+
+**Changed 2026-09-02.** `?demo=prize` and the other panel shortcuts
+(`consolation`, `redeemed`, `expired`, `voided`, `nophone`, `unavailable`) show
+their panel **once**, then the stored flag drops back to `journey`.
+
+They used to stay sticky like everything else, and that was wrong: you ask to
+see the awarded panel once, and from then on *every* arrival at the spin page —
+for the rest of the tab — hands you a prize you never spun for and never renders
+the wheel at all. It reads as a broken wheel rather than as a flag being
+honoured, which is exactly how it was found.
+
+The full-journey kinds (`journey`, `form`, `wheel`) **stay** sticky — those are
+the "walk the funnel repeatedly" case `?demo` exists for.
+
+So if the spin page jumps straight to a prize: a panel shortcut is armed. The
+console says which, one lap clears it, and `?demo=off` clears it now.
 
 ### The lead form
 

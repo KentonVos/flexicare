@@ -154,9 +154,12 @@
      KIOSK. authHeaders() deliberately returns {} for a dev token (sending a
      fake one would 401, and a 401 means "revoked", which would unpair the
      device the moment it tried anything). So POST /sessions still creates a
-     WEB session and POST /sessions/{id}/spin still 409s. To exercise the wheel,
-     use ?demo — that is what it is for. The dev code is for the GATE, the
-     fullscreen behaviour and the idle reset, nothing more.
+     WEB session and POST /sessions/{id}/spin still 409s.
+
+     The spin page handles that itself: flexicare-spin.js reads isDev() and
+     runs its DEMO JOURNEY — lead form → wheel → prize — because a dev device
+     could never spin for real. So the whole funnel is walkable on the dev code
+     alone, with no ?demo needed. Nothing is awarded and no stock moves.
 
      Heartbeat and GET /kiosks/me are skipped entirely for a dev token, for the
      same reason: both would 401 and unpair. <html data-kiosk-dev="true"> and a
@@ -1058,14 +1061,28 @@
   /* True when this device should be treated as a kiosk for PRESENTATION —
      fullscreen, and the touch hardening that CSS keys off data-kiosk-locked.
      Deliberately broader than isKiosk(): a device being configured is not
-     paired yet but is still a kiosk. It is never true for a web visitor. */
+     paired yet but is still a kiosk. It is never true for a web visitor.
+
+     TABLET ONLY. Pairing alone is not enough: now that pairing is required on
+     every screen, every phone and every laptop that walks the funnel holds a
+     token — and taking one of those fullscreen on tap, or killing its
+     pull-to-refresh, is hijacking a browser that is not a kiosk. The in-store
+     hardware is tablets, so that is what gets the kiosk presentation.
+
+     ?fullscreen still wins outright. It is an explicit per-device statement
+     ("this one IS a pinned tablet"), and it is the escape hatch for a device
+     the layout detection gets wrong — without it, a tablet the head snippet
+     failed to classify would have no way back to fullscreen.
+
+     Deliberately NOT gateOn(): the gate is on for everyone by default, so
+     routing that in here would harden every browser on the site. */
+  function isTabletDevice() {
+    return !!(FC.isTablet && FC.isTablet());
+  }
+
   function kioskLocked() {
-    // Deliberately NOT gateOn(): the gate is on for everyone by default, and
-    // routing that into data-kiosk-locked would apply the touch hardening
-    // (overscroll-behavior:none kills pull-to-refresh) and fullscreen-on-tap
-    // to every phone and every developer. Pairing or ?fullscreen — nothing
-    // else — says "this is a pinned tablet".
-    return !!state.token || fullscreenArmed();
+    if (fullscreenArmed()) return true; // explicit, per device — always wins
+    return !!state.token && isTabletDevice();
   }
 
   function fullscreenWanted() {
@@ -1129,6 +1146,7 @@
     return {
       active: isFullscreen(),
       wanted: fullscreenWanted(),
+      tablet: isTabletDevice(),
       supported: supported,
       paired: !!state.token,
       armed: fullscreenArmed(),
@@ -1143,6 +1161,10 @@
         ? 'data-kiosk-fullscreen="off" is set'
         : !state.token && !fullscreenArmed()
         ? "not paired and not armed — add ?fullscreen to the URL once"
+        : !isTabletDevice() && !fullscreenArmed()
+        ? "this is not a tablet (" +
+          ((FC.layout && FC.layout.mode) || "unknown") +
+          ") — fullscreen is tablet-only; ?fullscreen overrides"
         : "ready — tap the screen",
     };
   };
