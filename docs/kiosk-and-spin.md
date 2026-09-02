@@ -471,6 +471,12 @@ It gives you:
 The segments come from the live `GET /prizes/wheel`; if it is unreachable you get a
 placeholder set, so the page works with no backend and no network.
 
+It carries `data-kiosk-enforce="off"` on its `[data-spin]` wrapper (added
+2026-09-02): the page loads the real `flexicare-kiosk.js`, so the pairing gate
+(§4) would otherwise redirect it to a `/kiosk` page that does not exist beside
+the file. That attribute is not part of the component — don't copy it into
+Webflow.
+
 The CSS in that file is a **starting point, not a spec**. The script only cares
 about the `data-*` attributes — restyle everything else freely, then rebuild the
 structure in Webflow as proper classes.

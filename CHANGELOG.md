@@ -14,6 +14,23 @@ Format:
 
 ---
 
+## 2026-09-02 — Fix: the pairing gate broke demo/spin.html
+
+- `demo/spin.html`, `docs/kiosk-and-spin.md` §6
+
+The playground loads the real `flexicare-kiosk.js`, so the pairing gate shipped
+earlier today redirected it to `/kiosk` — a page that does not exist beside the
+file, local server or preview URL alike. It bounced to a 404 instead of showing
+the wheel.
+
+Fixed with `data-kiosk-enforce="off"` on its `[data-spin]` wrapper, which is what
+that attribute exists for. Commented in place as NOT part of the component, so it
+does not get copied into Webflow.
+
+**Webflow-side:** nothing.
+
+---
+
 ## 2026-09-02 — Pull-to-refresh comes back on a dev-paired tablet
 
 - `src/flexicare-kiosk.js`, `docs/kiosk-tablet-setup.md` §3

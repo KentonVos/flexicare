@@ -306,9 +306,16 @@
 
   <!-- ============================================================
        THE COMPONENT. Rebuild this structure in Webflow.
+
+       data-kiosk-enforce="off" is NOT part of the component — it is here
+       because this page loads the real flexicare-kiosk.js, whose pairing gate
+       redirects any unpaired device to /kiosk. That page does not exist beside
+       this file, so without the opt-out the playground bounces to a 404.
+       Don't copy that attribute into Webflow.
        ============================================================ -->
   <div data-spin
        data-spin-debug
+       data-kiosk-enforce="off"
        data-spin-turns="3"
        data-spin-duration="3"
        data-spin-ease="power2.inOut"
