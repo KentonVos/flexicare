@@ -59,6 +59,7 @@
     kiosk: {
       tokenKey: "flx_kiosk_token", // localStorage key (device token + cache)
       attractUrl: "/", // where an idle timeout returns to
+      pairUrl: "/kiosk", // where the pairing gate sends an unpaired device
       heartbeatSeconds: 60, // until the server says otherwise
       idleTimeoutSeconds: 90, // ditto
       appVersion: "1.0.0", // stamped into every heartbeat, shown to admins

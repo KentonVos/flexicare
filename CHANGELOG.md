@@ -14,6 +14,62 @@ Format:
 
 ---
 
+## 2026-09-02 — Pairing is now required on every screen, plus a dev pairing code
+
+- `src/flexicare-kiosk.js`, `src/flexicare-core.js` (one config default),
+  `ARCHITECTURE.md`, `docs/kiosk-and-spin.md` §4, `docs/kiosk-tablet-setup.md` §4/§5
+
+**The pairing gate — on by default.** A device with no token has nothing to
+show, so every arrival on every page (boot and Barba `afterEnter` alike) now
+checks for a device token and redirects to `/kiosk` if there is none. Sign in
+first, then the funnel. Previously an unpaired device behaved exactly like the
+public site, so a shopper walked the whole funnel on a `WEB` session and was
+refused at the wheel — which reads as a broken prize page rather than an
+unpaired device.
+
+**There is no public web visitor any more.** Anything that branches on a `WEB`
+session — the spin page's "unavailable" copy, `data-product-next-web` on the
+product page — is now effectively unreachable. It stays in place as the honest
+fallback if the gate is ever turned off, but nothing new should be built on it.
+
+Escape hatch: `?kiosk=off` turns the gate off for one **device**
+(`localStorage flx_kiosk_gate`); `?kiosk` or `Flexicare.kiosk.enforce(true)`
+restores it. That is for developing against the site in a normal browser. Note
+the polarity — storage holds an *opt-out*, so an untouched device, and one whose
+`localStorage` throws, is enforced. **The gate fails closed on purpose.**
+
+Skipped when the page can pair (`[data-kiosk-pair]`, which is how `/kiosk`
+exempts itself), when a page sets the new `[data-kiosk-enforce="off"]`, while
+pairing is in flight, or when already on the target. Target overridable with the
+new `[data-kiosk-pair-url]`. It deliberately does **not** feed
+`data-kiosk-locked`: routing an on-by-default gate into that hook would take
+pull-to-refresh away from every phone and every developer. It does fire on
+`unpair()`, so an admin revoking a token mid-shift returns the tablet to the
+pairing screen. `Flexicare.kiosk.gate()` prints why it fired or didn't.
+
+**The dev code `5555-5555`.** With pairing compulsory every tester needs a code,
+and minting a real one in the admin dashboard for each of them is friction the
+gate should not create. The dev code pairs the device **locally** — fake token,
+fake kiosk record, no network call — and satisfies `isKiosk()`, the gate,
+fullscreen and the idle reset.
+
+It deliberately **cannot** make the session `KIOSK`: `authHeaders()` returns
+`{}` for a dev token, because sending a fake one would `401` and a `401` means
+*revoked*, which would unpair the device instantly. So the session stays `WEB`,
+`POST /sessions/{id}/spin` still 409s, and the wheel still needs `?demo`.
+Heartbeat and `GET /kiosks/me` are skipped for the same reason — a dev device is
+invisible to the admin list. Marked `<html data-kiosk-dev="true">`, warns once in
+the console, reported by `Flexicare.kiosk.isDev()`.
+
+Also: `go()` now falls back to a hard load if `barba.go()` throws — the gate can
+run at boot, before `transition.js` has called `barba.init()`.
+
+**Webflow-side:** nothing required. Two optional new attributes:
+`[data-kiosk-enforce="off"]` to keep a page public, `[data-kiosk-pair-url]` to
+move the pairing page. **Never leave a store tablet paired with the dev code.**
+
+---
+
 ## 2026-09-02 — Docs caught up for the handover, and an unknown-preset warning
 
 Documentation, plus one small code change that came out of auditing it.

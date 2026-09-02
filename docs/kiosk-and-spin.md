@@ -291,6 +291,108 @@ the URL would 404 and look like the pairing had failed.
 confused. The alphabet already excludes them, but the *claim* codes on the prize
 screen use the same alphabet and get read aloud across a shop floor.
 
+### The dev code — `5555-5555`
+
+**Added 2026-09-02.** Type `5555-5555` into the pairing panel (or open
+`/kiosk?pair=5555-5555`) and the device pairs **locally**: a fake token, a fake
+kiosk record, no network call at all.
+
+Because the gate below makes pairing compulsory, every tester now needs a code —
+and minting a real one in the admin dashboard for each of them is friction the
+gate should not create. The dev code is that bypass. It is also what lets the
+tablet behaviour be built and walked end to end before the backend admin can
+issue real codes at all.
+
+It is a real pairing as far as the *front end* is concerned:
+
+| | dev pairing | real pairing |
+|---|---|---|
+| `Flexicare.kiosk.isKiosk()` | `true` | `true` |
+| passes the pairing gate (below) | yes | yes |
+| fullscreen on tap / touch hardening | yes | yes |
+| idle reset | yes | yes |
+| `X-Kiosk-Token` sent | **never** | on the four calls that need it |
+| session `channel` | `WEB` | `KIOSK` |
+| `POST /sessions/{id}/spin` | **409** | awards a prize |
+| heartbeat / `GET /kiosks/me` | skipped | every `heartbeat_seconds` |
+| visible in the admin device list | no | yes |
+
+**Why the token is never sent.** It is not a credential the server has ever
+seen, so it would come back `401` — and a `401` means *revoked*, which unpairs
+the device (§1). Suppressing the header keeps the dev device honest: the session
+is created as `WEB`, exactly as it would be in a browser, and **the wheel is
+reached with `?demo` (§9), not by faking a header.** Do not "improve" this by
+sending it anyway.
+
+The device is marked `<html data-kiosk-dev="true">` and warns once in the
+console on pairing, so a dev tablet is never mistaken for a real one. Clear it
+with `Flexicare.kiosk.unpair()`.
+
+### The pairing gate — pairing is required, on every screen
+
+**Added 2026-09-02. This is on by default.** A device with no token has nothing
+to show, so **every arrival on every page** — hard load and Barba navigation
+alike — checks for a token and redirects to `/kiosk` if there is none. Sign in
+first, then the funnel.
+
+**The consequence to understand: there is no public web visitor any more.**
+Anything downstream that branches on a `WEB` session — the spin page's
+"unavailable" copy, `data-product-next-web` on the product page (§5) — is now
+effectively unreachable. Leave it in place, since it is the honest fallback if
+the gate is ever turned off, but do not build new work on it.
+
+**The escape hatch is `?kiosk=off`**, stored per **device** in `localStorage`
+(`flx_kiosk_gate`) beside the token and the `?fullscreen` flag, for the same
+reason all three are: it describes a device, so it survives a reboot. `?kiosk`
+(or `Flexicare.kiosk.enforce(true)`) puts it back. That hatch exists so a
+developer can look at the site in a normal browser — it is not something to hand
+to a shopper.
+
+Note the **storage polarity**: the key holds an *opt-out*, so a device that has
+never been touched is enforced, and so is a device whose `localStorage` throws
+(a locked-down tablet profile, Safari private mode). The gate must fail
+**closed** — failing open would put a shopper on an unpaired journey, which is
+the exact thing it exists to prevent.
+
+The gate is skipped when:
+
+- the page can pair — it has `[data-kiosk-pair]`. This is how `/kiosk` exempts
+  itself, and it also covers a pairing overlay living in the persistent shell
+  (in which case the gate never redirects anywhere, because pairing is always
+  reachable — that is correct, not a bug).
+- the page sets `[data-kiosk-enforce="off"]` on something inside
+  `data-barba="container"`. Use this for any page that must stay public.
+- a pair request is in flight, or we are already on the target path.
+
+The target is `/kiosk`, overridable with `[data-kiosk-pair-url="/somewhere"]`
+anywhere in the DOM (read document-wide — the pairing panel only exists on the
+page we are going *to*, so every other page has to learn the target from
+somewhere else).
+
+**It does not feed `data-kiosk-locked`.** The touch hardening and
+fullscreen-on-tap are still gated on pairing or `?fullscreen` only. Routing an
+on-by-default gate into that hook would take `overscroll-behavior: none` — and
+with it pull-to-refresh — away from every phone and every developer.
+
+It also fires on `unpair()`, which is the real payoff: an admin revoking a token
+mid-shift produces a `401`, and the tablet now returns to the pairing screen
+instead of quietly finishing the journey as a web visitor.
+
+**It survives the idle reset.** `resetJourney()` only sweeps `sessionStorage`
+by prefix, so both the gate preference and the device token (`localStorage`) are
+untouched — a tablet resetting between shoppers stays signed in.
+
+**Walking the funnel with `?demo` (§9) still works**, with one extra step at the
+front: open `/?demo`, get redirected to `/kiosk`, pair with the dev code, then
+walk it. The demo flag is captured into `sessionStorage` at script load on the
+page carrying it, which happens *before* the gate redirects, so it is already
+armed by the time you land on the pairing screen.
+
+**When a device is redirecting (or refusing to), run
+`Flexicare.kiosk.gate()`.** It prints whether the gate is enforced, whether a
+token is present, the target, and the exact reason the redirect did or did not
+happen.
+
 ### On every other page
 
 Two optional attributes, both on something inside `data-barba="container"`:

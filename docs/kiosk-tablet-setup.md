@@ -169,14 +169,24 @@ html[data-kiosk-locked] :is(input, textarea, [contenteditable="true"]) {
    mains power.**
 2. **Open the funnel in Chrome** at the published URL **with `?fullscreen` on the end**,
    once. That arms fullscreen on this device before it is paired — you want it during
-   setup, not only at the end. Leave the tab open.
-3. **Pair the device.** Go to `/kiosk`, enter the code from the admin UI. The panel
-   should flip to "Paired" with the store name. Confirm:
+   setup, not only at the end. Clear it with `?fullscreen=off`.
+
+   Leave the tab open. Because pairing is required on every screen, the **pairing gate**
+   takes you straight to `/kiosk` — it is on by default and there is nothing to arm.
+   (`?kiosk=off` turns it off for one device, for development only.)
+3. **Pair the device.** Enter the code from the admin UI. The panel should flip to
+   "Paired" with the store name. Confirm:
    ```js
    Flexicare.kiosk.isKiosk()   // → true
+   Flexicare.kiosk.isDev()     // → false  (true means you used the dev code)
    ```
    Pair **from the tab you will actually run**, not a different browser or profile —
    the token is per-origin-per-browser-storage.
+
+   *While testing, before the admin can issue real codes:* `5555-5555` pairs the
+   device locally — enough for the gate, fullscreen and the idle reset, but the
+   session is still `WEB` and the wheel needs `?demo`. See
+   `docs/kiosk-and-spin.md` §4. **Never leave a store tablet on the dev code.**
 4. **Tap the screen once** to enter fullscreen. Confirm
    `Flexicare.kiosk.fullscreen().active === true`.
 5. **Screen lock + app pinning.** Settings → Lock screen → Screen lock type → **PIN**.
@@ -195,7 +205,10 @@ html[data-kiosk-locked] :is(input, textarea, [contenteditable="true"]) {
 ## 5. Acceptance checklist
 
 - [ ] `Flexicare.layout.forced` → `true`, viewport reads `width=991, viewport-fit=cover`
-- [ ] `Flexicare.kiosk.isKiosk()` → `true`
+- [ ] `Flexicare.kiosk.isKiosk()` → `true`, `Flexicare.kiosk.isDev()` → `false`
+- [ ] `Flexicare.kiosk.gate()` → `enforced: true`, `wouldRedirect: false`
+- [ ] **Unpair test:** run `Flexicare.kiosk.unpair()` mid-funnel — the tablet must
+      land back on `/kiosk`, not carry on. Then re-pair.
 - [ ] One tap → no address bar, no status bar (`kiosk.fullscreen().active` → `true`)
 - [ ] Fullscreen **survives the whole funnel** — walk landing → onboarding → quiz →
       reveal → product → spin without it dropping

@@ -858,8 +858,10 @@ pairing; there is no endpoint to read it back.
 PWA — a manifest's `start_url` must be same-origin as the manifest and a service worker
 must be same-origin as its pages, so both need root-path files Webflow cannot serve. Chrome
 Android hides the address bar *and* the status bar, which is the whole kiosk look.
-- Gated on the token, like everything else here, so a web visitor's browser is never
-  hijacked. Opt out on a paired device with `data-kiosk-fullscreen="off"` (read
+- Gated on `data-kiosk-locked` — a paired device, or one armed with `?fullscreen`.
+  Deliberately *not* the pairing gate, which is on for everyone: routing that into this
+  hook would apply the touch hardening and fullscreen-on-tap to every phone and every
+  developer. Opt out on a paired device with `data-kiosk-fullscreen="off"` (read
   document-wide — one device, one answer).
 - **Every** tap re-arms it, not just the first: a system dialog can drop the tablet out
   mid-shift and the next touch restores it. No-op when already fullscreen.
@@ -906,6 +908,41 @@ reload. Every response's `config` is applied, re-arming the timers.
 
 **Idle reset**: after `idle_timeout_seconds` without touch, drop the session id (no server
 call — an abandoned session needs no cleanup) and `barba.go()` to the attract URL.
+
+**The pairing gate** (added 2026-09-02) makes pairing **compulsory, on by default**:
+`init()` — which runs on boot and on every Barba `afterEnter`, so "every screen" is
+literal — redirects to `/kiosk` whenever there is no token. Sign in first, then the
+funnel.
+- **There is no public web visitor any more.** Everything that branches on a `WEB`
+  session — the spin page's "unavailable" copy, `data-product-next-web` — is now
+  effectively unreachable. It stays as the honest fallback if the gate is turned off, but
+  nothing new should be built on it.
+- **The escape hatch is `?kiosk=off`** (`localStorage flx_kiosk_gate`, `?kiosk` or
+  `kiosk.enforce(true)` to restore), per device, for developing in a normal browser. Note
+  the polarity: storage holds an *opt-out*, so an untouched device — and one whose
+  `localStorage` throws — is enforced. **The gate fails closed**; failing open would put
+  a shopper on an unpaired journey, which is what it exists to prevent.
+- Skipped when the page can pair (`[data-kiosk-pair]` — how `/kiosk` exempts itself, and
+  why a pairing overlay in the persistent shell disables the gate everywhere, correctly),
+  when the page sets `[data-kiosk-enforce="off"]`, while a pair request is in flight, or
+  when already on the target. Target is `/kiosk`, overridden by `[data-kiosk-pair-url]`
+  read *document-wide* — the panel only exists on the page we are going to.
+- It also fires from `unpair()`, which is the real payoff: an admin revoking a token
+  mid-shift now returns the tablet to the pairing screen instead of letting the shopper
+  finish a journey that will be refused at the wheel.
+- `kiosk.gate()` prints enforced / paired / target / whether this page redirects and why.
+
+**The dev code `5555-5555`** pairs locally with no network call — a fake token and a fake
+kiosk record. With pairing compulsory, every tester needs a code, and minting a real one
+in the admin dashboard for each of them is friction the gate should not create; this is
+that bypass, and it is also what lets the tablet behaviour be exercised before an admin
+can issue real codes at all. It satisfies `isKiosk()`, the gate, fullscreen and the idle reset. It cannot
+make the session `KIOSK`: **`authHeaders()` returns `{}` for a dev token**, because a fake
+token would come back `401` and a `401` means *revoked*, which unpairs the device. So the
+session is `WEB`, `POST /spin` 409s, and the wheel is reached with `?demo` instead.
+Heartbeat and `GET /kiosks/me` are skipped for the same reason, which means a dev device is
+invisible to the admin list. Marked `<html data-kiosk-dev="true">`, warns once on pairing,
+and reported by `kiosk.isDev()`.
 
 ### flexicare-spin.js
 `/spin-to-win` — the prize wheel. The one **kiosk-only** page in the funnel.

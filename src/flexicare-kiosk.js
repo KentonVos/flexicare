@@ -97,14 +97,22 @@
                                one answer) and only consulted when a token
                                exists, so it does nothing on the public site.
                                Default on. See docs/kiosk-tablet-setup.md.
+     [data-kiosk-enforce="off"]
+                               Exempts THIS page from the pairing gate below
+                               (see "THE PAIRING GATE"). Read on the incoming
+                               page, so it opts out one screen, not the device.
 
    PRESENTATION HOOK (on <html>, for the site's touch-hardening CSS):
-     data-kiosk-locked="true"  this device is a kiosk: paired, OR armed with
-                               ?fullscreen. Broader than isKiosk() on purpose —
-                               a device being configured is not paired yet but
-                               still wants the hardening. Absent for every web
-                               visitor, which is what keeps pull-to-refresh and
-                               text selection normal on the public site.
+     data-kiosk-locked="true"  this device is a PINNED TABLET: paired, OR armed
+                               with ?fullscreen. Broader than isKiosk() on
+                               purpose — a device being configured is not paired
+                               yet but still wants the hardening. Deliberately
+                               NOT fed by the pairing gate, which is on for
+                               everyone: that would take pull-to-refresh away
+                               from every phone and every developer.
+     data-kiosk-dev="true"     this device is paired with the DEV CODE, so the
+                               token is fake and no /kiosks/* call is made. A
+                               visible marker that the tablet is not real.
 
    STATE (drive your CSS off this — it is set on BOTH <html> and the panel):
      data-kiosk-state = "web"      no token: a normal web visitor
@@ -113,9 +121,52 @@
                       | "active"   paired and enabled — the normal state
                       | "disabled" paired, but the admin switched it off
 
+   THE PAIRING GATE — PAIRING IS REQUIRED, ON EVERY SCREEN, BY DEFAULT
+     A device with no token has nothing to show. Every arrival on every page
+     (hard load and Barba navigation alike) checks for a token and, finding
+     none, sends the device to the pairing page (/kiosk by default) instead of
+     rendering. Sign in first, then the funnel.
+
+     This is ON by default — the funnel is an in-store experience, so a paired
+     device is the baseline and an unpaired one is the exception. Which means
+     THERE IS NO PUBLIC WEB VISITOR any more: everything downstream that
+     branches on a WEB session (the spin page's "unavailable" copy,
+     data-product-next-web) is now effectively unreachable. Leave it be — it is
+     the honest fallback if the gate is ever turned off — but do not build on it.
+
+     Turn it off for ONE DEVICE with ?kiosk=off (localStorage, like ?fullscreen
+     — it describes a device, so it survives a reboot). ?kiosk re-enables it.
+     That hatch is for developing against the site in a normal browser. Note
+     the storage polarity: the key holds an OPT-OUT, so a fresh device — and a
+     device whose localStorage throws — is enforced. The gate must fail CLOSED.
+
+     Skipped when: the page can pair (it has [data-kiosk-pair], which is how
+     /kiosk itself is exempt), the page says [data-kiosk-enforce="off"], a pair
+     request is in flight, or we are already on the target path.
+
+   THE DEV CODE  ("5555-5555")
+     Because pairing is now required, every tester needs a code — and minting a
+     real one in the admin dashboard for each of them is friction the gate
+     should not create. Typing the dev code into the pairing panel pairs the
+     device LOCALLY: a fake token, a fake kiosk record, no network call at all.
+
+     What it does NOT do — and cannot: make the server treat the session as
+     KIOSK. authHeaders() deliberately returns {} for a dev token (sending a
+     fake one would 401, and a 401 means "revoked", which would unpair the
+     device the moment it tried anything). So POST /sessions still creates a
+     WEB session and POST /sessions/{id}/spin still 409s. To exercise the wheel,
+     use ?demo — that is what it is for. The dev code is for the GATE, the
+     fullscreen behaviour and the idle reset, nothing more.
+
+     Heartbeat and GET /kiosks/me are skipped entirely for a dev token, for the
+     same reason: both would 401 and unpair. <html data-kiosk-dev="true"> and a
+     console warning mark the device so nobody mistakes it for a real pairing.
+
    PUBLIC API (window.Flexicare.kiosk)
      isKiosk()      → boolean. "Is there a device token?" This is what the rest
-                      of the funnel asks before offering the spin.
+                      of the funnel asks before offering the spin. TRUE for a
+                      dev pairing too — it is a local gate, not proof the
+                      SERVER will accept the device (only a real token is).
      authHeaders()  → { "X-Kiosk-Token": … } or {}. Used by FC.api's kiosk flag.
      info()         → { kiosk, config, status } from the cache (may be stale).
      setScreen(s)   → what the next heartbeat reports.
@@ -123,6 +174,11 @@
      unpair()       → clears the token locally and shows the unpaired screen.
                       (Does NOT revoke server-side — that is an admin action.)
      onDisabled(fn) / onUnpaired(fn) → callbacks, if a page needs to react.
+     isDev()        → boolean. Paired with the dev code (fake token).
+     enforce(on)    → turn the pairing gate on/off for this device; no argument
+                      just reports. Same thing ?kiosk / ?kiosk=off does.
+     gate()         → prints why the gate did or did not fire. Start here when
+                      a tablet is redirecting (or refusing to redirect).
    ============================================================ */
 (function () {
   "use strict";
@@ -139,10 +195,17 @@
   // across a shop floor and typed on a tablet.
   var ALPHABET = /[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]/;
 
+  /* The dev pairing code. Deliberately inside the pairing alphabet so it
+     passes the same validation an operator's code does — there is no separate
+     input path and no separate button state to keep in sync. */
+  var DEV_CODE = "5555-5555";
+  var DEV_TOKEN = "dev-local"; // never sent anywhere; see authHeaders()
+
   var K = (FC.kiosk = FC.kiosk || {});
 
   var state = {
     token: null,
+    dev: false, // token came from the dev code — never sent to the server
     kiosk: null, // { id, name, status, location: { id, name, code } }
     config: null, // { heartbeat_seconds, idle_timeout_seconds }
     status: null, // "ACTIVE" | "DISABLED"
@@ -196,11 +259,22 @@
       return false;
     }
   }
+  /* Same-document navigation wherever possible: a hard load would drop the
+     tablet out of fullscreen and discard the buffered selfie. The try/catch is
+     for the boot-time pairing gate, which can run before transition.js has
+     called barba.init() — barba.go() throws then, and a hard load is the right
+     answer at that point (nothing is in flight yet to lose). */
   function go(url) {
     if (!url || samePath(url)) return;
-    if (window.barba && typeof window.barba.go === "function")
-      window.barba.go(url);
-    else window.location.href = url;
+    if (window.barba && typeof window.barba.go === "function") {
+      try {
+        window.barba.go(url);
+        return;
+      } catch (e) {
+        dbg("barba.go failed, hard-loading:", (e && e.message) || e);
+      }
+    }
+    window.location.href = url;
   }
   function now() {
     return new Date().getTime();
@@ -239,6 +313,7 @@
         STORE_KEY,
         JSON.stringify({
           token: state.token,
+          dev: state.dev,
           kiosk: state.kiosk,
           config: state.config,
         })
@@ -284,6 +359,8 @@
     if (!root) return;
     if (kioskLocked()) root.setAttribute("data-kiosk-locked", "true");
     else root.removeAttribute("data-kiosk-locked");
+    if (state.dev) root.setAttribute("data-kiosk-dev", "true");
+    else root.removeAttribute("data-kiosk-dev");
   }
 
   function applyState() {
@@ -366,13 +443,23 @@
   };
   K.isPaired = K.isKiosk;
 
+  K.isDev = function () {
+    return !!state.dev;
+  };
+
+  /* A DEV token is never sent. It is not a credential the server has ever
+     seen, so it would come back 401 — and 401 means "revoked", which unpairs
+     the device. Returning {} keeps the dev device honest instead: the session
+     is created as WEB, exactly as it would be in a browser, and the wheel is
+     reached with ?demo rather than by faking a header. */
   K.authHeaders = function () {
-    return state.token ? { "X-Kiosk-Token": state.token } : {};
+    return state.token && !state.dev ? { "X-Kiosk-Token": state.token } : {};
   };
 
   K.info = function () {
     return {
       paired: !!state.token,
+      dev: !!state.dev,
       kiosk: state.kiosk,
       config: state.config,
       status: state.status,
@@ -403,6 +490,7 @@
   K.unpair = function (reason) {
     dbg("unpairing:", reason || "manual");
     state.token = null;
+    state.dev = false;
     state.kiosk = null;
     state.config = null;
     state.status = null;
@@ -412,6 +500,9 @@
     // The shopper mid-quiz cannot finish a session bound to a revoked device.
     if (FC.getSessionId()) FC.resetJourney();
     applyState();
+    // An armed device that just lost its token belongs on the pairing screen,
+    // not three pages into a journey it can no longer complete.
+    enforceGate(document);
   };
 
   /* ------------------------------- pairing ------------------------------- */
@@ -432,6 +523,40 @@
     );
   }
 
+  /* Local pairing with the dev code. No network call — there is no server
+     record to create, which is the point: this exists so the funnel can be
+     walked end to end before an admin has minted a real pairing code. */
+  function devPair() {
+    state.busy = false;
+    state.token = DEV_TOKEN;
+    state.dev = true;
+    state.kiosk = {
+      id: "dev",
+      name: "Dev tablet (local pairing)",
+      status: "ACTIVE",
+      location: { id: "dev", name: "Dev — not a real kiosk", code: "dev" },
+    };
+    // Server config never arrives for a dev device, so the fallbacks in
+    // Flexicare.config.kiosk are what the heartbeat-less device runs on.
+    state.config = {
+      heartbeat_seconds: CFG.heartbeatSeconds || 60,
+      idle_timeout_seconds: CFG.idleTimeoutSeconds || 90,
+    };
+    state.status = "ACTIVE";
+    writeStore();
+    resetIdle(); // idle reset is local, so it DOES work on a dev device
+    applyState();
+    if (window.console)
+      console.warn(
+        "[kiosk] DEV PAIRING (" +
+          DEV_CODE +
+          "). The token is fake and is never sent: sessions are still WEB, so " +
+          "POST /spin will 409 — use ?demo for the wheel. No heartbeat, no " +
+          "/kiosks/me. Pair with a real code before go-live."
+      );
+    return Promise.resolve(K.info());
+  }
+
   K.pair = function (code) {
     code = normaliseCode(code);
     if (!codeComplete(code))
@@ -439,6 +564,7 @@
         new Error("Enter the 8-character code as XXXX-XXXX")
       );
     if (state.busy) return Promise.reject(new Error("Pairing already running"));
+    if (code === DEV_CODE) return devPair();
 
     state.busy = true;
     clearPanelError();
@@ -603,7 +729,8 @@
      A disabled kiosk still gets a 200 here — that is how it finds out. */
 
   function checkMe() {
-    if (!state.token) return Promise.resolve();
+    // A dev token would 401 here, and a 401 unpairs the device.
+    if (!state.token || state.dev) return Promise.resolve();
     return FC.api("/kiosks/me", { kiosk: true })
       .then(function (res) {
         applyServer(res);
@@ -643,7 +770,9 @@
   }
 
   function beat() {
-    if (!state.token) return;
+    // A dev token is not a credential — beating with it would 401 and unpair.
+    // The consequence to accept: a dev device is invisible to the admin list.
+    if (!state.token || state.dev) return;
     FC.api("/kiosks/heartbeat", {
       method: "POST",
       kiosk: true,
@@ -666,7 +795,7 @@
   }
 
   function armHeartbeat() {
-    if (!state.token) return;
+    if (!state.token || state.dev) return;
     var every = heartbeatSeconds();
     if (state.beatTimer && state.beatEvery === every) return; // unchanged
     stopHeartbeat();
@@ -794,11 +923,148 @@
     }
   }
 
+  /* ------------------------- the pairing gate -------------------------
+     "This device is a kiosk, so it must be paired before it shows anything."
+
+     Without this, a tablet whose token was revoked (or never written — see
+     writeStore) silently becomes a member of the public. The shopper walks the
+     whole funnel on a WEB session and is refused at the wheel, which reads as
+     a broken prize page rather than an unpaired tablet. The gate moves that
+     failure to the first screen, where it is obvious and fixable.
+
+     IT IS ON BY DEFAULT. This is a decision, not an oversight: the funnel is
+     an in-store experience, so "signed in" is the baseline state and an
+     unpaired browser has nothing to show. Every device that opens the site
+     pairs first — a tablet with a real code from the admin dashboard, or a
+     tester with the dev code.
+
+     THE CONSEQUENCE TO UNDERSTAND: there is no public web visitor any more.
+     Anything downstream that branches on a WEB session — the spin page's
+     "unavailable" copy, data-product-next-web on the product page — is now
+     effectively unreachable. Leave it in place (it is the honest fallback if
+     the gate is ever turned off again) but do not build new work on it.
+
+     THE ESCAPE HATCH is ?kiosk=off, stored per DEVICE in localStorage beside
+     the token and the fullscreen flag, for the same reason all three are:
+     it describes a device, so it has to survive a reboot. Re-enable with
+     ?kiosk (or ?kiosk=on). This exists so a developer can look at the site in
+     a normal browser; it is not something to hand to a shopper. */
+  var ENF_KEY = "flx_kiosk_gate"; // holds "off" — absence means enforced
+
+  function captureEnforceFlag() {
+    var raw = null;
+    try {
+      raw = new URL(location.href).searchParams.get("kiosk");
+    } catch (e) {
+      var m = /[?&]kiosk(?:=([^&]*))?/.exec(location.search || "");
+      if (m) raw = m[1] == null ? "" : decodeURIComponent(m[1]);
+    }
+    if (raw === null) return; // absent — leave any stored preference alone
+    var on = !/^(off|0|false|no)$/i.test(raw);
+    setGate(on);
+    dbg("pairing gate →", on ? "enforced" : "off for this device");
+  }
+
+  function setGate(on) {
+    try {
+      if (on) localStorage.removeItem(ENF_KEY); // default IS enforced
+      else localStorage.setItem(ENF_KEY, "off");
+    } catch (e) {}
+  }
+
+  /* Note the polarity: storage holds an OPT-OUT, so a device that has never
+     been touched — and a device whose localStorage throws — is enforced. The
+     gate failing open would put a shopper on an unpaired journey, which is
+     exactly what it exists to prevent. */
+  function gateOn() {
+    try {
+      return localStorage.getItem(ENF_KEY) !== "off";
+    } catch (e) {
+      return true;
+    }
+  }
+
+  /* Where an unpaired armed device is sent. Read document-wide and not from
+     the pairing panel — the panel only exists on the page we are going TO, so
+     every other page has to learn the target from somewhere else. */
+  function pairUrl() {
+    var el = document.querySelector("[data-kiosk-pair-url]");
+    var fromDom = el && attr(el, "data-kiosk-pair-url", null);
+    return fromDom || CFG.pairUrl || "/kiosk";
+  }
+
+  /* Why the gate would not fire on this page. Kept as one function so gate()
+     can report exactly what init() decided, rather than re-deriving it. */
+  function gateBlock(scope) {
+    if (!gateOn()) return "off for this device — ?kiosk re-enables it";
+    if (state.token)
+      return state.dev ? "paired (dev code)" : "paired — token present";
+    if (state.busy) return "a pair request is in flight";
+    // The page can pair, so redirecting it would be a loop. This is how /kiosk
+    // exempts itself, and it also covers a pairing overlay in the shell.
+    if (state.panel) return "this page has [data-kiosk-pair]";
+    var exempt = null;
+    scope = scope || document;
+    if (scope.matches && scope.matches('[data-kiosk-enforce="off"]'))
+      exempt = scope;
+    else if (scope.querySelector)
+      exempt = scope.querySelector('[data-kiosk-enforce="off"]');
+    if (exempt) return 'the page sets [data-kiosk-enforce="off"]';
+    if (samePath(pairUrl())) return "already on " + pairUrl();
+    return null;
+  }
+
+  /* Runs on boot and on every Barba arrival, so "every screen" is literal.
+     Returns true when it redirected, so callers can stop setting up a page
+     that is on its way out. */
+  function enforceGate(scope) {
+    var why = gateBlock(scope);
+    if (why) return false;
+    var target = pairUrl();
+    if (window.console)
+      console.warn(
+        "[kiosk] this device is not paired — redirecting to " +
+          target +
+          ". Pair it (the dev code is " +
+          DEV_CODE +
+          "), or turn the gate off for this device with ?kiosk=off."
+      );
+    go(target);
+    return true;
+  }
+
+  K.enforce = function (on) {
+    if (arguments.length) {
+      setGate(!!on);
+      applyState();
+    }
+    return gateOn();
+  };
+
+  K.gate = function () {
+    var why = gateBlock(document);
+    var out = {
+      enforced: gateOn(),
+      paired: !!state.token,
+      dev: !!state.dev,
+      target: pairUrl(),
+      wouldRedirect: !why,
+      reason: why || "not paired — this page redirects",
+    };
+    if (window.console) console.table ? console.table([out]) : console.log(out);
+    return out;
+  };
+
   /* True when this device should be treated as a kiosk for PRESENTATION —
      fullscreen, and the touch hardening that CSS keys off data-kiosk-locked.
      Deliberately broader than isKiosk(): a device being configured is not
      paired yet but is still a kiosk. It is never true for a web visitor. */
   function kioskLocked() {
+    // Deliberately NOT gateOn(): the gate is on for everyone by default, and
+    // routing that into data-kiosk-locked would apply the touch hardening
+    // (overscroll-behavior:none kills pull-to-refresh) and fullscreen-on-tap
+    // to every phone and every developer. Pairing or ?fullscreen — nothing
+    // else — says "this is a pinned tablet".
     return !!state.token || fullscreenArmed();
   }
 
@@ -996,6 +1262,10 @@
     clearPanelError();
 
     applyState();
+    // Before anything else about this page matters: is this device allowed to
+    // BE here? A redirect makes the rest moot, and arming the idle timer for a
+    // page we are leaving would just fire against the pairing screen.
+    if (enforceGate(scope)) return;
     resetIdle();
   }
 
@@ -1015,10 +1285,12 @@
     // Before anything reads kioskLocked(): ?fullscreen has to be honoured on
     // the very load that carries it, and applyLocked() runs during init().
     captureFullscreenFlag();
+    captureEnforceFlag(); // same deal: honour ?kiosk on the load carrying it
 
     var saved = readStore();
     if (saved) {
       state.token = saved.token;
+      state.dev = !!saved.dev;
       state.kiosk = saved.kiosk || null;
       state.config = saved.config || null;
       state.status = (saved.kiosk && saved.kiosk.status) || "ACTIVE";
@@ -1035,7 +1307,9 @@
       applyLocked(); // covers the armed-but-unpaired device
       dbg("boot", {
         paired: !!state.token,
+        dev: state.dev,
         armed: fullscreenArmed(),
+        gate: gateOn() ? "enforced" : "off",
         mode: state.mode,
       });
     }

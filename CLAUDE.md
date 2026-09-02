@@ -27,10 +27,14 @@ published since the change.**
    on Kenton's machine and paste into `PRESETS` in `src/glass.js`. See the glass bullet
    below and `docs/webflow-mcp.md` §9.
 2. **The API base is STAGING** in `flexicare-core.js`. Swap before go-live.
-3. **Four lead-form fields have no backend endpoint** (`name`, `surname`, `id_type`,
+3. **The dev pairing code `5555-5555` is live** (added 2026-09-02). It pairs a device
+   locally with a fake token so the tablet behaviour can be tested before the admin can
+   issue real codes. **A store tablet must never go live on it** — the session stays
+   `WEB` and the wheel refuses. Check with `Flexicare.kiosk.isDev()`.
+4. **Four lead-form fields have no backend endpoint** (`name`, `surname`, `id_type`,
    `id_number`) — buffered in memory only, and the button says "Call me back".
-4. Before go-live: drop `slider.js` / `orb-tuner.js` from the Webflow footer.
-5. Element deletions on `/spin-to-win` and `/kiosk` still need Kenton's explicit yes —
+5. Before go-live: drop `slider.js` / `orb-tuner.js` from the Webflow footer.
+6. Element deletions on `/spin-to-win` and `/kiosk` still need Kenton's explicit yes —
    `docs/webflow-mcp.md` §9.
 
 **Recently changed, so don't be surprised:** glass lost saturation, tint, chromatic
@@ -286,6 +290,28 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
   reload**, so swapping any `barba.go()` for a `location.reload()` drops the tablet out
   of fullscreen on every idle reset. Same rule that protects the buffered selfie, second
   reason. `docs/kiosk-tablet-setup.md`.
+- **Pairing is REQUIRED on every screen, and the gate is ON by default.** Every
+  arrival on every page (boot and every Barba `afterEnter`) redirects to `/kiosk` when
+  there is no device token — sign in first, then the funnel. **So there is no public web
+  visitor any more:** everything that branches on a `WEB` session (the spin page's
+  "unavailable" copy, `data-product-next-web`) is now effectively unreachable. Leave it
+  as the fallback, don't build on it. Turn the gate off for ONE DEVICE with `?kiosk=off`
+  (`localStorage flx_kiosk_gate`; `?kiosk` restores) — that is for developing in a
+  normal browser, not for shoppers. **Storage holds an OPT-OUT, so the gate fails
+  CLOSED**: an untouched device, and one whose `localStorage` throws, is enforced.
+  Failing open would put a shopper on an unpaired journey, which is the whole point.
+  It skips pages that can pair (`[data-kiosk-pair]`), pages with
+  `[data-kiosk-enforce="off"]`, and the target itself; `[data-kiosk-pair-url]` moves the
+  target. It deliberately does NOT feed `data-kiosk-locked` — routing an on-by-default
+  gate into that hook would take pull-to-refresh away from every phone and every
+  developer. `Flexicare.kiosk.gate()` says why it fired or didn't.
+- **The dev code `5555-5555` pairs locally and its token is NEVER sent.** It exists so
+  a tester can get past the compulsory gate without an admin minting a real code, and to
+  exercise fullscreen and the idle reset before real codes exist at all. Sending
+  a fake token would `401`, and a `401` means *revoked* — which unpairs the device
+  instantly. So `authHeaders()` returns `{}` for it, the heartbeat and `GET /kiosks/me`
+  are skipped, the session is `WEB` and the wheel still needs `?demo`. Do not "fix" this
+  by sending the header. `<html data-kiosk-dev="true">` marks the device.
 - **`flexicare-kiosk.js` already owns the idle reset** (server-tunable
   `idle_timeout_seconds`, `[data-kiosk-idle-factor]`, `resetJourney()` then `barba.go()`).
   Don't add a second idle timer — a hand-rolled `location.reload()` one would double-fire,
