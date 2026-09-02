@@ -4,6 +4,40 @@
      Keep it short and behavioural. Deep detail lives in ARCHITECTURE.md,
      which you should read on demand (it is NOT auto-loaded). -->
 
+## ⚠️ Where things stand (last updated 2026-09-02)
+
+Read this first; it is what a fresh session would otherwise have to rediscover.
+
+**Unpublished Webflow changes are waiting.** The connector writes to the Designer, the
+browser shows the last publish. Four edits are sitting there and are inert until Kenton
+publishes — full table in `docs/webflow-mcp.md` §8:
+- `data-journey-start` moved onto the Barba container on Home (the journey reset does
+  not fire on navigation without it)
+- the head snippet's viewport now ends `, viewport-fit=cover`
+- the last `saturate()` removed from the spin wheel CSS
+- a new head block: kiosk touch hardening, scoped `html[data-kiosk-locked]`
+
+**Do not assume a visual bug is a code bug until you have confirmed the site was
+published since the change.**
+
+**Open items that will bite, in rough priority order:**
+1. **Five glass preset names exist only in one browser's `localStorage`** —
+   `background-glass`, `tag`, `button-glass`, `character-card`, `nav-container`. On the
+   kiosk tablets those hosts fall back to `DEFAULTS`. Run `LiquidGlass.exportPresets()`
+   on Kenton's machine and paste into `PRESETS` in `src/glass.js`. See the glass bullet
+   below and `docs/webflow-mcp.md` §9.
+2. **The API base is STAGING** in `flexicare-core.js`. Swap before go-live.
+3. **Four lead-form fields have no backend endpoint** (`name`, `surname`, `id_type`,
+   `id_number`) — buffered in memory only, and the button says "Call me back".
+4. Before go-live: drop `slider.js` / `orb-tuner.js` from the Webflow footer.
+5. Element deletions on `/spin-to-win` and `/kiosk` still need Kenton's explicit yes —
+   `docs/webflow-mcp.md` §9.
+
+**Recently changed, so don't be surprised:** glass lost saturation, tint, chromatic
+aberration, press tilt and elevation (it casts no drop shadow at all now), blur became a
+real px radius, and the light angle sweeps 0→360 on an 8s loop. The kiosk tablets run
+fullscreen via the Fullscreen API. See `CHANGELOG.md` for 2026-08-31 → 2026-09-02.
+
 ## What this project is
 
 Custom JavaScript for a **Webflow** multi-page funnel called **Flexicare**. Webflow
@@ -33,8 +67,8 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
    float. Unlike background-motion it targets elements INSIDE the Barba container, so it
    re-scans on `afterEnter` and prunes tweens for removed nodes.
 6. `src/flexicare-core.js` — `window.Flexicare` (aka `FC`). The persistent brain: config, session id, buffered selfie, API helper, journey reset. **First of the Flexicare scripts.**
-7. `src/flexicare-kiosk.js` — `window.Flexicare.kiosk`. Device pairing, heartbeat and
-   idle reset for the in-store tablets. **Must load before onboarding** — it owns the
+7. `src/flexicare-kiosk.js` — `window.Flexicare.kiosk`. Device pairing, heartbeat,
+   idle reset and fullscreen for the in-store tablets (`docs/kiosk-tablet-setup.md`). **Must load before onboarding** — it owns the
    device token that `POST /sessions` needs. Completely inert on the public site.
    Its pairing UI is the **`/kiosk` page** (built 2026-08-28, duplicated from
    `/onboarding` so the shell matches). Operator-only, linked from nowhere.
@@ -119,6 +153,13 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
   worth refracting, and warping the wrapper deforms the glass and both glows as one shape.
   `orb-motion.js` warns about this placement on every load — **the warning is expected
   here; do not "fix" it** by moving the warp onto `glass-orb`.
+- **A glass preset saved in the tuner exists in ONE browser's `localStorage`.** The
+  built-in `PRESETS` in `glass.js` are only `cta`, `nav`, `panel`, `pill` — but the
+  Designer uses `background-glass`, `tag`, `button-glass`, `character-card` and
+  `nav-container`. On any other device those hosts fall back to `DEFAULTS`, so the glass
+  is right on the machine that tuned it and wrong on the kiosk tablets, silently. Fix by
+  running `LiquidGlass.exportPresets()` on that machine and pasting into `PRESETS`.
+  `glass.js` now warns once per unknown name — **if you see that warning, this is it.**
 - **Never animate `border-radius` on a `data-liquid-glass` element.** Glass bakes a
   displacement map from the layout box plus ONE corner radius, so a morphing silhouette
   leaves the refraction rim describing a circle it no longer matches — and per-frame
@@ -216,7 +257,9 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
   beating the script. Note it does not flag that contradiction for you yet.
 - **`?demo` is sticky for the whole browser tab, and it is the ONLY way to see the
   wheel without a paired tablet.** Set it once anywhere (`/?demo`), walk the funnel,
-  reach a working wheel with unlimited re-spins. `flexicare-spin.js` loads site-wide
+  and the spin page runs its whole sequence: lead form (pre-filled) → wheel → prize.
+  ONE spin, like a real session. `?demo=prize` jumps straight to the awarded panel,
+  `?demo=wheel` skips the form. `flexicare-spin.js` loads site-wide
   and captures the flag at script load on every page into `sessionStorage` — it must
   be sticky because `barba.go(path)` carries no query string. It skips only this
   page's session GATE: onboarding still creates a real `WEB` session, so **a demo run

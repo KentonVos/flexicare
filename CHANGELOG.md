@@ -14,6 +14,41 @@ Format:
 
 ---
 
+## 2026-09-02 — Docs caught up for the handover, and an unknown-preset warning
+
+Documentation, plus one small code change that came out of auditing it.
+
+**`glass.js` now warns on an unknown `data-lg-preset`.** Auditing `/spin-to-win` turned
+up five preset names in the Designer that do not exist in the file: `background-glass`,
+`tag`, `button-glass`, `character-card`, `nav-container`. Only `pill` is a real built-in
+(`cta`, `nav`, `panel`, `pill`).
+
+They must be **tuner-saved presets living in one browser's `localStorage`**, which
+`loadStoredPresets()` merges on top of `PRESETS`. So they resolve perfectly on the
+machine that invented them and **fall back to `DEFAULTS` everywhere else — including the
+kiosk tablets.** The glass would look right on the laptop and wrong in store, and
+`readOpts` said nothing at all. It now warns once per unknown name, pointing at
+`LiquidGlass.exportPresets()`, which is the fix.
+
+Recorded as the top open item in `CLAUDE.md` and `docs/webflow-mcp.md` §9. Only
+`/spin-to-win` was audited; the other pages still need sweeping. The same audit found
+**no** leftover `data-lg-ca` / `-tilt` / `-saturate` on that page, so the knob removals
+were clean there.
+
+**Docs updated:**
+- **`CLAUDE.md`** — new "Where things stand" block at the top (it is the only file
+  auto-loaded each session): the four unpublished Webflow edits, the five open items in
+  priority order, and a one-line summary of what changed this week. Also corrected the
+  `?demo` bullet, which still promised unlimited re-spins.
+- **`docs/webflow-mcp.md`** — new §8 listing every change made through the connector
+  that is **still unpublished**, and how the site-head block must be edited (read in
+  full, edit surgically, diff the write-back). Open items renumbered to §9 and updated.
+- **`ARCHITECTURE.md`** — the preset trap under `glass.js`; `cta|nav|panel|pill` marked
+  as the only built-ins.
+- **`docs/kiosk-and-spin.md`** — cross-link to `docs/kiosk-tablet-setup.md`.
+
+---
+
 ## 2026-09-01 — Fix: fullscreen needed pairing first, and the touch CSS was unscoped
 
 `src/flexicare-kiosk.js` + the Webflow site head (Designer, unpublished).

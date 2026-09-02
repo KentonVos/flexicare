@@ -136,14 +136,46 @@ and say plainly that the position is a guess to be reviewed.
 **Anything visual.** Deciding whether a fade reads better than a rise is not a
 call the connector can inform.
 
-## 8. Open items
+## 8. Changes made from here, still UNPUBLISHED
+
+Everything below is in the Designer and **not on the live site until someone hits
+Publish**. The connector reads the Designer; the browser shows the last publish — that
+distinction has already burned one debugging round.
+
+| When | Page / scope | Change |
+|---|---|---|
+| 2026-08-31 | Home | `data-journey-start="true"` moved off `<body>` onto `glass-content-wrapper` (the `data-barba="container"` element). Without it the journey reset fires on a hard load but not on a navigation. |
+| 2026-09-01 | Site head | Tablet snippet's viewport string now ends `, viewport-fit=cover`. |
+| 2026-09-01 | Site head | `saturate()` removed from `[data-spin-wheel]` and `[data-spin-hub]` — the last one on the site. |
+| 2026-09-01 | Site head | New fifth block: kiosk touch hardening, scoped `html[data-kiosk-locked]`. |
+
+The site head is ONE freeform block and `set_site_freeform_code` replaces it wholesale.
+Read it in full, edit surgically, and diff the returned content against what you sent.
+There are five blocks in it now: font smoothing, the tablet snippet, spin CSS, kiosk
+pairing CSS, kiosk touch hardening.
+
+## 9. Open items
 
 - The spin page still carries `product-card-wrapper`, `glass-orb is-product` and
   `voucher-code-wrapper` from the product-page duplicate — asked twice, never
   confirmed as intentional.
+- **⚠️ Five glass preset names in the Designer do not exist in `glass.js`.** Audited on
+  `/spin-to-win` 2026-09-02: `background-glass`, `tag`, `button-glass`,
+  `character-card`, `nav-container` are all in use; only `pill` is a real built-in
+  (`cta`, `nav`, `panel`, `pill`). They must be **tuner-saved presets living in one
+  browser's `localStorage`** — which means those elements fall back to `DEFAULTS` on
+  every other device, **including the kiosk tablets**. The look would be right on the
+  designer's laptop and wrong in store, with nothing on screen to say so.
+  **Fix:** on the machine that has them, run `LiquidGlass.exportPresets()` and paste the
+  output into `PRESETS` in `src/glass.js`. `glass.js` now warns once per unknown name in
+  the console (added 2026-09-02) — before that it failed silently. Re-audit the other
+  pages while you are there; only `/spin-to-win` was checked.
 - `/onboarding`'s `.input-glass-wrapper` has `data-lg-preset="character-card"`
   with no `data-liquid-glass` (glass removed on purpose). The preset is inert;
-  clear it during the glass sweep.
+  clear it during the glass sweep. Note the same class on `/spin-to-win` carries it too.
+- Removed glass knobs (`data-lg-ca`, `-saturate`, `-tinthue`, `-tintamount`, `-tilt`,
+  `-elevation`) are inert wherever they remain. **`/spin-to-win` was checked and has
+  none**; the other pages have not been swept.
 - `.spin-cooldown` on `/spin-to-win` was created from here and its position is a
   guess: bottom edge inside the square wheel stage. Restyle freely.
 - Before go-live: swap the staging API base in `flexicare-core.js`, and drop

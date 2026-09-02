@@ -137,6 +137,30 @@
   }
   loadStoredPresets();
 
+  /* An unknown preset name used to fail SILENTLY — the element just took the
+     defaults. That is the worst possible failure mode here, because the tuner
+     saves presets to localStorage: a name works perfectly on the machine that
+     invented it and evaporates on every other device, which for this project
+     means the look is right on the designer's laptop and wrong on the kiosk
+     tablets. Nothing on screen says so.
+
+     So: warn once per unknown name. The fix is always the same — run
+     LiquidGlass.exportPresets() on the machine that has them and paste the
+     output into PRESETS above, which makes them permanent and device
+     independent. */
+  var warnedPresets = {};
+  function warnUnknownPreset(name) {
+    if (warnedPresets[name] || !window.console) return;
+    warnedPresets[name] = true;
+    console.warn(
+      '[glass] unknown preset "' +
+        name +
+        '" — falling back to defaults. If you saved it in the tuner it only ' +
+        "exists in THIS browser's localStorage; run LiquidGlass.exportPresets() " +
+        "and paste the result into PRESETS in glass.js to make it permanent."
+    );
+  }
+
   function readOpts(el) {
     var o = {};
     for (var k in DEFAULTS) o[k] = DEFAULTS[k]; // 1. defaults
@@ -144,6 +168,8 @@
     if (pname && PRESETS[pname]) {
       var pre = PRESETS[pname];
       for (var pk in pre) if (pk in DEFAULTS) o[pk] = pre[pk];
+    } else if (pname) {
+      warnUnknownPreset(pname);
     }
     for (var k2 in DEFAULTS) {
       // 3. explicit attrs win
@@ -643,6 +669,7 @@
   }
   function reloadPresets() {
     loadStoredPresets();
+    warnedPresets = {}; // a name that just arrived should not stay "unknown"
     refreshAll();
   }
 

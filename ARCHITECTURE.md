@@ -142,7 +142,8 @@ only) — hence `barba.go()` everywhere.
 
 ### glass.js → `window.LiquidGlass`
 Attribute-driven liquid-glass effect. Hook: `data-liquid-glass`. Optional preset
-`data-lg-preset="cta|nav|panel|pill"` and many `data-lg-*` knobs (refraction, lighting,
+`data-lg-preset="cta|nav|panel|pill"` (those four are the ONLY built-ins — see the
+preset warning below) and many `data-lg-*` knobs (refraction, lighting,
 surface, interaction) — see the header comment in the file for the full list and defaults.
 - Refraction (the real distortion) is **Chrome/Edge only**; Safari/Firefox get a plain
   backdrop blur instead. Lighting, surface and press work everywhere.
@@ -190,6 +191,13 @@ surface, interaction) — see the header comment in the file for the full list a
 - Presets saved by the tuner live in `localStorage` under `lgTunerPresets` and merge on
   top of the built-in `PRESETS`. `exportPresets()` prints them ready to paste into the
   `PRESETS` object so they become permanent.
+- **⚠️ A tuner preset is invisible to every other device until you paste it in.** The
+  built-ins are only `cta`, `nav`, `panel`, `pill`; the Designer currently also uses
+  `background-glass`, `tag`, `button-glass`, `character-card` and `nav-container`, none
+  of which are in the file. On any browser without the matching `localStorage`, those
+  hosts silently take `DEFAULTS` — so the glass looks right on the machine that tuned it
+  and wrong on the kiosk tablets. `readOpts` warns once per unknown name (added
+  2026-09-02); before that it failed with no signal at all. See `docs/webflow-mcp.md` §9.
 
 
 **Positioning.** A glass host must CONTAIN the injected `.lg-layer`

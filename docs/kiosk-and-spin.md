@@ -4,7 +4,8 @@ Covers the two new scripts, `src/flexicare-kiosk.js` and `src/flexicare-spin.js`
 and exactly what has to exist in the Designer for them to work.
 
 Read `docs/api-contract.md` §6 and §7 for the backend side. This document is the
-**Webflow** side.
+**Webflow** side. Running the tablets full screen — the Fullscreen API, `?fullscreen`,
+and the per-device setup steps — is `docs/kiosk-tablet-setup.md`.
 
 ---
 
