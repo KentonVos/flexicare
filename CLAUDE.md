@@ -9,13 +9,15 @@
 Read this first; it is what a fresh session would otherwise have to rediscover.
 
 **Unpublished Webflow changes are waiting.** The connector writes to the Designer, the
-browser shows the last publish. Four edits are sitting there and are inert until Kenton
+browser shows the last publish. Five edits are sitting there and are inert until Kenton
 publishes — full table in `docs/webflow-mcp.md` §8:
 - `data-journey-start` moved onto the Barba container on Home (the journey reset does
   not fire on navigation without it)
 - the head snippet's viewport now ends `, viewport-fit=cover`
 - the last `saturate()` removed from the spin wheel CSS
 - a new head block: kiosk touch hardening, scoped `html[data-kiosk-locked]`
+- on `/spin-to-win`, `data-spin-when="ready spinning"` moved off `spin-stage` onto its
+  new parent `spin-stage-wrapper` (so the new heading hides with the wheel)
 
 **Do not assume a visual bug is a code bug until you have confirmed the site was
 published since the change.**

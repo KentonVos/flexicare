@@ -814,6 +814,21 @@ attributes. Build one, style it, duplicate it for the rest.
 | No phone number | `nophone` | a link back to `/onboarding` |
 | Anything went wrong | `unavailable error` | `[data-spin-error]` |
 
+**`data-spin-when` goes on the OUTERMOST element you want to disappear, not on the
+stage.** The moment the stage gets a sibling — a heading, a subtitle, a caption — the
+attribute has to move up to their shared parent, or that sibling sits on screen through
+every other state, over the top of the prize card. This happened for real on 2026-09-02:
+a `spin-heading-wrapper` H1 was added beside `spin-stage` inside a new
+`spin-stage-wrapper`, and the heading never hid because the attribute was still one level
+down. Fixed by moving `data-spin-when="ready spinning"` onto `spin-stage-wrapper`.
+
+`data-spin-stage` stays on the square stage itself either way — the CSS keys off it, and
+the script only reads it for the geometry warning in `Flexicare.spin.panels()`.
+
+Nesting panels is allowed (a child panel skips its own fade while the parent is
+changing), so both levels *can* carry the attribute — but prefer one, or two places claim
+to own the same visibility.
+
 Space-separated values mean "show in any of these states", which is how the wheel
 panel covers both `ready` and `spinning`.
 

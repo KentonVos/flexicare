@@ -14,6 +14,26 @@ Format:
 
 ---
 
+## 2026-09-02 — Webflow: the spin heading now hides with the wheel
+
+- Webflow `/spin-to-win` (Designer only — **needs a publish**), `docs/webflow-mcp.md` §8,
+  `docs/kiosk-and-spin.md` §8, `CLAUDE.md`
+
+Kenton wrapped the wheel in a new `spin-stage-wrapper` to add an H1
+(`spin-heading-wrapper`). The panel attribute was still on `spin-stage`, so the
+heading was a sibling of the panel rather than inside it — it stayed on screen
+through every state, including over the prize card.
+
+`data-spin-when="ready spinning"` moved off `spin-stage` onto `spin-stage-wrapper`;
+`data-spin-stage` stayed where it is (the CSS keys off it, and the script only reads
+it for the geometry warning). No code change.
+
+The generalizable rule, now in `docs/kiosk-and-spin.md` §8: **`data-spin-when` goes
+on the outermost element you want to disappear.** As soon as the stage gains a
+sibling, the attribute has to move up to their shared parent.
+
+---
+
 ## 2026-09-02 — Fix: the pairing gate broke demo/spin.html
 
 - `demo/spin.html`, `docs/kiosk-and-spin.md` §6

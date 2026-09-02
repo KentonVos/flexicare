@@ -148,6 +148,7 @@ distinction has already burned one debugging round.
 | 2026-09-01 | Site head | Tablet snippet's viewport string now ends `, viewport-fit=cover`. |
 | 2026-09-01 | Site head | `saturate()` removed from `[data-spin-wheel]` and `[data-spin-hub]` — the last one on the site. |
 | 2026-09-01 | Site head | New fifth block: kiosk touch hardening, scoped `html[data-kiosk-locked]`. |
+| 2026-09-02 | `/spin-to-win` | `data-spin-when="ready spinning"` moved off `spin-stage` onto its new parent `spin-stage-wrapper`, so the new `spin-heading-wrapper` H1 hides with the wheel instead of staying on screen over the prize panel. `data-spin-stage` stayed on `spin-stage`. |
 
 The site head is ONE freeform block and `set_site_freeform_code` replaces it wholesale.
 Read it in full, edit surgically, and diff the returned content against what you sent.
