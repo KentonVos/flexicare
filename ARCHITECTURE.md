@@ -147,6 +147,14 @@ preset warning below) and many `data-lg-*` knobs (refraction, lighting,
 surface, interaction) — see the header comment in the file for the full list and defaults.
 - Refraction (the real distortion) is **Chrome/Edge only**; Safari/Firefox get a plain
   backdrop blur instead. Lighting, surface and press work everywhere.
+- **⚠️ That detection is a brand check, not an engine check** (`REFRACT =
+  !isFirefox && !isSafari`, `src/glass.js:72`) — untested as of 2026-09-08. On iOS
+  every browser is WebKit, but Chrome-for-iOS identifies itself as `CriOS`, which the
+  Safari-brand regex does not match, so it is NOT excluded: a Chrome-for-iOS visitor
+  takes the full refraction path on an engine that cannot render it. Flagged during a
+  reported mobile hang investigation (see orb-motion.js below); not yet fixed or
+  confirmed as the cause. If it needs fixing, feature-detect or exclude iOS as a whole
+  (`/iP(hone|ad|od)/`), not just Safari's brand string.
 - **`data-lg-blur` is a real px radius, applied as a native `blur()` in front of the
   displacement `url()`** — `backdrop-filter: blur(8px) url(#lg-3)`. It is deliberately
   NOT an `feGaussianBlur` in the SVG chain: that filter's region is pinned to the
@@ -347,6 +355,22 @@ nothing and break the unified silhouette. The alternative placement (on the glas
 and/or on a glow group beside it) remains correct for any context where something *is*
 behind the orb. The injected `<svg>` defs host is tagged `data-js-injected` so
 `syncShellClasses` skips it.
+
+**⚠️ Open investigation (reported 2026-09-08, not yet fixed): a possible mobile
+crash.** The landing page reportedly hangs Chrome on an iPhone 12 mini. Discussion
+only so far — no code has changed. The warp filter chain is rebuilt on `feOffset`
+(and `feDisplacementMap`'s `scale`, since `data-orb-warp-pulse` is nonzero) **every
+frame**, at DPR 3, through an element that is also the `glass-orb` refraction's
+backdrop root — meaning the frame cost is two full-size buffers, not one — and the
+squish tween scales that same filtered ancestor on top of it. `will-change: filter`
+on the wrapper permanently promotes the layer, which on WebKit is often a net loss
+rather than a help. iOS killing a renderer under memory pressure is exactly this
+shape of load. This has not been isolated from the `REFRACT` brand-vs-engine bug
+above (Chrome-for-iOS may be taking the costly refraction path unnecessarily on top
+of it) — confirm which browser reproduces it before changing anything. Proposed but
+not built: a `?lite` device flag, same pattern as `?fullscreen`/`?demo`, to turn off
+`data-orb-warp` and the glass light sweep on request. See `CLAUDE.md`'s open items
+for the full state of this.
 
 A lava-lamp look is mostly **non-affine** — a bulge swells on one side while the rest
 stays put — and affine transforms of a circle are always ellipses, so no scale/skew on the
