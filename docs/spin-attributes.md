@@ -201,12 +201,15 @@ and its label changes. It reverts the moment the form is accepted.
 The button also gets `data-spin-go-mode="submit"` / `"spin"`, so the two jobs can
 look different if you want them to.
 
-> **Only phone and email reach the backend.** They have real endpoints
-> (`PATCH …/contact/phone` and `…/contact/email`). `name`, `surname`, `id_type`
-> and `id_number` have **no endpoint in the API contract** — they are buffered
-> on `Flexicare.lead` in memory and are lost on a hard reload. Deliberate and
-> temporary: the form was built ahead of the backend. When the endpoints land,
-> `submitLead()` in `flexicare-spin.js` is the one function to change.
+> **All six fields reach the backend** (since 2026-09-08). `submitLead()` PATCHes
+> phone → email → identity: `…/contact/phone`, `…/contact/email`, then
+> `…/identity` with `first_name`, `last_name`, `id_type` (`"ID"`/`"PASSPORT"`)
+> and `id_number`. Identity goes last on purpose — it is the call the shopper's
+> own typing can fail, so the contact details are saved before it runs. The ID
+> number is validated client-side with the same rules the server applies (13
+> digits, real `MMDD`, citizenship digit `0|1`, Luhn check digit), because
+> `/identity` is capped at 10 calls a minute per IP. See `docs/api-contract.md`
+> §3.11.
 
 Build it with `?demo=form`. Paste-ready per-field embeds, matching how
 `/onboarding` is built: `demo/spin-lead-embed.html`.

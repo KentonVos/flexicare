@@ -311,16 +311,27 @@
      [data-spin-lead-idlabel]   Optional. Its text follows the chosen type
                                 ("ID number" / "Passport number").
 
-     WHAT ACTUALLY REACHES THE BACKEND, AND WHAT DOES NOT
-       Only two of these fields have an endpoint today:
-         phone → PATCH /sessions/{id}/contact/phone
-         email → PATCH /sessions/{id}/contact/email
-       name, surname, id_type and id_number have NO endpoint in the API
-       contract (checked 2026-08-28 — the words do not appear in it). They are
-       buffered on Flexicare.lead, in memory, and are LOST on a hard reload.
-       This is deliberate and temporary: the form was built ahead of the
-       backend so the page could ship. When the endpoints land, send them from
-       submitLead() and delete this paragraph.
+     WHERE EACH FIELD GOES (all six now have a home — 2026-09-08)
+         phone                    → PATCH /sessions/{id}/contact/phone
+         email                    → PATCH /sessions/{id}/contact/email
+         name, surname,           → PATCH /sessions/{id}/identity
+         id_type, id_number
+       submitLead() fires all three in that order. The identity call is LAST
+       because it is the one that can fail on the shopper's own typing: the
+       server checks a South African ID number properly (13 digits, a real
+       MMDD, citizenship digit 0/1 and a Luhn check digit), so a single
+       mistyped digit is a 422. Phone and email being saved first means a
+       rejected ID never costs them the contact details they got right.
+
+       That endpoint is rate-limited to 10 calls per minute per IP — tighter
+       than the contact ones, because it is unauthenticated and stores identity
+       documents. So validateLead() runs the SAME ID rules client-side: a
+       typo is caught before it burns a call, and the shopper gets a sentence
+       instead of a FastAPI validation blob. Keep the two in step.
+
+       Nothing here is readable back. The API returns `id_number_masked`
+       ("•••••••••0088"), never the number — POPIA, encrypted at rest. The
+       value the shopper typed stays on Flexicare.lead for this journey only.
 
    STATE (drive your CSS and your panels off this — set on the wrapper AND
    on <html>, so a full-bleed background can react too):
@@ -2128,11 +2139,10 @@
      does the state go to "ready". The wheel is already drawn behind the
      panel, so submitting is a state flip, not a load.
 
-     ONLY TWO FIELDS HAVE SOMEWHERE TO GO. phone and email have real
-     endpoints; name, surname, id_type and id_number do not exist anywhere in
-     the API contract, so they are buffered on Flexicare.lead and go no
-     further. See the header comment — when the backend adds them, this is the
-     one function to change. */
+     ALL SIX FIELDS NOW REACH THE BACKEND (since 2026-09-08): phone and email
+     via /contact/*, and name, surname, id_type and id_number via the identity
+     endpoint the backend added. submitLead() is the one function that sends
+     them; see the header comment for the ordering and why it matters. */
 
   // Per-session, so a reload does not re-ask. sessionStorage, not local:
   // the next shopper on a kiosk must never inherit this.
@@ -2282,7 +2292,10 @@
     "[data-spin-lead-surname]": "Mokoena",
     "[data-spin-lead-phone]": "071 234 5678",
     "[data-spin-lead-email]": "thandi@example.com",
-    "[data-spin-lead-idnumber]": "9001015800086",
+    /* Must survive validateLead — the demo form is prefilled, not exempt. This
+       number is Luhn-correct (…86 was not, and now that the ID rules are real
+       it would fail on every demo lap). 900101 = 1 Jan 1990; …0… = citizen. */
+    "[data-spin-lead-idnumber]": "9001015800088",
   };
 
   function leadKnown(session) {
@@ -2351,6 +2364,41 @@
     };
   }
 
+  /* ---------------------- South African ID number ----------------------
+     PATCH /identity applies all of these server-side and 422s on any one of
+     them, so we apply them here too — see the header comment. Deliberately
+     the same four checks in the same order, so the client message and the
+     server's rejection can never disagree about WHICH digit is wrong.
+
+     Layout: YYMMDD SSSS C A Z
+       0-5  date of birth      6-9  sequence (gender)
+       10   citizenship 0|1    11   unused    12   Luhn check digit  */
+
+  var DAYS_IN_MONTH = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+  // February is allowed 29 unconditionally: YY is a two-digit year, so the
+  // century — and therefore whether it was a leap year — is unknowable here.
+  function saIdDateValid(n) {
+    var month = parseInt(n.slice(2, 4), 10);
+    var day = parseInt(n.slice(4, 6), 10);
+    if (month < 1 || month > 12) return false;
+    return day >= 1 && day <= DAYS_IN_MONTH[month - 1];
+  }
+
+  function luhnValid(n) {
+    var sum = 0;
+    // Right to left; double every second digit, casting 10..18 down by 9.
+    for (var i = 0; i < n.length; i++) {
+      var d = parseInt(n.charAt(n.length - 1 - i), 10);
+      if (i % 2 === 1) {
+        d *= 2;
+        if (d > 9) d -= 9;
+      }
+      sum += d;
+    }
+    return sum % 10 === 0;
+  }
+
   // Returns { field, msg } for the FIRST problem, or null when the form is
   // good. One message at a time, in reading order — a wall of six errors is
   // worse than being walked down the form.
@@ -2390,6 +2438,25 @@
           f.idNumber.replace(/\D/g, "").length +
           ".",
       };
+    } else if (!saIdDateValid(f.idNumber)) {
+      return {
+        field: "idnumber",
+        msg: "That ID number doesn't start with a real date of birth — check the first six digits.",
+      };
+    } else if (f.idNumber.charAt(10) !== "0" && f.idNumber.charAt(10) !== "1") {
+      return {
+        field: "idnumber",
+        msg: "That doesn't look like a valid ID number — please check it.",
+      };
+    } else if (!luhnValid(f.idNumber)) {
+      /* The Luhn digit is what catches a single transposed or mistyped digit,
+         which is the overwhelmingly common case — so say that, rather than
+         "invalid", which reads as an accusation when they typed it correctly
+         off the card and fat-fingered one key. */
+      return {
+        field: "idnumber",
+        msg: "That ID number doesn't check out — one of the digits looks wrong.",
+      };
     }
     return null;
   }
@@ -2418,8 +2485,10 @@
     refreshLeadButton();
     leadError("");
 
-    /* Everything the backend has no home for. In memory only — a hard reload
-       loses it, which is exactly why this is temporary. */
+    /* Kept in memory for the rest of the journey: it prefills the form on a
+       re-entry, and the ID number can never be read back from the API (it
+       returns id_number_masked only). A hard reload still loses it — but the
+       server now has all six fields, so that costs a prefill, not the data. */
     FC.lead = {
       name: f.name,
       surname: f.surname,
@@ -2438,11 +2507,49 @@
       return;
     }
 
-    var base = "/sessions/" + id + "/contact/";
-    FC.api(base + "phone", { method: "PATCH", body: { phone_number: f.phone } })
+    var base = "/sessions/" + id + "/";
+    FC.api(base + "contact/phone", {
+      method: "PATCH",
+      body: { phone_number: f.phone },
+    })
+      .catch(function (err) {
+        /* 409 here means one thing only: "Phone number is locked after the
+           prize spin." The award is recorded against the number, so the
+           server refuses to move it. That is not a failure of THIS form — the
+           number is already stored, which is all the form wanted — so swallow
+           it and carry on. Letting it reject would sit a shopper who has
+           already spun in front of an error they cannot clear. */
+        if (err && err.status === 409) {
+          dbg("phone already locked by a spin — keeping the stored number");
+          return null;
+        }
+        throw err;
+      })
       .then(function () {
         if (!alive(token)) return null;
-        return FC.api(base + "email", { method: "PATCH", body: { email: f.email } });
+        return FC.api(base + "contact/email", {
+          method: "PATCH",
+          body: { email: f.email },
+        });
+      })
+      .then(function () {
+        if (!alive(token)) return null;
+        /* Name, surname and the ID document. Sent LAST — see the header
+           comment: it is the call the shopper's own typing can fail, and the
+           contact details should already be banked when it does.
+
+           id_type is upper-cased for the API ("ID" / "PASSPORT"); our internal
+           state.leadType is lower-case. The two must be sent together or the
+           server 422s, and validateLead has already guaranteed both. */
+        return FC.api(base + "identity", {
+          method: "PATCH",
+          body: {
+            first_name: f.name,
+            last_name: f.surname,
+            id_type: f.idType === "passport" ? "PASSPORT" : "ID",
+            id_number: f.idNumber,
+          },
+        });
       })
       .then(function () {
         if (!alive(token)) return;
@@ -2452,9 +2559,11 @@
         if (state.session) {
           state.session.phone_number = f.phone;
           state.session.email = f.email;
+          state.session.first_name = f.name;
+          state.session.last_name = f.surname;
         }
         FC.setFirstName(f.name);
-        dbg("lead captured; name/surname/id buffered only", FC.lead);
+        dbg("lead captured — contact + identity saved", FC.lead);
         setState("ready");
       })
       .catch(function (err) {
@@ -2462,10 +2571,27 @@
         state.leadBusy = false;
         refreshLeadButton();
         /* A 422 is the shopper's problem to fix — the server validated the
-           number or the address. Anything else is ours, and must NOT trap
-           them in front of a wheel they were promised. */
+           number, the address or the ID document. Anything else is ours, and
+           must NOT trap them in front of a wheel they were promised. */
         if (err && err.status === 422) {
           leadError(validationDetail(err) || "Please check your details and try again.");
+          return;
+        }
+        /* /identity is capped at 10 calls a minute per IP. On a kiosk that is
+           several shoppers sharing one store's connection, so this is reachable
+           without anyone hammering anything — count them down rather than
+           showing a generic failure they would answer by retrying immediately. */
+        if (err && err.status === 429) {
+          var wait = err.retryAfter;
+          leadError(
+            wait
+              ? "Too many attempts just now — please try again in " +
+                wait +
+                " second" +
+                (wait === 1 ? "" : "s") +
+                "."
+              : "Too many attempts just now — please try again in a moment."
+          );
           return;
         }
         dbg("lead save failed", err && err.message);

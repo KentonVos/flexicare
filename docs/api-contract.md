@@ -36,9 +36,9 @@
     and show the unpaired screen, §6.5)
   - `403` kiosk is `DISABLED`, or a spin attempted from a different kiosk than the one
     that started the session
-  - `429` rate-limited (pairing and spin). The response carries **`Retry-After` in
-    SECONDS** — read it, count down, don't retry early. `FC.api()` surfaces it as
-    `err.retryAfter`.
+  - `429` rate-limited (pairing, the spin, and identity capture §3.11 — the last at 10
+    calls/min per IP). The response carries **`Retry-After` in SECONDS** — read it, count
+    down, don't retry early. `FC.api()` surfaces it as `err.retryAfter`.
   - `503` prize wheel not configured server-side (§7.4) — show fallback copy, never block
 - **CORS:** wide open during development; will be locked to the production origin before
   go-live. No cookies/credentials involved, so nothing changes on the frontend.
@@ -174,9 +174,17 @@ not on the spin page. Web visitors send nothing.
 {
   "id": "3f0b7f6e-...-uuid",
   "status": "IN_PROGRESS",
+  "channel": "KIOSK",
+  "kiosk_id": "c1a2b3d4-...-uuid",
+  "location_id": "9e8d7c6b-...-uuid",
   "language": "en",
   "first_name": "Thandi",
+  "last_name": null,
   "gender": "female",
+  "phone_number": null,
+  "email": null,
+  "id_type": null,
+  "id_number_masked": null,
   "archetype_id": null,
   "tier_score": null,
   "recommended_product_id": null,
@@ -185,6 +193,13 @@ not on the spin page. Web visitors send nothing.
   "completed_at": null
 }
 ```
+
+`last_name`, `id_type` and `id_number_masked` stay `null` until set via §3.11;
+`phone_number` / `email` until set via §3.10. **`id_number_masked` is never the raw
+document number** — only the last four characters ever come back (§3.11).
+
+`SessionOut` is also what §3.3, §3.8, §3.10, §3.11 and photo confirm (§5) return, so
+these fields appear on all of those.
 
 ### 3.3 `POST /api/v1/sessions/{session_id}/answers` — submit answer(s)
 
@@ -448,6 +463,50 @@ Both return the updated `SessionOut` (which carries `phone_number` / `email`).
 - **Email:** RFC-validated, max 254 chars, domain lowercased. Invalid → `422`.
 - On `422` the `detail` is FastAPI's validation list (`[ { "msg": "…" } ]`) — surface `msg`
   next to the input.
+- **Phone is LOCKED after a spin.** Once `POST /spin` has succeeded the award is recorded
+  against that number, so `PATCH …/contact/phone` returns `409`
+  `"Phone number is locked after the prize spin."`. Email is never locked.
+  `flexicare-spin.js` treats that `409` as success — the number it wanted stored already
+  is — rather than stranding a shopper who has spun in front of an error they can't clear.
+
+### 3.11 Identity capture — `PATCH .../identity`
+
+Added by the backend 2026-09-08; this is the home for the four lead-form fields that
+previously had nowhere to go. The rest of the "call me back" form: name, surname, and an
+ID/passport toggle with its number.
+
+```
+PATCH /api/v1/sessions/{session_id}/identity
+{ "first_name": "Thandi", "last_name": "Mokoena", "id_type": "ID", "id_number": "9001015800088" }
+```
+
+Returns the updated `SessionOut`.
+
+- **Every field is optional**; omitted fields are left untouched, so the surname can be
+  saved now and the ID later. An empty payload is `422`. We always send all four.
+- **`id_type` and `id_number` must travel TOGETHER** — one without the other is `422`
+  (`"id_type and id_number must be supplied together."`). `id_type` is `"ID"` or
+  `"PASSPORT"`, upper-case (our internal `state.leadType` is lower-case — convert).
+- **`first_name` can be set here**, not only at `POST /sessions`. The form collects it long
+  after onboarding started the session, so this is how a correction gets through.
+- **`id_type: "ID"` is validated properly:** exactly 13 digits (spaces/dashes stripped), a
+  real `MMDD`, citizenship digit `0` or `1`, and a correct **Luhn check digit**. One
+  mistyped digit is rejected. `flexicare-spin.js` mirrors all four checks client-side —
+  keep the two in step — and surfaces the `422` `msg` if the server disagrees anyway.
+- **`id_type: "PASSPORT"`:** 6–20 letters and digits, spacing stripped, upper-cased. No
+  checksum — passport formats vary by issuing country.
+- **Never locked**, unlike the phone number: the award is keyed to the phone, not the
+  document, so this stays editable after a spin. Only `ABANDONED` is rejected (`409`);
+  `COMPLETED` is the expected moment to call it.
+- **The number cannot be read back.** The response carries `id_type` and
+  `id_number_masked` (`"•••••••••0088"`), never `id_number` — identity numbers are
+  encrypted at rest under POPIA and this endpoint is unauthenticated. Keep what the
+  shopper typed in your own state if the screen needs to redisplay it (we hold it on
+  `Flexicare.lead` for the journey).
+- **Rate limited: 10 calls per minute per IP** — tighter than §3.10 because it is
+  unauthenticated and stores identity documents. `429` carries `Retry-After` in seconds
+  (`err.retryAfter`). On a kiosk that is a whole store behind one IP, so it is reachable
+  without anyone hammering the button: count it down, and never PATCH per keystroke.
 
 ---
 

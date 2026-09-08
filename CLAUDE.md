@@ -4,7 +4,7 @@
      Keep it short and behavioural. Deep detail lives in ARCHITECTURE.md,
      which you should read on demand (it is NOT auto-loaded). -->
 
-## ⚠️ Where things stand (last updated 2026-09-02)
+## ⚠️ Where things stand (last updated 2026-09-08)
 
 Read this first; it is what a fresh session would otherwise have to rediscover.
 
@@ -23,20 +23,41 @@ publishes — full table in `docs/webflow-mcp.md` §8:
 published since the change.**
 
 **Open items that will bite, in rough priority order:**
-1. **Five glass preset names exist only in one browser's `localStorage`** —
+1. **Investigate before touching: the landing page reportedly locks up Chrome on an
+   iPhone 12 mini** (reported 2026-09-08, discussion only — no code changed yet).
+   Prime suspect is `data-orb-warp` on `orb-wrapper`: its SVG filter chain
+   (`feTurbulence → feColorMatrix → feOffset → feDisplacementMap`) is rewritten every
+   frame by GSAP (`dx`/`dy`, plus `scale` since `data-orb-warp-pulse` is nonzero), at
+   DPR 3, through an ancestor that also contains `glass-orb`'s `backdrop-filter` — two
+   full-size buffers per frame, compounded by the squish tween scaling the same
+   filtered element and by `will-change: filter` permanently promoting that layer.
+   iOS renderers are killed under memory pressure exactly this shape of load produces.
+   **Separately, and worth fixing regardless of the crash:** `glass.js`'s `REFRACT`
+   check (`!isFirefox && !isSafari`, `src/glass.js:72`) tests the UA *brand*, not the
+   *engine* — on iOS every browser is WebKit, but Chrome-for-iOS reports `CriOS` and so
+   is not excluded. If the report came from Chrome on that phone (confirm which
+   browser before assuming anything), it may be taking the full 7-host refraction path
+   on an engine that cannot render it, for no visual benefit at all. Next step agreed
+   with Kenton: confirm the browser, then (if reachable) `OrbMotion.stop()` /
+   `LiquidGlass.lightSpin(0)` in Safari Web Inspector over USB to isolate the cause
+   before optimising anything. A `?lite` device flag (same pattern as `?fullscreen` /
+   `?demo`) to kill warp + the light sweep on request was proposed but not built.
+2. **Five glass preset names exist only in one browser's `localStorage`** —
    `background-glass`, `tag`, `button-glass`, `character-card`, `nav-container`. On the
    kiosk tablets those hosts fall back to `DEFAULTS`. Run `LiquidGlass.exportPresets()`
    on Kenton's machine and paste into `PRESETS` in `src/glass.js`. See the glass bullet
    below and `docs/webflow-mcp.md` §9.
-2. **The API base is STAGING** in `flexicare-core.js`. Swap before go-live.
-3. **The dev pairing code `5555-5555` is live** (added 2026-09-02). It pairs a device
+3. **The API base is STAGING** in `flexicare-core.js`. Swap before go-live.
+4. **The dev pairing code `5555-5555` is live** (added 2026-09-02). It pairs a device
    locally with a fake token so the tablet behaviour can be tested before the admin can
    issue real codes. **A store tablet must never go live on it** — the session stays
    `WEB` and the wheel refuses. Check with `Flexicare.kiosk.isDev()`.
-4. **Four lead-form fields have no backend endpoint** (`name`, `surname`, `id_type`,
-   `id_number`) — buffered in memory only, and the button says "Call me back".
-5. Before go-live: drop `slider.js` / `orb-tuner.js` from the Webflow footer.
-6. Element deletions on `/spin-to-win` and `/kiosk` still need Kenton's explicit yes —
+5. ~~Four lead-form fields have no backend endpoint~~ **DONE 2026-09-08** — the backend
+   added `PATCH /sessions/{id}/identity` and `submitLead()` now sends all six fields. The
+   button still says "Call me back"; whether anything downstream actually calls back is a
+   backend/ops question, not a frontend one.
+6. Before go-live: drop `slider.js` / `orb-tuner.js` from the Webflow footer.
+7. Element deletions on `/spin-to-win` and `/kiosk` still need Kenton's explicit yes —
    `docs/webflow-mcp.md` §9.
 
 **Recently changed, so don't be surprised:** glass lost saturation, tint, chromatic
@@ -237,14 +258,20 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
   `barba.go()` — the destination ran its entrance animation, init and skeleton twice.
   Rules: resolve within the incoming container (or `state.wrap`), filter to nodes that are
   actually attached, and never navigate to the page you are already on (`samePath()`).
-- **A lead form gates the spin wheel, and four of its fields go nowhere yet.**
+- **A lead form gates the spin wheel, and all six fields now reach the backend.**
   State `form` sits between `loading` and `ready`; the wheel renders behind the panel
   and only unlocks once the form is submitted (remembered per session in
-  `sessionStorage`). Phone and email are PATCHed to real endpoints. **`name`,
-  `surname`, `id_type` and `id_number` have NO endpoint in `docs/api-contract.md`** —
-  they are buffered on `Flexicare.lead` in memory and lost on a hard reload. Agreed as
-  temporary, but the button says "Call me back", so nothing downstream can honour that
-  yet. `submitLead()` is the one function to change when the endpoints land. The
+  `sessionStorage`). `submitLead()` fires three PATCHes in a fixed order — phone, email,
+  then `/identity` (name, surname, `id_type`, `id_number`, added 2026-09-08). **The order
+  is load-bearing:** identity is the only one the shopper's own typing can fail, so the
+  contact details are banked before it runs. Two rules if you touch it: **`id_type` and
+  `id_number` must be sent together** or the server 422s, and the SA ID rules
+  (13 digits, real `MMDD`, citizenship digit `0|1`, **Luhn** check digit) are duplicated
+  client-side in `validateLead` — keep the two in step, because `/identity` is rate
+  limited to **10 calls/min per IP** and a whole store shares one IP. A `409` on the
+  phone PATCH is not an error: it means the number is locked by a spin that already
+  happened, so it is swallowed. The ID number can never be read back (`id_number_masked`
+  only), so `Flexicare.lead` still holds it for prefill within the journey. The
   `[data-spin-go]` CTA doubles as the form's submit and relabels itself — it lives in
   the persistent nav, outside every panel, so it is already on screen during `form`.
 - **`el.style.display = ""` reveals a panel by falling back to CSS — so a class that

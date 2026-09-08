@@ -14,6 +14,43 @@ Format:
 
 ---
 
+## 2026-09-08 — The lead form's last four fields now reach the backend
+
+- `src/flexicare-spin.js`, `docs/api-contract.md` §1/§3.2/§3.10/§3.11,
+  `docs/spin-attributes.md`, `CLAUDE.md`
+- **No Webflow change.** Same six inputs, same attributes — only where they go.
+
+The backend added `PATCH /sessions/{id}/identity`, which closes the open item that
+had `name`, `surname`, `id_type` and `id_number` buffered on `Flexicare.lead` and
+lost on a hard reload. `submitLead()` now fires three PATCHes: phone → email →
+identity.
+
+**The order is deliberate.** Identity is the only one of the three the shopper's own
+typing can fail, so the contact details are banked before it runs — a rejected ID
+number no longer costs them the phone and email they got right.
+
+Three things the new endpoint forced:
+
+- **Real ID validation, duplicated client-side.** The server checks 13 digits, a real
+  `MMDD`, citizenship digit `0|1` and a **Luhn** check digit, and 422s on one wrong
+  key. `validateLead` now runs the same four checks in the same order, so the shopper
+  gets a sentence instead of a FastAPI blob — and, more to the point, a typo doesn't
+  burn one of the **10 calls per minute per IP** that endpoint allows. On a kiosk that
+  cap is a whole store behind one connection, so a `429` is reachable without anyone
+  hammering anything; it now counts down from `Retry-After`.
+- **The demo prefill was invalid.** `SAMPLE_LEAD`'s ID number was `9001015800086`,
+  whose Luhn digit is wrong. It passed the old "is it 13 digits" check and would have
+  failed on every `?demo` lap the moment the real rules landed. Now `9001015800088`.
+- **A `409` on the phone PATCH is no longer an error.** It means only "phone locked
+  after the prize spin" — the number is already stored, which is all the form wanted.
+  It used to fall through to "we couldn't save your details", which would have sat a
+  shopper who had already spun in front of an error they could not clear.
+
+`id_number` can never be read back (the API returns `id_number_masked`, POPIA), so
+`Flexicare.lead` still holds what they typed for prefill within the journey.
+
+---
+
 ## 2026-09-02 — Webflow: the spin heading now hides with the wheel
 
 - Webflow `/spin-to-win` (Designer only — **needs a publish**), `docs/webflow-mcp.md` §8,
