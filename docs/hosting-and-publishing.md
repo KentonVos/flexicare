@@ -7,8 +7,27 @@ The mental model: **push to `main` → it's live.** No Webflow step, no version 
 cache guessing. Hard-refresh and you're looking at the new code.
 
 - Repo: https://github.com/KentonVos/flexicare (public)
-- Live CDN base: https://flexicare.kenton-323.workers.dev
-- Example: https://flexicare.kenton-323.workers.dev/src/glass.js
+- Live CDN base: https://flexicare.injozi-app.workers.dev
+- Example: https://flexicare.injozi-app.workers.dev/src/glass.js
+
+**The account subdomain moved on 2026-09-09.** A `workers.dev` hostname is
+`<worker-name>.<account-subdomain>.workers.dev`, so the change from
+`kenton-323` to `injozi-app` is an ACCOUNT move, not a rename of the worker —
+`wrangler.jsonc` still names it `flexicare`. Two things that follow, and both
+have to be true or a push goes to `main` and nowhere else:
+
+- **The new account's worker must be connected to this repo** (Workers Builds
+  on `main`). A one-off `wrangler deploy` serves whatever was on the deploying
+  machine at that moment and never updates again — the footer is then pinned
+  to code that has silently stopped moving.
+- **`_headers` must be in effect on the new deployment**, or browsers sit on a
+  cached copy even once the worker is current. See the section below.
+
+Verify both at once by opening a file the CDN serves and looking for something
+you know is recent, e.g. `https://flexicare.injozi-app.workers.dev/src/flexicare-kiosk.js`
+should contain `data-kiosk-unpair` (added 2026-09-09). Older Webflow footers
+pointing at `kenton-323` will keep resolving for as long as that account
+exists, which is exactly how a stale footer hides this.
 
 ---
 
@@ -62,25 +81,25 @@ load-bearing (see ARCHITECTURE.md); GSAP and Barba are libraries and stay pinned
 ```html
 <script src="https://cdn.jsdelivr.net/npm/@barba/core@2.10.3/dist/barba.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
-<script src="https://flexicare.kenton-323.workers.dev/src/glass.js"></script>
-<script src="https://flexicare.kenton-323.workers.dev/src/transition.js"></script>
-<script src="https://flexicare.kenton-323.workers.dev/src/text-reveal.js"></script>
-<script src="https://flexicare.kenton-323.workers.dev/src/background-motion.js"></script>
-<script src="https://flexicare.kenton-323.workers.dev/src/orb-motion.js"></script>
-<script src="https://flexicare.kenton-323.workers.dev/src/flexicare-core.js"></script>
+<script src="https://flexicare.injozi-app.workers.dev/src/glass.js"></script>
+<script src="https://flexicare.injozi-app.workers.dev/src/transition.js"></script>
+<script src="https://flexicare.injozi-app.workers.dev/src/text-reveal.js"></script>
+<script src="https://flexicare.injozi-app.workers.dev/src/background-motion.js"></script>
+<script src="https://flexicare.injozi-app.workers.dev/src/orb-motion.js"></script>
+<script src="https://flexicare.injozi-app.workers.dev/src/flexicare-core.js"></script>
 <!-- kiosk mode: MUST come before onboarding (it owns the device token) -->
-<script src="https://flexicare.kenton-323.workers.dev/src/flexicare-kiosk.js"></script>
-<script src="https://flexicare.kenton-323.workers.dev/src/flexicare-selfie.js"></script>
-<script src="https://flexicare.kenton-323.workers.dev/src/flexicare-avatar.js"></script>
-<script src="https://flexicare.kenton-323.workers.dev/src/flexicare-onboarding.js"></script>
-<script src="https://flexicare.kenton-323.workers.dev/src/flexicare-quiz.js"></script>
-<script src="https://flexicare.kenton-323.workers.dev/src/flexicare-reveal.js"></script>
-<script src="https://flexicare.kenton-323.workers.dev/src/flexicare-product.js"></script>
-<script src="https://flexicare.kenton-323.workers.dev/src/flexicare-spin.js"></script>
+<script src="https://flexicare.injozi-app.workers.dev/src/flexicare-kiosk.js"></script>
+<script src="https://flexicare.injozi-app.workers.dev/src/flexicare-selfie.js"></script>
+<script src="https://flexicare.injozi-app.workers.dev/src/flexicare-avatar.js"></script>
+<script src="https://flexicare.injozi-app.workers.dev/src/flexicare-onboarding.js"></script>
+<script src="https://flexicare.injozi-app.workers.dev/src/flexicare-quiz.js"></script>
+<script src="https://flexicare.injozi-app.workers.dev/src/flexicare-reveal.js"></script>
+<script src="https://flexicare.injozi-app.workers.dev/src/flexicare-product.js"></script>
+<script src="https://flexicare.injozi-app.workers.dev/src/flexicare-spin.js"></script>
 <!-- dev-only tuner, loaded last; gated behind ?tune in the URL -->
-<script src="https://flexicare.kenton-323.workers.dev/src/slider.js"></script>
+<script src="https://flexicare.injozi-app.workers.dev/src/slider.js"></script>
 <!-- dev-only orb tuner; gated behind ?orbtune -->
-<script src="https://flexicare.kenton-323.workers.dev/src/orb-tuner.js"></script>
+<script src="https://flexicare.injozi-app.workers.dev/src/orb-tuner.js"></script>
 ```
 
 Separately, the **Head** holds the `window.__fcLayout` snippet, which is NOT in this repo

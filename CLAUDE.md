@@ -444,7 +444,7 @@ The short version:
 3. Cloudflare auto-deploys in ~1 min. Hard-refresh. **Nothing to paste into Webflow.**
 4. Add a line to `CHANGELOG.md`.
 
-Live base URL: `https://flexicare.kenton-323.workers.dev` (e.g. `/src/glass.js`).
+Live base URL: `https://flexicare.injozi-app.workers.dev` (e.g. `/src/glass.js`).
 
 Rules for me when publishing:
 - **`main` IS live.** Every push ships immediately to the real site — there is no

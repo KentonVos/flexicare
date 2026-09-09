@@ -448,7 +448,7 @@ open http://localhost:8080/demo/spin.html
 ```
 
 **Or on the deployed preview** — no local server needed:
-`https://<branch>-flexicare.kenton-323.workers.dev/demo/spin.html`
+`https://<branch>-flexicare.injozi-app.workers.dev/demo/spin.html`
 
 It also carries the **structural attributes** the required CSS keys off — none of
 which the script reads; they exist so you can name your Webflow classes freely:

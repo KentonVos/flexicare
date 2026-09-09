@@ -76,5 +76,5 @@ flexicare/
 ```
 
 The `src/` path and filenames must match the URLs in the Webflow footer exactly
-(`https://flexicare.kenton-323.workers.dev/src/glass.js`). Renaming a file is the one
+(`https://flexicare.injozi-app.workers.dev/src/glass.js`). Renaming a file is the one
 change that still requires editing the Webflow footer.

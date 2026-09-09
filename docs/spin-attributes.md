@@ -345,5 +345,5 @@ on this look. The two genuinely worth setting are `data-spin-product` and
 `data-spin-onboarding`, which have no sensible default for your URL structure.
 
 Tune any of it live at
-`https://flexicare.kenton-323.workers.dev/demo/spin?spindemo` — the panel writes
+`https://flexicare.injozi-app.workers.dev/demo/spin?spindemo` — the panel writes
 these attributes and hands back a paste-ready block.

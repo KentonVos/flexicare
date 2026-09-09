@@ -14,6 +14,25 @@ Format:
 
 ---
 
+## 2026-09-09 — The CDN moved to the injozi-app Cloudflare account
+
+- `CLAUDE.md`, `README.md`, `docs/hosting-and-publishing.md`,
+  `docs/kiosk-and-spin.md`, `docs/spin-attributes.md`
+- The live base is now `https://flexicare.injozi-app.workers.dev`. Kenton changed
+  the account domain across all his projects, so `kenton-323` is gone. 22
+  references updated; the Webflow footer was already repointed by hand.
+- **This is an ACCOUNT move, not a worker rename** — `workers.dev` hostnames are
+  `<worker>.<account>.workers.dev` and `wrangler.jsonc` still names the worker
+  `flexicare`. So the new deployment has its own history: it is only current if
+  the new account's worker is connected to this repo's `main`, and only fast if
+  `_headers` took effect there. `docs/hosting-and-publishing.md` now spells out
+  both checks, because a one-off `wrangler deploy` would pin the footer to code
+  that has silently stopped updating.
+- Historical CHANGELOG entries keep the old URLs on purpose — they record what
+  was true at the time. Only the instructional docs were rewritten.
+
+---
+
 ## 2026-09-09 — A sign-out button for the pairing screen (dev-only by default)
 
 - `src/flexicare-kiosk.js`
