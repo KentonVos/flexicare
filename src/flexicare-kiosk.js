@@ -1253,24 +1253,114 @@
      on arrival. The rejection is expected and routine (an unsupported
      browser, a gesture the engine did not credit), so it is swallowed rather
      than surfaced: failing to go fullscreen must never break the journey. */
+  /* WHAT THE LAST ATTEMPT DID, remembered.
+
+     Every failure path below is deliberately silent — a refused fullscreen
+     must never break the journey — and that is exactly what made this
+     undiagnosable on a real tablet: a tap that was blocked by a gate, a tap
+     the engine did not credit as a gesture, and a browser with no
+     requestFullscreen at all all look identical to not tapping. So each
+     attempt records what happened, `Flexicare.kiosk.fullscreen().last`
+     reports it, and the overlay below puts it on the screen for a device
+     with no debugger attached. */
+  var fsLast = { taps: 0, outcome: "no tap yet", detail: "" };
+
+  function fsNote(outcome, detail) {
+    fsLast.outcome = outcome;
+    fsLast.detail = detail || "";
+    fsPaint();
+  }
+
   function enterFullscreen() {
-    if (!fullscreenWanted() || isFullscreen()) return;
+    fsLast.taps++;
+    if (isFullscreen()) return fsNote("already fullscreen", "");
+    if (!fullscreenWanted()) return fsNote("blocked by a gate", K.fullscreen().why);
     var el = document.documentElement;
     var req =
       el.requestFullscreen ||
       el.webkitRequestFullscreen ||
       el.mozRequestFullScreen;
-    if (!req) return;
+    if (!req) return fsNote("unsupported", "no requestFullscreen on this browser");
     try {
       var r = req.call(el, { navigationUI: "hide" });
-      if (r && typeof r.catch === "function")
-        r.catch(function (err) {
-          dbg("fullscreen refused:", (err && err.message) || err);
-        });
+      fsNote("requested", "waiting for the browser");
+      if (r && typeof r.then === "function")
+        r.then(
+          function () {
+            fsNote("granted", "");
+          },
+          function (err) {
+            // The usual cause is a gesture the engine did not credit.
+            dbg("fullscreen refused:", (err && err.message) || err);
+            fsNote("REFUSED", (err && (err.message || err.name)) || String(err));
+          }
+        );
     } catch (e) {
       dbg("fullscreen threw:", e && e.message);
+      fsNote("THREW", (e && e.message) || String(e));
     }
   }
+
+  /* ---------------- the on-screen fullscreen readout ----------------
+     Gated behind ?fcdebug (sticky in localStorage), the same flag
+     transition.js uses for its layout panel — so one flag turns both on.
+     Anchored bottom-RIGHT because that panel sits bottom-left.
+
+     This exists because the only way to read kiosk.fullscreen() on a store
+     tablet is USB remote debugging, which is not something you can do while
+     standing in a shop. */
+  var FS_DEBUG = (function () {
+    var m = /[?&]fcdebug(?:=([^&]*))?/.exec(location.search || "");
+    try {
+      if (!m) return localStorage.getItem("fcDebug") === "1";
+    } catch (e) {
+      if (!m) return false;
+    }
+    return !(m[1] === "off" || m[1] === "0" || m[1] === "false");
+  })();
+
+  var fsBox = null;
+
+  function fsPaint() {
+    if (!FS_DEBUG || !document.body) return;
+    if (!fsBox) {
+      fsBox = document.createElement("div");
+      fsBox.id = "fc-fs-debug";
+      // data-js-injected so transition.js's shell class sync skips it.
+      fsBox.setAttribute("data-js-injected", "");
+      fsBox.style.cssText =
+        "position:fixed;right:12px;bottom:12px;z-index:2147483647;" +
+        "font:11px/1.45 ui-monospace,Menlo,monospace;max-width:60vw;" +
+        "background:rgba(6,8,20,.92);color:#dfe6ff;padding:9px 11px;" +
+        "border:1px solid rgba(160,200,255,.35);border-radius:10px;" +
+        "white-space:pre-wrap;pointer-events:none";
+      document.body.appendChild(fsBox);
+    }
+    var f = K.fullscreen();
+    var l = FC.layout || {};
+    fsBox.textContent =
+      "FULLSCREEN\n" +
+      "taps        " + fsLast.taps + "\n" +
+      "last        " + fsLast.outcome + (fsLast.detail ? " — " + fsLast.detail : "") + "\n" +
+      "active      " + f.active + "\n" +
+      "wanted      " + f.wanted + "\n" +
+      "supported   " + f.supported + "\n" +
+      "tablet      " + f.tablet + "  (mode " + (l.mode || "?") +
+      ", forced " + l.forced + ", w " + l.naturalWidth + ")\n" +
+      "paired      " + f.paired + (f.dev ? " (DEV)" : "") + "\n" +
+      "armed       " + f.armed + "\n" +
+      "hardened    " + f.touchHardened + "\n" +
+      "why         " + f.why + "\n" +
+      "ua          " + (navigator.userAgent || "").slice(0, 120);
+  }
+
+  // Repaint when the browser changes fullscreen state under us — a system
+  // dialog or the back gesture drops it, and that is worth seeing.
+  ["fullscreenchange", "webkitfullscreenchange"].forEach(function (ev) {
+    document.addEventListener(ev, function () {
+      fsPaint();
+    });
+  });
 
   /* Every tap re-arms it, not just the first. A system dialog, a forced
      rotation or a stray swipe can drop the tablet out mid-shift, and the next
@@ -1302,6 +1392,8 @@
       paired: !!state.token,
       armed: fullscreenArmed(),
       optedOut: optedOut,
+      dev: !!state.dev,
+      last: fsLast, // what the most recent tap actually did
       // Says out loud why nothing happened, which is what was missing the
       // first time this looked broken on a device.
       why: isFullscreen()
@@ -1488,6 +1580,7 @@
         checkMe();
       }
       applyLocked(); // covers the armed-but-unpaired device
+      fsPaint(); // no-op unless ?fcdebug — shows the verdict before any tap
       dbg("boot", {
         paired: !!state.token,
         dev: state.dev,

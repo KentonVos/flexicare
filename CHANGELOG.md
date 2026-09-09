@@ -14,6 +14,31 @@ Format:
 
 ---
 
+## 2026-09-09 — Fullscreen now says out loud why it did nothing
+
+- `src/flexicare-kiosk.js`
+- A paired Galaxy Tab S10 FE on Chrome would not go fullscreen, and there was
+  no way to find out why while standing next to it. Every failure path in
+  `enterFullscreen()` is deliberately silent — a refused fullscreen must never
+  break the journey — so a tap blocked by a gate, a tap the engine did not
+  credit as a gesture, and a browser with no `requestFullscreen` at all were
+  all indistinguishable from not tapping.
+- Each attempt is now recorded: `Flexicare.kiosk.fullscreen().last` gives
+  `{ taps, outcome, detail }`, where outcome is one of *no tap yet*,
+  *already fullscreen*, *blocked by a gate* (with the `why`), *unsupported*,
+  *requested*, *granted*, *REFUSED* (with the browser's own message) or
+  *THREW*. The promise's rejection reason was previously dropped into a
+  `dbg()` nobody could see.
+- **On-screen readout behind `?fcdebug`** — the same sticky flag transition.js
+  uses, anchored bottom-RIGHT so it does not sit on that panel. Prints the
+  attempt record, every gate, the layout mode/forced/natural width and the UA.
+  Load `/kiosk?fcdebug` on the tablet, tap once, read the verdict. This is the
+  point of the change: USB remote debugging is not something you can do in a
+  shop.
+- No behaviour change when the flag is off, and none to the gates themselves.
+
+---
+
 ## 2026-09-09 — The CDN moved to the injozi-app Cloudflare account
 
 - `CLAUDE.md`, `README.md`, `docs/hosting-and-publishing.md`,
