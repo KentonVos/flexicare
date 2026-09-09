@@ -71,6 +71,22 @@
                                countdown.
      [data-kiosk-pair-error]   Message box. Filled with the server's `detail`
                                (or the countdown) as TEXT, never HTML.
+     [data-kiosk-unpair]       The "Sign out this device" button. Put it inside
+                               the panel (typically in data-kiosk-when="active")
+                               — it is resolved within [data-kiosk-pair] like
+                               the pair button, not document-wide. DEV-ONLY by
+                               default: it hides itself and ignores clicks on a
+                               real pairing, because re-pairing needs a fresh
+                               single-use code from an admin. Opt a real tablet
+                               in with data-kiosk-unpair="any", which then wants
+                               a second tap. Local only — it never revokes the
+                               token server-side.
+                                 data-kiosk-unpair-confirm="Tap again to sign out"
+                                   the "any" scope's second-tap label
+                                 data-kiosk-unpair-armed="true"
+                                   set while awaiting that tap, for styling
+                               Do NOT give this button a display:none class —
+                               it is revealed by clearing an inline display.
 
      SLOTS (written once paired, safe on the attract screen / a small badge):
      [data-kiosk-name]         kiosk.name        ("Sandton City — entrance tablet")
@@ -178,6 +194,8 @@
      setScreen(s)   → what the next heartbeat reports.
      pair(code)     → Promise. Also what the pairing panel calls.
      unpair()       → clears the token locally and shows the unpaired screen.
+                      Also what [data-kiosk-unpair] calls. Local only: it does
+                      not revoke the token server-side (nothing here can).
                       (Does NOT revoke server-side — that is an admin action.)
      onDisabled(fn) / onUnpaired(fn) → callbacks, if a page needs to react.
      isDev()        → boolean. Paired with the dev code (fake token).
@@ -381,6 +399,7 @@
 
     paintSlots();
     applyWhen();
+    applyUnpair();
     refreshPanel();
 
     if (changed) {
@@ -510,6 +529,102 @@
     // not three pages into a journey it can no longer complete.
     enforceGate(document);
   };
+
+  /* ------------------------ the sign-out control ------------------------
+     [data-kiosk-unpair] — a button inside the pairing panel that calls
+     unpair() locally. It exists for DEV pairings, and the asymmetry is the
+     whole reason it is safe:
+
+       A DEV pairing costs nothing to undo. The token is fake and local, so
+       signing out and back in is just typing 5555-5555 again.
+
+       A REAL pairing is the opposite. There is no endpoint a device can call
+       to re-pair itself — the code is single-use and expires in 15 minutes
+       (docs/api-contract.md §6.1), so one stray tap strands a store tablet
+       on the unpaired screen until an admin mints a new one, mid-shift.
+
+     So the DEFAULT SCOPE IS DEV. On a real pairing the button hides itself
+     and a click is ignored. Opt a real tablet in deliberately with
+     data-kiosk-unpair="any", which then asks for a second tap first.
+
+     This is local only, exactly like unpair() itself: it does not revoke the
+     token server-side (nothing here can — see the endpoint list in §6). An
+     admin revoking it is what produces the 401 that unpairs a tablet by
+     itself. Two separate operations, and this is only ever the local half. */
+
+  var unpairArmed = null; // the [data-kiosk-unpair="any"] awaiting its 2nd tap
+  var unpairTimer = null;
+
+  function unpairScope(el) {
+    return attr(el, "data-kiosk-unpair", "dev") === "any" ? "any" : "dev";
+  }
+
+  /* Same convention as applyWhen(): reveal by CLEARING the inline display so
+     the Designer's own styling stays authoritative, and hide with an inline
+     none. Do NOT give this button a class that sets display:none — clearing
+     the inline value would fall straight back through it. */
+  function applyUnpair() {
+    all("[data-kiosk-unpair]").forEach(function (el) {
+      var show = unpairScope(el) === "any" ? !!state.token : state.dev;
+      el.style.display = show ? "" : "none";
+      if (!show && unpairArmed === el) disarmUnpair();
+    });
+  }
+
+  // Capture the Designer's own label ONCE, before the confirm overwrites it.
+  function unpairLabel(el, which) {
+    if (el.__fcUnpairLabel == null) el.__fcUnpairLabel = el.textContent;
+    text(
+      el,
+      which === "confirm"
+        ? attr(el, "data-kiosk-unpair-confirm", "Tap again to sign out")
+        : el.__fcUnpairLabel
+    );
+  }
+
+  function disarmUnpair() {
+    if (unpairTimer) {
+      clearTimeout(unpairTimer);
+      unpairTimer = null;
+    }
+    if (unpairArmed) {
+      unpairLabel(unpairArmed, "label");
+      unpairArmed.removeAttribute("data-kiosk-unpair-armed");
+      unpairArmed = null;
+    }
+  }
+
+  function armUnpair(el) {
+    disarmUnpair();
+    unpairArmed = el;
+    el.setAttribute("data-kiosk-unpair-armed", "true"); // for Designer styling
+    unpairLabel(el, "confirm");
+    // Long enough to read, short enough that it cannot sit armed unnoticed
+    // and turn somebody else's first tap into the confirming one.
+    unpairTimer = setTimeout(disarmUnpair, 6000);
+  }
+
+  function clickUnpair(el) {
+    if (!state.token) return; // nothing to sign out of
+    var scope = unpairScope(el);
+    if (scope === "dev" && !state.dev) {
+      // Visible on a real pairing only by mistake (applyUnpair hides it), so
+      // say why rather than silently doing nothing.
+      if (window.console)
+        console.warn(
+          "[kiosk] [data-kiosk-unpair] is dev-only. This device is paired " +
+            'with a REAL code; add data-kiosk-unpair="any" to sign it out, ' +
+            "and note it needs a fresh single-use code to pair again."
+        );
+      return;
+    }
+    if (scope === "any" && unpairArmed !== el) {
+      armUnpair(el);
+      return;
+    }
+    disarmUnpair();
+    K.unpair(scope === "dev" ? "dev sign-out button" : "sign-out button");
+  }
 
   /* ------------------------------- pairing ------------------------------- */
 
@@ -1251,7 +1366,17 @@
     if (btn && state.panel.contains(btn)) {
       e.preventDefault();
       submitPanel();
+      return;
     }
+    var out = t.closest("[data-kiosk-unpair]");
+    if (out && state.panel.contains(out)) {
+      e.preventDefault();
+      clickUnpair(out);
+      return;
+    }
+    // A tap anywhere else in the panel abandons a pending confirm, so the
+    // button cannot stay armed while the operator has moved on.
+    if (unpairArmed && state.panel.contains(t)) disarmUnpair();
   });
 
   document.addEventListener("input", function (e) {

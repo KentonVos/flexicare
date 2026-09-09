@@ -14,6 +14,30 @@ Format:
 
 ---
 
+## 2026-09-09 — A sign-out button for the pairing screen (dev-only by default)
+
+- `src/flexicare-kiosk.js`
+- New `[data-kiosk-unpair]`: a button inside `[data-kiosk-pair]` that calls the
+  existing `Flexicare.kiosk.unpair()`. Until now signing a device out meant the
+  console or clearing site data, which is not something a tester holding a phone
+  can do.
+- **Dev-only by default**, and that asymmetry is the point. A dev pairing costs
+  nothing to undo — the token is fake and local, so re-pairing is typing
+  `5555-5555` again. A REAL pairing has no self-service path back: the code is
+  single-use and expires in 15 minutes, so a stray tap strands a store tablet
+  until an admin mints a new one. So on a real pairing the button hides itself
+  and ignores clicks; `data-kiosk-unpair="any"` opts a real tablet in and then
+  asks for a second tap (`data-kiosk-unpair-confirm`, `-armed` for styling).
+- Still LOCAL only — it does not revoke the token server-side, because no
+  endpoint exists for a device to do that. An admin revoking it is what produces
+  the `401` that unpairs a tablet on its own.
+- Revealed by clearing an inline `display`, the same convention as
+  `applyWhen()` — so the button must NOT carry a `display:none` class.
+- **Webflow:** needs a button placed inside the `data-kiosk-when="active"` panel
+  on `/kiosk`, with `data-kiosk-unpair` on it. Inert until then.
+
+---
+
 ## 2026-09-08 — The lead form's last four fields now reach the backend
 
 - `src/flexicare-spin.js`, `docs/api-contract.md` §1/§3.2/§3.10/§3.11,
