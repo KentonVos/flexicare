@@ -332,6 +332,17 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
   site head is scoped to `html[data-kiosk-locked]` because `overscroll-behavior: none`
   kills pull-to-refresh: unscoped it took that away from every developer and phone
   visitor too. Never write that block unscoped.
+- **Chrome's "Request desktop site" silently kills fullscreen, and no code can
+  override it.** In that mode Chrome reports a desktop UA *and* `pointer: fine` /
+  `hover: hover`, so every tablet check fails — including the head snippet's
+  coarse-pointer fallback. `FC.isTablet()` goes false, `kioskDevice()` goes false,
+  and every tap is skipped in silence. It is a per-site browser preference with no
+  API to read or set, so detection cannot see through it by design. The tell is
+  `kiosk.fullscreen().tablet === false` on an obvious tablet. Two defences, both in
+  `docs/kiosk-tablet-setup.md` §4: uncheck the box (re-check it after a domain
+  change — it is remembered per site), and **always arm `?fullscreen` during setup**,
+  which bypasses the tablet check entirely and is the only thing that makes
+  fullscreen independent of detection. Cost a debugging session on 2026-09-09.
 - **The tablets go fullscreen via the Fullscreen API on tap, NOT a PWA.** A manifest's
   `start_url` must be same-origin as the manifest and a service worker must be
   same-origin as its pages, so both need root-path files Webflow cannot serve. The

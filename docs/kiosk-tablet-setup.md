@@ -181,14 +181,35 @@ html[data-kiosk-locked] :is(input, textarea, [contenteditable="true"]) {
    → tap Build number ×7. Then Settings → Developer options → **Stay awake**. This is
    the only native way past Samsung's 10-minute screen-timeout ceiling. **Requires
    mains power.**
-2. **Open the funnel in Chrome** at the published URL **with `?fullscreen` on the end**,
+2. **Chrome → ⋮ menu → make sure "Desktop site" is UNCHECKED.** Non-obvious and it
+   breaks fullscreen outright (it cost a real debugging session on 2026-09-09). In
+   desktop-site mode Chrome does not just change the UA — it also reports
+   `pointer: fine` and `hover: hover`, so **every** tablet check fails, including the
+   head snippet's coarse-pointer fallback. `Flexicare.isTablet()` goes false,
+   `kioskDevice()` goes false, and fullscreen is skipped silently.
+
+   **This cannot be forced from the page.** It is a per-site browser preference and
+   there is no API to read or override it; Chrome deliberately makes the device look
+   like a desktop, which is the whole point of the feature. Detection cannot see
+   through it, so the only defences are this checkbox and step 3 below.
+
+   Chrome remembers the setting **per site**, so check it on the published origin you
+   will actually run, and re-check it after changing domains.
+
+3. **Open the funnel in Chrome** at the published URL **with `?fullscreen` on the end**,
    once. That arms fullscreen on this device before it is paired — you want it during
    setup, not only at the end. Clear it with `?fullscreen=off`.
+
+   **Do not skip this even on a tablet that works without it.** The flag is stored per
+   device and **wins outright**, bypassing the tablet check entirely — which makes the
+   device immune to desktop-site mode, to a Chrome update changing the UA, and to any
+   other way the layout detection can be fooled. It is the one setting that makes
+   fullscreen not depend on detection at all.
 
    Leave the tab open. Because pairing is required on every screen, the **pairing gate**
    takes you straight to `/kiosk` — it is on by default and there is nothing to arm.
    (`?kiosk=off` turns it off for one device, for development only.)
-3. **Pair the device.** Enter the code from the admin UI. The panel should flip to
+4. **Pair the device.** Enter the code from the admin UI. The panel should flip to
    "Paired" with the store name. Confirm:
    ```js
    Flexicare.kiosk.isKiosk()   // → true
@@ -201,17 +222,17 @@ html[data-kiosk-locked] :is(input, textarea, [contenteditable="true"]) {
    device locally — enough for the gate, fullscreen and the idle reset, but the
    session is still `WEB` and the wheel needs `?demo`. See
    `docs/kiosk-and-spin.md` §4. **Never leave a store tablet on the dev code.**
-4. **Tap the screen once** to enter fullscreen. Confirm
+5. **Tap the screen once** to enter fullscreen. Confirm
    `Flexicare.kiosk.fullscreen().active === true`.
-5. **Screen lock + app pinning.** Settings → Lock screen → Screen lock type → **PIN**.
+6. **Screen lock + app pinning.** Settings → Lock screen → Screen lock type → **PIN**.
    Then Settings → Security and privacy → Other security settings → **Pin app** → on,
    with **"Ask for PIN before unpinning"** enabled.
-6. **Silence interruptions.** Do Not Disturb on. Settings → Advanced features: disable
+7. **Silence interruptions.** Do Not Disturb on. Settings → Advanced features: disable
    Edge panels and the side-button Bixby/Assistant shortcut. Lock screen → Always On
    Display off. Software update → auto-download off. Bluetooth off.
-7. **Display.** Adaptive brightness off, brightness set for the venue. Screen timeout
+8. **Display.** Adaptive brightness off, brightness set for the venue. Screen timeout
    10 min as a backstop. Rotation locked to the stand's orientation.
-8. **Pin it.** Swipe up and hold for Recents → tap the app's icon at the top of its
+9. **Pin it.** Swipe up and hold for Recents → tap the app's icon at the top of its
    card → **Pin this app**.
 
 ---
@@ -240,17 +261,24 @@ html[data-kiosk-locked] :is(input, textarea, [contenteditable="true"]) {
 
 Work down this list — the first two are what actually goes wrong.
 
-1. **`Flexicare.kiosk.fullscreen().why`** — if it says *not paired and not armed*,
+1. **Is Chrome requesting the desktop site?** ⋮ menu → uncheck **Desktop site**. This
+   is the confirmed cause of the 2026-09-09 case and it looks like nothing else: the
+   device is paired, the code is current, every tap is silently skipped. In that mode
+   Chrome reports a desktop UA *and* `pointer: fine` / `hover: hover`, so no tablet
+   check can survive it — `fullscreen().tablet` reads `false` on an obvious tablet,
+   which is the tell. It is per-site, so it can come back after a domain change.
+2. **`Flexicare.kiosk.fullscreen().why`** — if it says *not paired and not armed*,
    nothing was ever attempted. Add `?fullscreen` once, or run
-   `Flexicare.kiosk.armFullscreen()`.
-2. **You have to TAP after the page loads.** `requestFullscreen()` is only allowed from
+   `Flexicare.kiosk.armFullscreen()`. Load any page with **`?fcdebug`** to read the
+   whole verdict on screen, including what the last tap actually did — no debugger.
+3. **You have to TAP after the page loads.** `requestFullscreen()` is only allowed from
    inside a user gesture, so it cannot fire on load. The listener is on `pointerdown`,
    so any tap anywhere does it.
-3. **Check the browser.** This is verified on **Chrome**. Samsung Internet's fullscreen
+4. **Check the browser.** This is verified on **Chrome**. Samsung Internet's fullscreen
    behaviour differs and it may keep a bar; if you are on it, switch to Chrome.
-4. **`supported: false`** means the browser has no `requestFullscreen` at all. Nothing
+5. **`supported: false`** means the browser has no `requestFullscreen` at all. Nothing
    in this document will help — that is the PWA/kiosk-browser case (§7).
-5. **`active: true` but a bar is still visible.** Then the bar is not browser chrome:
+6. **`active: true` but a bar is still visible.** Then the bar is not browser chrome:
    - Android's **navigation** bar (or gesture pill) at the *bottom* can persist. Locking
      rotation and using a stand that covers the edge is the usual answer.
    - **App pinning** shows its own hint on entry. It clears on its own.

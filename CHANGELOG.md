@@ -14,6 +14,29 @@ Format:
 
 ---
 
+## 2026-09-09 — Chrome's "Request desktop site" was killing fullscreen
+
+- `docs/kiosk-tablet-setup.md` §4 + §5b, `CLAUDE.md`
+- **Root cause of the tablet not going fullscreen.** Chrome had "Desktop site"
+  checked. In that mode it reports a desktop UA *and* `pointer: fine` /
+  `hover: hover`, so every tablet check fails — including the head snippet's
+  coarse-pointer fallback, which exists precisely to catch a UA it does not
+  recognise. `FC.isTablet()` → false, `kioskDevice()` → false, every tap
+  skipped silently. Nothing was wrong with the device or the code.
+- **It cannot be forced from the page.** It is a per-site browser preference
+  with no API to read or override, and Chrome deliberately makes the device
+  look like a desktop. Documented as a constraint rather than left as a gap,
+  because the natural instinct is to add more detection, and no amount of it
+  can work.
+- Two defences, both now setup steps: uncheck the box (per site, so re-check
+  after a domain change), and **always arm `?fullscreen`** during setup — it
+  wins outright, bypassing the tablet check, and is the only thing that makes
+  fullscreen independent of detection at all.
+- Also promoted to the top of the "still not fullscreen" list, since it
+  presents exactly like nothing being attempted.
+
+---
+
 ## 2026-09-09 — Fullscreen now says out loud why it did nothing
 
 - `src/flexicare-kiosk.js`
