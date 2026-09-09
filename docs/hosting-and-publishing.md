@@ -166,5 +166,6 @@ deploy command `npx wrangler deploy`.
 - The repo is **public** — never commit API keys, tokens, or passwords.
 - Test on the **published or preview URL**, not the Designer — the camera (selfie page)
   and Barba both need a real `https` page.
-- The API base URL in `flexicare-core.js` is still **staging**
-  (`api-staging-discovery.injozitech.com`) and must be swapped before go-live.
+- The API base URL in `flexicare-core.js` is **production** as of 2026-09-09
+  (`admin.flexi-play.co.za`). Staging (`api-staging-discovery.injozitech.com`) is for
+  development only, and switching between them invalidates every paired device token.

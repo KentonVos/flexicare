@@ -148,9 +148,13 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
   `/meet-your-two-selves` (`flexicare-reveal.js`), which resolves the archetype and polls
   for the generated images *while the copy is already on screen*. Don't reintroduce a
   blocking loading screen — the reveal page never waits on images to render.
-- **The API base URL is STAGING** in `flexicare-core.js`
-  (`api-staging-discovery.injozitech.com`). It must be swapped to production before
-  go-live. This is the single config touchpoint for the backend. The **full backend
+- **The API base URL is PRODUCTION** in `flexicare-core.js` — `admin.flexi-play.co.za`
+  (switched 2026-09-09). This is the single config touchpoint for the backend, and
+  the `/api/v1` prefix is baked into it, so never add the prefix at a call site.
+  **Device tokens are per environment**, so pointing this back at staging 401s every
+  paired tablet — which this code correctly reads as *revoked* and unpairs. Changing
+  environments therefore means re-pairing every device with a fresh single-use code;
+  it is not a flag to flip while stores are trading. The **full backend
   contract** (every endpoint, payload, error code, the photo/image flow) is in
   `docs/api-contract.md` — read it before touching anything that calls `Flexicare.api()`.
 - **The photo step has TWO paths and they are mutually exclusive.** A selfie

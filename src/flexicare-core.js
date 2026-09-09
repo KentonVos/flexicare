@@ -41,8 +41,15 @@
 
   /* ----------------------------- config ----------------------------- */
   FC.config = FC.config || {
-    // Staging. Swap to the production base before go-live.
-    apiBase: "https://api-staging-discovery.injozitech.com/api/v1",
+    /* PRODUCTION (switched 2026-09-09). The /api/v1 prefix is baked in, so
+       FC.api("/sessions") is the whole call — never add it at a call site.
+       Staging, for development only:
+         https://api-staging-discovery.injozitech.com/api/v1
+       Device tokens are PER ENVIRONMENT: pointing this back at staging makes
+       every paired tablet 401 on its next call, which this code treats as
+       "revoked" and unpairs. So switching environments means re-pairing every
+       device, with a fresh single-use code. Not a thing to toggle casually. */
+    apiBase: "https://admin.flexi-play.co.za/api/v1",
     language: "en", // only `en` is fully populated server-side
     selfie: {
       maxSize: 1080, // px, long edge of the square capture

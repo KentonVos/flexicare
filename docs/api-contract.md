@@ -5,15 +5,21 @@
 > (staging only — disabled in production).
 >
 > **Base URL is configured in one place:** `Flexicare.config.apiBase` in
-> `src/flexicare-core.js` (currently STAGING — swap before go-live).
+> `src/flexicare-core.js` (PRODUCTION since 2026-09-09).
 
 ---
 
 ## 1. Fundamentals
 
-- **Base URL (staging):** `https://api-staging-discovery.injozitech.com`; all routes are
-  prefixed `/api/v1` (already baked into `FC.config.apiBase`, so `FC.api("/sessions")`
-  is the full call).
+- **Base URL.** All routes are prefixed `/api/v1`, already baked into
+  `FC.config.apiBase`, so `FC.api("/sessions")` is the full call.
+  - **Production:** `https://admin.flexi-play.co.za` — live since 2026-09-09.
+  - **Staging:** `https://api-staging-discovery.injozitech.com` — development only,
+    and its content may differ from production.
+
+  **Kiosk device tokens are per environment.** A tablet paired against staging is not
+  paired against production: its token 401s, which this frontend reads as *revoked*
+  and unpairs. Switching the base URL means re-pairing every device.
 - **Authentication: NONE.** `POST /sessions` returns a UUID `id`; that UUID *is* the
   credential, passed as a path param on every later call. Treat it as a secret — memory /
   `sessionStorage` only, never logged. (`FC.getSessionId()` / `FC.setSessionId()`.)

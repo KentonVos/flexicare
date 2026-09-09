@@ -14,6 +14,36 @@ Format:
 
 ---
 
+## 2026-09-09 — GO LIVE: the API base is now production
+
+- `src/flexicare-core.js`, `CLAUDE.md`, `docs/api-contract.md`,
+  `docs/hosting-and-publishing.md`
+- `Flexicare.config.apiBase` → `https://admin.flexi-play.co.za/api/v1`. Staging
+  (`api-staging-discovery.injozitech.com`) is development only from here. One line;
+  the `/api/v1` prefix stays baked in, so no call site changes.
+- **Device tokens are per environment**, so this invalidated every tablet paired
+  against staging: their tokens now 401, which `flexicare-kiosk.js` correctly reads
+  as *revoked* and unpairs, landing each device on `/kiosk`. **Every tablet must be
+  re-paired with a fresh production code** (single-use, 15-minute expiry). Kenton
+  accepted this cost knowingly rather than it being a surprise. Recorded in all three
+  docs so nobody flips the base URL back mid-shift.
+- The live site is **flexi-play.co.za** (and `www.`), both connected in Webflow and
+  published 2026-09-09 08:22.
+- **Outstanding for the backend:** CORS is still `*` and gets locked down before
+  go-live. It must allowlist BOTH `https://flexi-play.co.za` and
+  `https://www.flexi-play.co.za` — Webflow serves both — plus
+  `https://discovery-flexicare.webflow.io` if testing is to keep working anywhere but
+  production. Locking it to one origin breaks the live site silently.
+- **Still open before this is truly launched:** the production avatar catalog needs
+  its scenario pairs approved (a slot is selectable only when `url` is present, so an
+  unbaked catalog is all placeholders); the five tuner-only glass presets still need
+  `exportPresets()` pasted into `PRESETS`; `slider.js` / `orb-tuner.js` still need
+  dropping from the Webflow footer; and the dev code `5555-5555` is still live (it
+  can only make `WEB` sessions, so it cannot award a prize, but no store tablet may
+  launch on it).
+
+---
+
 ## 2026-09-09 — Chrome's "Request desktop site" was killing fullscreen
 
 - `docs/kiosk-tablet-setup.md` §4 + §5b, `CLAUDE.md`
