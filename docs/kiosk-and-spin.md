@@ -291,7 +291,14 @@ the URL would 404 and look like the pairing had failed.
 confused. The alphabet already excludes them, but the *claim* codes on the prize
 screen use the same alphabet and get read aloud across a shop floor.
 
-### The dev code — `5555-5555`
+### The dev code — `5555-5555`  (DISABLED 2026-09-11)
+
+> **It is off.** `DEV_PAIRING_ENABLED` in `flexicare-kiosk.js` is `false`, so the
+> pairing panel rejects this code with the same message a wrong code gets, and any
+> device still signed in on it is signed out automatically on its next page load.
+> Every tablet now needs a real, admin-issued single-use code. The rest of this
+> section is kept as the record of what it did — flip the constant to `true` to get
+> it back.
 
 **Added 2026-09-02.** Type `5555-5555` into the pairing panel (or open
 `/kiosk?pair=5555-5555`) and the device pairs **locally**: a fake token, a fake

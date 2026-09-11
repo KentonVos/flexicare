@@ -48,10 +48,16 @@ published since the change.**
    on Kenton's machine and paste into `PRESETS` in `src/glass.js`. See the glass bullet
    below and `docs/webflow-mcp.md` §9.
 3. **The API base is STAGING** in `flexicare-core.js`. Swap before go-live.
-4. **The dev pairing code `5555-5555` is live** (added 2026-09-02). It pairs a device
-   locally with a fake token so the tablet behaviour can be tested before the admin can
-   issue real codes. **A store tablet must never go live on it** — the session stays
-   `WEB` and the wheel refuses. Check with `Flexicare.kiosk.isDev()`.
+4. ~~The dev pairing code `5555-5555` is live~~ **DISABLED 2026-09-11.**
+   `DEV_PAIRING_ENABLED` in `flexicare-kiosk.js` is `false`: the code is rejected like
+   any wrong code, and a device still holding the fake token is signed out on its next
+   page load (the token is dropped at boot, the journey is reset, and the compulsory
+   gate sends it to `/kiosk`). Every device now needs a real single-use code.
+   `isDev()` is therefore always false, so the spin page's dev demo journey and the
+   dev exemption from the touch hardening are unreachable — left in place, gated by the
+   one constant. Note the knock-on: `[data-kiosk-unpair]` defaults to dev scope, so the
+   sign-out button on `/kiosk` never shows now; a real tablet needs
+   `data-kiosk-unpair="any"` to get one.
 5. ~~Four lead-form fields have no backend endpoint~~ **DONE 2026-09-08** — the backend
    added `PATCH /sessions/{id}/identity` and `submitLead()` now sends all six fields. The
    button still says "Call me back"; whether anything downstream actually calls back is a

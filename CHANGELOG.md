@@ -14,6 +14,25 @@ Format:
 
 ---
 
+## 2026-09-11 — Dev pairing (`5555-5555`) disabled, and dev devices signed out
+
+- `src/flexicare-kiosk.js`, `CLAUDE.md`, `ARCHITECTURE.md`,
+  `docs/kiosk-and-spin.md`, `docs/kiosk-tablet-setup.md`
+- New constant `DEV_PAIRING_ENABLED` (false). `K.pair()` no longer accepts
+  `5555-5555` — it rejects with the same message a wrong code gets, so an
+  operator who has heard the code learns nothing from trying it.
+- Devices already signed in on the dev code are signed out automatically: boot
+  drops the stored token before it is restored into state (matching on the
+  `dev` flag OR the `dev-local` token value), resets any journey in progress,
+  and the compulsory pairing gate then redirects the device to `/kiosk`. There
+  is nothing to revoke server-side — the token was always fake and local.
+- Knock-on, both deliberate: `isDev()` is now always false, so the spin page's
+  dev demo journey and the dev exemption from the touch hardening are
+  unreachable (left in place, gated by the one constant); and
+  `[data-kiosk-unpair]` defaults to dev scope, so the sign-out button on
+  `/kiosk` no longer appears. A real tablet needs `data-kiosk-unpair="any"`.
+- No Webflow change required.
+
 ## 2026-09-09 — GO LIVE: the API base is now production
 
 - `src/flexicare-core.js`, `CLAUDE.md`, `docs/api-contract.md`,

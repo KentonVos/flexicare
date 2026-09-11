@@ -218,6 +218,9 @@ html[data-kiosk-locked] :is(input, textarea, [contenteditable="true"]) {
    Pair **from the tab you will actually run**, not a different browser or profile —
    the token is per-origin-per-browser-storage.
 
+   *(The dev code below was DISABLED on 2026-09-11 — `DEV_PAIRING_ENABLED` is `false`
+   in `flexicare-kiosk.js`. Every device now needs a real code from the admin.)*
+
    *While testing, before the admin can issue real codes:* `5555-5555` pairs the
    device locally — enough for the gate, fullscreen and the idle reset, but the
    session is still `WEB` and the wheel needs `?demo`. See

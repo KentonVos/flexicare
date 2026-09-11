@@ -963,6 +963,11 @@ funnel.
   finish a journey that will be refused at the wheel.
 - `kiosk.gate()` prints enforced / paired / target / whether this page redirects and why.
 
+**The dev code `5555-5555` is DISABLED (2026-09-11).** `DEV_PAIRING_ENABLED` in
+`flexicare-kiosk.js` is `false`: the code is rejected like any wrong code, and a device
+still holding the fake token is signed out on its next page load and sent to `/kiosk`.
+Everything below describes what it did, and what returns if the switch is flipped back.
+
 **The dev code `5555-5555`** pairs locally with no network call — a fake token and a fake
 kiosk record. With pairing compulsory, every tester needs a code, and minting a real one
 in the admin dashboard for each of them is friction the gate should not create; this is

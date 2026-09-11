@@ -163,7 +163,14 @@
      /kiosk itself is exempt), the page says [data-kiosk-enforce="off"], a pair
      request is in flight, or we are already on the target path.
 
-   THE DEV CODE  ("5555-5555")
+   THE DEV CODE  ("5555-5555")  — DISABLED 2026-09-11
+     It is OFF. DEV_PAIRING_ENABLED is false, so the code pairs nothing: the
+     pairing panel rejects it with the same message a wrong code gets, and on
+     boot any device still holding the fake token is signed out and sent back
+     to /kiosk by the gate. Every device on the floor now runs on a real,
+     server-issued pairing. The rest of this section describes what the code
+     did, and what comes back if the switch is flipped to true again.
+
      Because pairing is now required, every tester needs a code — and minting a
      real one in the admin dashboard for each of them is friction the gate
      should not create. Typing the dev code into the pairing panel pairs the
@@ -198,7 +205,8 @@
                       not revoke the token server-side (nothing here can).
                       (Does NOT revoke server-side — that is an admin action.)
      onDisabled(fn) / onUnpaired(fn) → callbacks, if a page needs to react.
-     isDev()        → boolean. Paired with the dev code (fake token).
+     isDev()        → boolean. Paired with the dev code (fake token). Always
+                      false while DEV_PAIRING_ENABLED is off.
      enforce(on)    → turn the pairing gate on/off for this device; no argument
                       just reports. Same thing ?kiosk / ?kiosk=off does.
      gate()         → prints why the gate did or did not fire. Start here when
@@ -224,6 +232,14 @@
      input path and no separate button state to keep in sync. */
   var DEV_CODE = "5555-5555";
   var DEV_TOKEN = "dev-local"; // never sent anywhere; see authHeaders()
+
+  /* DEV PAIRING IS OFF (2026-09-11, go-live). The dev code no longer pairs
+     anything: K.pair() rejects it like any unknown code, and purgeDevPairing()
+     below signs out — on its next page load — every device still holding the
+     fake token. Flip this back to true to get the local pairing back; nothing
+     else has to change, and every isDev() branch downstream (the spin page's
+     demo journey, the touch-hardening exemption) comes back with it. */
+  var DEV_PAIRING_ENABLED = false;
 
   var K = (FC.kiosk = FC.kiosk || {});
 
@@ -685,7 +701,12 @@
         new Error("Enter the 8-character code as XXXX-XXXX")
       );
     if (state.busy) return Promise.reject(new Error("Pairing already running"));
-    if (code === DEV_CODE) return devPair();
+    if (code === DEV_CODE) {
+      if (DEV_PAIRING_ENABLED) return devPair();
+      // Deliberately the same wording a real bad code gets: an operator who
+      // has heard the dev code from somewhere should learn nothing from it.
+      return Promise.reject(new Error("That code is not valid. Check it and try again."));
+    }
 
     state.busy = true;
     clearPanelError();
@@ -1563,6 +1584,23 @@
     captureEnforceFlag(); // same deal: honour ?kiosk on the load carrying it
 
     var saved = readStore();
+    var purged = false;
+
+    /* Sign out a device still holding the dev token. Done HERE, before the
+       token is restored into state, so nothing downstream ever sees a dev
+       pairing: no heartbeat is armed for it, isDev() is false from the first
+       line, and the pairing gate in init() finds an unpaired device and sends
+       it to /kiosk on its very next page load. The token is local and fake, so
+       there is nothing to revoke server-side — dropping it IS the sign-out.
+
+       Belt and braces on the test: a store written before the `dev` flag
+       existed would only be identifiable by the token value. */
+    if (saved && !DEV_PAIRING_ENABLED && (saved.dev || saved.token === DEV_TOKEN)) {
+      dropStore();
+      saved = null;
+      purged = true;
+    }
+
     if (saved) {
       state.token = saved.token;
       state.dev = !!saved.dev;
@@ -1572,6 +1610,22 @@
     }
 
     function start() {
+      /* A dev device could have been mid-journey. That journey was started on
+         a WEB session it can no longer complete, so clear it the same way an
+         unpair() would — and do it before init(), so the gate redirects a
+         device with nothing left to resume. */
+      if (purged) {
+        try {
+          if (FC.getSessionId()) FC.resetJourney();
+        } catch (e) {}
+        if (window.console)
+          console.warn(
+            "[kiosk] Dev pairing (" +
+              DEV_CODE +
+              ") has been disabled. This device has been signed out and needs " +
+              "a real single-use pairing code."
+          );
+      }
       init(document);
       consumeDeepLink(); // may pair us right now
       if (state.token) {
