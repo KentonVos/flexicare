@@ -430,6 +430,12 @@ The persistent brain. Holds:
   actually pins the viewport before paint.
 - Session id — `getSessionId()`/`setSessionId()`/`clearSession()`, stored in sessionStorage,
   treated as a secret (never logged).
+- **Build watch** (`FC.build`) — reloads a tab running an old build, only on the
+  `[data-journey-start]` landing page and only with no session, no Barba transition and
+  no recent touch. Fingerprint = the ETag of every CDN script (needs
+  `Access-Control-Expose-Headers: ETag` in `_headers`) + Webflow's `Last Published`
+  stamp. Checked on every arrival there and every 5 min while idle; one reload per
+  10 min at most. The only sanctioned `location.reload()` in the codebase.
 - Buffered avatar choice — `setAvatar()/getAvatar()/hasAvatar()/clearAvatar()`, plus
   `FC.avatarGender` (kept separately so it survives `clearAvatar()` and can still pre-fill
   onboarding). Shape `{ id, slug, url, race, gender, ageGroup, variant }`; only `id` is

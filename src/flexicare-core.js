@@ -30,6 +30,9 @@
        and POST /sessions/{id}/spin do.
      • config.kiosk — fallback kiosk settings; the server's per-device
        config overrides them once paired.
+     • the BUILD WATCH — reloads a tab that is running an old build, but
+       only on the landing page and only when nothing can be lost. The
+       one sanctioned location.reload() in the codebase; see that section.
 
    Later pages extend this same object (answers, archetype, echo
    label, etc.). Keep additions on window.Flexicare.
@@ -346,11 +349,295 @@
     return FC;
   };
 
+  /* ----------------------------- build watch -----------------------------
+     WHY THIS EXISTS. Barba never reloads the page, and it keeps every page's
+     HTML in memory for the life of the tab, with no expiry. So a tablet whose
+     tab stays open all day keeps running the code — and showing the Webflow
+     copy — it loaded that morning, whatever has been pushed or published
+     since. That is how the demo link kept handing out FLX-DEMO-CODE prizes
+     after it was switched off (2026-10-23): the fix was live, and the open
+     tabs never fetched it.
+
+     WHAT IT DOES. At boot it fingerprints the build this tab is running.
+     Whenever the tablet is on the LANDING page ([data-journey-start]) — on
+     every arrival, and every BUILD_EVERY_MS while it sits there — it
+     fingerprints what is live now, and reloads if the two differ.
+
+     The fingerprint is two things, so both kinds of deploy are caught:
+       • the ETag of every script this page loaded from our CDN (a push).
+         Cloudflare content-hashes it, so it changes only when the file does.
+         It is cross-origin, so _headers must say
+         Access-Control-Expose-Headers: ETag — without that the header reads
+         as null and this half quietly does nothing.
+       • Webflow's "<!-- Last Published: … -->" stamp (a publish). Every page
+         carries the same one. The boot value is read from this document, the
+         live one from a no-store fetch of the landing page.
+
+     WHY ONLY ON THE LANDING PAGE. A reload drops the buffered selfie and takes
+     the tablet out of fullscreen — every other navigation is barba.go() for
+     exactly that reason. On the landing page the journey has just been reset,
+     so there is nothing to lose, and the next shopper's first tap restores
+     fullscreen (flexicare-kiosk.js re-requests it on every pointerdown). Even
+     there it reloads only when, at that moment: we are still on the landing
+     page, there is no session id, no Barba transition is running, and nobody
+     has touched the screen since arriving (or for BUILD_QUIET_MS). A shopper
+     who has started is never interrupted; a later check catches it.
+
+     SAFETY. Any network failure, or a header we cannot read, means "no news",
+     never "changed". At most one reload per BUILD_RELOAD_GAP_MS
+     (sessionStorage), so a fingerprint that flaps cannot loop a tablet.
+
+     IT CANNOT REACH A TAB THAT LOADED BEFORE THIS CODE EXISTED — that tab does
+     not have it. Those still need closing by hand, once.
+
+     Flexicare.build.info()  → the boot fingerprint and the last check.
+     Flexicare.build.check() → check now (it still only reloads when safe). */
+  var BUILD_WATCH_ENABLED = true;
+  var BUILD_EVERY_MS = 5 * 60 * 1000; // re-check while idle on the landing page
+  var BUILD_QUIET_MS = 30 * 1000; // untouched this long counts as idle
+  var BUILD_RELOAD_GAP_MS = 10 * 60 * 1000; // loop guard
+  var BUILD_RELOAD_KEY = "fcBuildReloadAt";
+
+  var build = {
+    cdn: null, // "https://<cdn>/src/" — where our own scripts come from
+    boot: null, // { stamp, tags: { url: etag } } — what this tab is running
+    onLanding: false,
+    arrivedAt: 0,
+    arrivalPending: false,
+    lastInput: 0,
+    timer: null,
+    busy: false,
+    last: null, // { at, reason, changed, outcome }
+  };
+
+  // Read NOW, while this script is the one executing — later it is null.
+  (function () {
+    var me = document.currentScript && document.currentScript.src;
+    var m = me && /^(.*\/src\/)[^\/?#]+(?:[?#].*)?$/.exec(me);
+    build.cdn = m ? m[1] : null;
+  })();
+
+  function nowMs() {
+    return new Date().getTime();
+  }
+
+  function stampOf(text) {
+    var m = /Last Published:\s*([^<>]*?)\s*(?:-->|$)/.exec(text || "");
+    return m ? m[1] : null;
+  }
+
+  // Webflow puts the stamp in a comment BEFORE <html>, which the parser hangs
+  // off the document itself.
+  function docStamp() {
+    var nodes = document.childNodes || [];
+    for (var i = 0; i < nodes.length; i++)
+      if (nodes[i].nodeType === 8) {
+        var s = stampOf(nodes[i].data);
+        if (s) return s;
+      }
+    return null;
+  }
+
+  // The shell's scripts are whatever the FIRST page loaded — Barba never adds
+  // any — so this is exactly the code the tab is running.
+  function ourScripts() {
+    var out = [];
+    if (!build.cdn || !document.querySelectorAll) return out;
+    var seen = {};
+    var list = document.querySelectorAll("script[src]");
+    for (var i = 0; i < list.length; i++) {
+      var src = list[i].src;
+      if (src && src.indexOf(build.cdn) === 0 && !seen[src]) {
+        seen[src] = true;
+        out.push(src);
+      }
+    }
+    return out;
+  }
+
+  function etagOf(url) {
+    return fetch(url, {
+      method: "HEAD",
+      cache: "no-store",
+      mode: "cors",
+      credentials: "omit",
+    })
+      .then(function (res) {
+        return res.ok ? res.headers.get("ETag") : null;
+      })
+      .catch(function () {
+        return null;
+      });
+  }
+
+  function liveStamp() {
+    return fetch(location.pathname || "/", {
+      cache: "no-store",
+      credentials: "same-origin",
+    })
+      .then(function (res) {
+        return res.ok ? res.text() : null;
+      })
+      .then(function (html) {
+        return html ? stampOf(html) : null;
+      })
+      .catch(function () {
+        return null;
+      });
+  }
+
+  function tagsFor(urls) {
+    return Promise.all(urls.map(etagOf)).then(function (etags) {
+      var tags = {};
+      for (var i = 0; i < urls.length; i++) tags[urls[i]] = etags[i];
+      return tags;
+    });
+  }
+
+  // Only a value we actually read on BOTH sides can count as a change.
+  function whatChanged(was, now) {
+    var out = [];
+    if (was.stamp && now.stamp && was.stamp !== now.stamp)
+      out.push("Webflow publish " + now.stamp);
+    for (var url in was.tags) {
+      if (!was.tags.hasOwnProperty(url)) continue;
+      var a = was.tags[url];
+      var b = now.tags[url];
+      if (a && b && a !== b) out.push(url.slice(build.cdn.length));
+    }
+    return out;
+  }
+
+  // null when it is safe to reload right now; otherwise why not.
+  function reloadBlocker() {
+    if (!build.onLanding) return "left the landing page";
+    if (FC.getSessionId()) return "a session is in progress";
+    var b = window.barba;
+    if (b && b.transitions && b.transitions.isRunning)
+      return "a page transition is running";
+    var touchedSinceArrival = build.lastInput > build.arrivedAt;
+    if (touchedSinceArrival && nowMs() - build.lastInput < BUILD_QUIET_MS)
+      return "someone is using the screen";
+    try {
+      var at = +sessionStorage.getItem(BUILD_RELOAD_KEY) || 0;
+      if (nowMs() - at < BUILD_RELOAD_GAP_MS)
+        return "already reloaded for a new build less than 10 min ago";
+    } catch (e) {}
+    return null;
+  }
+
+  function checkBuild(reason) {
+    if (!BUILD_WATCH_ENABLED || !build.boot || build.busy)
+      return Promise.resolve(build.last);
+    build.busy = true;
+    return Promise.all([liveStamp(), tagsFor(ourScripts())])
+      .then(function (r) {
+        var changed = whatChanged(build.boot, { stamp: r[0], tags: r[1] });
+        var blocker = changed.length ? reloadBlocker() : null;
+        var outcome = !changed.length
+          ? "current"
+          : blocker
+          ? "not now: " + blocker
+          : "reloading";
+        build.last = {
+          at: new Date().toISOString(),
+          reason: reason,
+          changed: changed,
+          outcome: outcome,
+        };
+        if (changed.length && window.console)
+          console.warn(
+            "[core] a newer build is live (" + changed.join(", ") + ") — " + outcome
+          );
+        if (outcome === "reloading") {
+          try {
+            sessionStorage.setItem(BUILD_RELOAD_KEY, String(nowMs()));
+          } catch (e) {}
+          window.location.reload();
+        }
+        build.busy = false;
+        return build.last;
+      })
+      .catch(function () {
+        build.busy = false;
+        return build.last;
+      });
+  }
+
+  function captureBootBuild() {
+    if (!BUILD_WATCH_ENABLED || typeof fetch !== "function") return;
+    var stamp = docStamp();
+    tagsFor(ourScripts()).then(function (tags) {
+      build.boot = { stamp: stamp, tags: tags };
+    });
+  }
+
+  /* Called from maybeResetJourney on every page: on=true for the landing page.
+     `arrived` is a Barba navigation into it (a hard load is already current).
+     The arrival check waits for Barba's `after` hook — during afterEnter the
+     transition is still running and the reload would be refused. */
+  function watchLanding(on, arrived) {
+    build.onLanding = on;
+    if (!on) {
+      if (build.timer) clearInterval(build.timer);
+      build.timer = null;
+      build.arrivalPending = false;
+      return;
+    }
+    build.arrivedAt = nowMs();
+    if (!build.timer)
+      build.timer = setInterval(function () {
+        checkBuild("idle on the landing page");
+      }, BUILD_EVERY_MS);
+    if (!arrived) return;
+    if (window.barba && window.barba.hooks) build.arrivalPending = true;
+    else
+      setTimeout(function () {
+        checkBuild("arrived on the landing page");
+      }, 2000);
+  }
+
+  if (window.barba && window.barba.hooks)
+    window.barba.hooks.after(function () {
+      if (!build.arrivalPending) return;
+      build.arrivalPending = false;
+      checkBuild("arrived on the landing page");
+    });
+
+  (function () {
+    var events = ["pointerdown", "touchstart", "keydown"];
+    function note() {
+      build.lastInput = nowMs();
+    }
+    for (var i = 0; i < events.length; i++)
+      document.addEventListener(events[i], note, { passive: true, capture: true });
+  })();
+
+  FC.build = {
+    info: function () {
+      return {
+        enabled: BUILD_WATCH_ENABLED,
+        cdn: build.cdn,
+        boot: build.boot,
+        onLanding: build.onLanding,
+        last: build.last,
+      };
+    },
+    check: function () {
+      return checkBuild("manual");
+    },
+  };
+
+  if (document.readyState === "loading")
+    document.addEventListener("DOMContentLoaded", captureBootBuild);
+  else captureBootBuild();
+
   function maybeResetJourney(scope) {
     var root = scope || document;
     var hit =
       (root.matches && root.matches("[data-journey-start]") && root) ||
       (root.querySelector && root.querySelector("[data-journey-start]"));
+    watchLanding(!!hit, !!hit && !!scope && scope !== document);
     if (hit) {
       FC.resetJourney();
       return;

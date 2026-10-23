@@ -41,6 +41,9 @@ exists, which is exactly how a stale footer hides this.
    git push
    ```
 3. Cloudflare auto-deploys within ~1 minute. Hard-refresh (Cmd/Ctrl+Shift+R). Done.
+   Tablets in the store pick it up on their own the next time they are back on the
+   landing page (the build watch in `flexicare-core.js`), so nobody has to visit them.
+   A Webflow publish reaches them the same way.
 4. Add a line to `CHANGELOG.md`.
 
 **Nothing to paste into Webflow.** The footer only ever needs touching again if the

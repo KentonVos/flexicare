@@ -41,6 +41,17 @@ constants are `true`. **There is no bypass for a developer either now** — test
 funnel needs a real pairing code. **Never hand anyone a test link on the production
 site:** a link outlives its purpose and the site is trading.
 
+**Tablets now update themselves (2026-10-23) — the BUILD WATCH in `flexicare-core.js`.**
+Barba never reloads and keeps every page's HTML in memory with no expiry, so an open
+tab used to run the code and Webflow copy it loaded that morning, all day. Now, on the
+landing page, a tablet compares what it booted with (each CDN script's ETag + Webflow's
+`Last Published` stamp) against what is live — on every arrival and every 5 min while
+idle — and reloads if either changed, provided nobody is mid-journey or touching the
+screen. So a push OR a Webflow publish reaches every tablet within one lap. **Tabs
+opened before this shipped do not have it** and must be closed by hand once. It needs
+`Access-Control-Expose-Headers: ETag` in `_headers`. `Flexicare.build.info()` shows what
+the tab booted with and the outcome of the last check.
+
 **Open items that will bite, in rough priority order:**
 1. **Investigate before touching: the landing page reportedly locks up Chrome on an
    iPhone 12 mini** (reported 2026-09-08, discussion only — no code changed yet).
@@ -201,7 +212,8 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
 - **The buffered selfie lives in memory only** (`Flexicare.photo`). It survives Barba
   navigations but NOT a hard page reload. That's why the controllers always navigate
   with `barba.go()`, never `window.location`. Don't "helpfully" change a `barba.go()`
-  to a normal redirect.
+  to a normal redirect. The ONE deliberate reload is the build watch in
+  `flexicare-core.js`: landing page only, no session — see the top of this file.
 - **The orb's `data-orb-warp` is on `orb-wrapper` ON PURPOSE, and that has switched the
   glass refraction OFF.** A `filter` makes an element a backdrop root, so a filtered
   ancestor leaves `glass-orb` with nothing behind it to refract. This was measured, not
@@ -379,7 +391,8 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
   consequence to protect: **fullscreen survives same-document navigation but not a
   reload**, so swapping any `barba.go()` for a `location.reload()` drops the tablet out
   of fullscreen on every idle reset. Same rule that protects the buffered selfie, second
-  reason. `docs/kiosk-tablet-setup.md`.
+  reason. `docs/kiosk-tablet-setup.md`. (The build watch's landing-page reload is the
+  deliberate exception: nothing is lost there, and the next tap restores fullscreen.)
 - **Pairing is REQUIRED on every screen, and the gate is ON by default.** Every
   arrival on every page (boot and every Barba `afterEnter`) redirects to `/kiosk` when
   there is no device token — sign in first, then the funnel. **So there is no public web

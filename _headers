@@ -15,7 +15,14 @@
 # to pinned versions — long cache + floating URL is how you ship a fix nobody
 # receives.
 
+# Access-Control-Expose-Headers: ETag is for the BUILD WATCH in
+# flexicare-core.js, which compares each script's ETag against the one it
+# booted with to spot a new push in a tab that never reloads. ETag is not a
+# CORS-safelisted header, so without this line the site reads it as null and
+# the check silently sees no push, ever.
+
 /src/*
   Cache-Control: public, max-age=0, must-revalidate
   Access-Control-Allow-Origin: *
+  Access-Control-Expose-Headers: ETag
   X-Content-Type-Options: nosniff

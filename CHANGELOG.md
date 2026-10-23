@@ -14,6 +14,26 @@ Format:
 
 ---
 
+## 2026-10-23 — Build watch: tablets reload themselves onto a new build
+
+- `src/flexicare-core.js`, `_headers`, `CLAUDE.md`, `ARCHITECTURE.md`,
+  `docs/hosting-and-publishing.md`
+- Barba never reloads and caches every page's HTML in memory with no expiry, so an
+  open tablet tab kept running old code and old Webflow copy indefinitely. That is
+  why the demo fix did not reach tabs that were already open.
+- New section in core (`FC.build`): at boot it fingerprints the running build (the
+  ETag of every CDN script this page loaded, plus Webflow's `Last Published` stamp).
+  On the `[data-journey-start]` landing page — on every Barba arrival (after the
+  transition's `after` hook) and every 5 min while idle there — it fingerprints what
+  is live and calls `location.reload()` if anything changed, but only when there is
+  no session id, no transition running, and no touch since arrival or in the last
+  30s. At most one reload per 10 min (sessionStorage loop guard). A network failure
+  or an unreadable header counts as "no change".
+- `_headers`: `Access-Control-Expose-Headers: ETag` on `/src/*`, so the cross-origin
+  ETag is readable from the site.
+- Tabs opened before this push do not have the code; close them by hand once.
+- No Webflow change.
+
 ## 2026-10-23 — Only paired, ACTIVE tablets can use the site: `?kiosk=off` disabled
 
 - `src/flexicare-kiosk.js`, `CLAUDE.md`, `ARCHITECTURE.md`, `docs/kiosk-and-spin.md`,
