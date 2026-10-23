@@ -896,6 +896,13 @@ wrapper. Clear it with `?demo=off` when you're done.
 
 ## 9. Demoing the whole journey without a tablet — `?demo`
 
+> **DISABLED 2026-10-23.** `DEMO_ENABLED` in `flexicare-spin.js` is `false`, so every
+> `?demo` / `?spindemo` URL below is ignored (with a console warning), and a tab armed
+> before the change is disarmed on its next page load. A copy-review link
+> (`?kiosk=off&demo`) was used at a live activation and handed shoppers fake
+> `FLX-DEMO-CODE` prizes. Flip the constant to `true` to bring the mode back, and only
+> ever on a branch preview, never on `main` while the site is trading.
+
 The real page needs a `COMPLETED` session on a **paired** tablet, and pairing needs
 a code from the admin UI. That is the right gate for production and a miserable one
 for building the page: until a tablet is paired there is nothing on screen to style.

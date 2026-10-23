@@ -22,6 +22,16 @@ publishes — full table in `docs/webflow-mcp.md` §8:
 **Do not assume a visual bug is a code bug until you have confirmed the site was
 published since the change.**
 
+**Demo mode is OFF (2026-10-23) — `DEMO_ENABLED = false` in `flexicare-spin.js`.** A
+`?kiosk=off&demo` link handed to the client for a copy review was used at a live
+activation, and shoppers were shown prize cards with the shared placeholder code
+`FLX-DEMO-CODE` that the backend never saw (a demo spin never calls `POST /spin`, and
+the demo lead form never PATCHes). Every `?demo` passage below describes the mode as it
+works when that constant is `true`. **Never hand anyone a test link on the production
+site:** a link outlives its purpose and the site is trading. `?kiosk=off` is still live
+and still sticky per device; a device with it set now walks the funnel as a `WEB`
+session and gets the wheel's "unavailable" panel instead of a fake prize.
+
 **Open items that will bite, in rough priority order:**
 1. **Investigate before touching: the landing page reportedly locks up Chrome on an
    iPhone 12 mini** (reported 2026-09-08, discussion only — no code changed yet).
@@ -307,7 +317,8 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
   ARE the walk-the-funnel case. So when the spin page jumps straight to a prize, a panel
   shortcut is armed: the console says which, one lap clears it, `?demo=off` clears it
   now.
-- **`?demo` is sticky for the whole browser tab, and it is the ONLY way to see the
+- **DISABLED 2026-10-23 (`DEMO_ENABLED = false`, see the top of this file).** When on:
+  **`?demo` is sticky for the whole browser tab, and it is the ONLY way to see the
   wheel without a paired tablet** (or a dev pairing, which implies it). Set it once anywhere (`/?demo`), walk the funnel,
   and the spin page runs its whole sequence: lead form (pre-filled) → wheel → prize.
   ONE spin, like a real session. `?demo=prize` jumps straight to the awarded panel,
