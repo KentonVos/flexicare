@@ -354,6 +354,11 @@
    ------------------------------------------------------------
    DEV-ONLY DEMO MODE  —  ?demo   (alias: ?spindemo)
 
+   DISABLED 2026-10-23 — see DEMO_ENABLED below. A ?kiosk=off&demo test link
+   handed out for a copy review was used at a live activation, and shoppers
+   were given demo prizes with the shared code FLX-DEMO-CODE that the backend
+   never saw. Everything below describes the mode as it works when it is on.
+
    The real page needs a COMPLETED session on a PAIRED tablet, which needs a
    pairing code from the admin UI. That is the right gate for production and a
    miserable one for building the page: until a tablet is paired there is
@@ -1833,6 +1838,17 @@
 
   var DEMO_STORE_KEY = "fcSpinDemo";
 
+  /* DEMO MODE IS OFF (2026-10-23). A demo spin hands out a prize card that
+     looks real and exists nowhere on the server, so on a live site it is a way
+     to promise shoppers prizes nobody can honour. With this false every ?demo
+     variant is ignored, Flexicare.spin.demo() cannot arm it, and a tab that was
+     armed before this shipped is disarmed on its next page load (the flag is in
+     sessionStorage, so a reload alone would otherwise keep it). The dev-pairing
+     demo is gated here too, so turning DEV_PAIRING_ENABLED back on in
+     flexicare-kiosk.js does not bring fake awards back with it. Flip this to
+     true to get the whole mode back; nothing else has to change. */
+  var DEMO_ENABLED = false;
+
   function readParam(name) {
     try {
       return new URL(location.href).searchParams.get(name);
@@ -1856,6 +1872,20 @@
      kiosk tablet left on overnight must not still be in demo mode in the
      morning. Clear it early with ?demo=off. */
   function captureDemoFlag() {
+    if (!DEMO_ENABLED) {
+      try {
+        sessionStorage.removeItem(DEMO_STORE_KEY);
+      } catch (e) {}
+      if (
+        (readParam("spindemo") !== null || readParam("demo") !== null) &&
+        window.console
+      )
+        console.warn(
+          "[spin] ?demo is disabled on this build and was ignored — " +
+            "see DEMO_ENABLED in flexicare-spin.js."
+        );
+      return;
+    }
     var raw = readParam("spindemo");
     if (raw === null) raw = readParam("demo");
     if (raw === null) return; // no parameter here — leave any stored flag alone
@@ -1873,6 +1903,7 @@
   }
 
   function readDemoParam() {
+    if (!DEMO_ENABLED) return null;
     try {
       return sessionStorage.getItem(DEMO_STORE_KEY) || null;
     } catch (e) {
@@ -1918,6 +1949,7 @@
      inspected on a dev tablet. A REAL pairing is untouched: it spins for real.
      See flexicare-kiosk.js on why the dev token is never sent. */
   function devPairingDemo() {
+    if (!DEMO_ENABLED) return null;
     return FC.kiosk && typeof FC.kiosk.isDev === "function" && FC.kiosk.isDev()
       ? "journey"
       : null;
@@ -2839,6 +2871,7 @@
      Flexicare.spin.demo() reports; demo("prize"|"form"|…) arms; demo(false)
      clears. Takes effect on the next arrival at /spin-to-win. */
   FC.spin.demo = function (kind) {
+    if (!DEMO_ENABLED) return null; // see DEMO_ENABLED — cannot be armed
     if (kind === undefined) return readDemoParam();
     try {
       if (kind === false || kind === null || kind === "off")

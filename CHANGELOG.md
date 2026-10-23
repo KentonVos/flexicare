@@ -14,6 +14,24 @@ Format:
 
 ---
 
+## 2026-10-23 — Demo mode (`?demo`) disabled on the live site
+
+- `src/flexicare-spin.js`
+- A `?kiosk=off&demo` link handed to the client for a copy review was used at
+  a live activation. Demo spins never call `POST /spin`, so shoppers were shown
+  prize cards with the shared placeholder code `FLX-DEMO-CODE` that exist
+  nowhere on the backend.
+- New constant `DEMO_ENABLED = false` (same pattern as `DEV_PAIRING_ENABLED`):
+  every `?demo` / `?spindemo` variant is ignored with a console warning,
+  `Flexicare.spin.demo()` cannot arm it, the dev-pairing demo is gated too, and
+  a tab armed before this shipped is disarmed on its next page load.
+- The fix only reaches a device when it RELOADS: Barba never re-fetches
+  scripts, so a tab left open keeps running the old code.
+- `?kiosk=off` is untouched. A device with it set still walks the funnel as a
+  `WEB` session, and the wheel now shows its "unavailable" panel instead of a
+  fake prize.
+- No Webflow change.
+
 ## 2026-09-11 — Dev pairing (`5555-5555`) disabled, and dev devices signed out
 
 - `src/flexicare-kiosk.js`, `CLAUDE.md`, `ARCHITECTURE.md`,
