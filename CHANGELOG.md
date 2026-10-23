@@ -14,6 +14,25 @@ Format:
 
 ---
 
+## 2026-10-23 — Only paired, ACTIVE tablets can use the site: `?kiosk=off` disabled
+
+- `src/flexicare-kiosk.js`, `CLAUDE.md`, `ARCHITECTURE.md`, `docs/kiosk-and-spin.md`,
+  `docs/kiosk-tablet-setup.md`
+- New constant `GATE_OPTOUT_ENABLED = false`: `?kiosk=off` is ignored (console warning),
+  `Flexicare.kiosk.enforce(false)` is refused, and an opt-out stored before this shipped
+  is wiped at boot, so a device that was given the copy-review link is sent to `/kiosk`
+  on its next page load. Same pattern as `DEV_PAIRING_ENABLED` / `DEMO_ENABLED`.
+- A DISABLED kiosk no longer passes the gate just because it holds a token. It is sent
+  to `/kiosk` (its `[data-kiosk-when="disabled"]` panel) at boot, or as soon as
+  `/kiosks/me` / a heartbeat reports the switch, with the journey reset. The idle reset
+  skips it while disabled (no bounce through the gate) and brings it back to `/` once
+  it is ACTIVE again. Only `DISABLED` gates — an unknown/missing status after a network
+  failure still carries on, per the contract.
+- Still exempt: `/kiosk` (it pairs) and `/terms-and-conditions`
+  (`data-kiosk-enforce="off"`, read-only).
+- No Webflow change. A tab opened before the push keeps running the old code until
+  it is reloaded.
+
 ## 2026-10-23 — Demo mode (`?demo`) disabled on the live site
 
 - `src/flexicare-spin.js`

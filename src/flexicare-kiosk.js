@@ -153,11 +153,21 @@
      data-product-next-web) is now effectively unreachable. Leave it be — it is
      the honest fallback if the gate is ever turned off — but do not build on it.
 
-     Turn it off for ONE DEVICE with ?kiosk=off (localStorage, like ?fullscreen
-     — it describes a device, so it survives a reboot). ?kiosk re-enables it.
-     That hatch is for developing against the site in a normal browser. Note
-     the storage polarity: the key holds an OPT-OUT, so a fresh device — and a
-     device whose localStorage throws — is enforced. The gate must fail CLOSED.
+     THE ?kiosk=off OPT-OUT IS DISABLED (2026-10-23) — see GATE_OPTOUT_ENABLED.
+     A copy-review link carrying it was used at a live activation, so it is
+     ignored now, and an opt-out stored before that is wiped on the next page
+     load. When it is on: ?kiosk=off turns the gate off for ONE DEVICE
+     (localStorage, like ?fullscreen — it describes a device, so it survives a
+     reboot) and ?kiosk re-enables it. Note the storage polarity: the key holds
+     an OPT-OUT, so a fresh device — and a device whose localStorage throws —
+     is enforced. The gate must fail CLOSED.
+
+     A DISABLED kiosk is not let through either (2026-10-23). It still holds a
+     valid token, but an admin has switched it off, so it is sent to /kiosk,
+     whose [data-kiosk-when="disabled"] panel explains. A tablet disabled
+     mid-journey is taken there as soon as /kiosks/me or a heartbeat says so,
+     and its journey is reset. Once it is ACTIVE again the idle reset brings it
+     back to the attract screen.
 
      Skipped when: the page can pair (it has [data-kiosk-pair], which is how
      /kiosk itself is exempt), the page says [data-kiosk-enforce="off"], a pair
@@ -208,7 +218,8 @@
      isDev()        → boolean. Paired with the dev code (fake token). Always
                       false while DEV_PAIRING_ENABLED is off.
      enforce(on)    → turn the pairing gate on/off for this device; no argument
-                      just reports. Same thing ?kiosk / ?kiosk=off does.
+                      just reports. Same thing ?kiosk / ?kiosk=off does. While
+                      GATE_OPTOUT_ENABLED is off it cannot turn the gate off.
      gate()         → prints why the gate did or did not fire. Start here when
                       a tablet is redirecting (or refusing to redirect).
    ============================================================ */
@@ -454,6 +465,7 @@
 
   function applyServer(payload) {
     if (!payload) return;
+    var wasDisabled = state.status === "DISABLED";
     if (payload.kiosk) {
       state.kiosk = payload.kiosk;
       if (payload.kiosk.status) state.status = payload.kiosk.status;
@@ -466,6 +478,14 @@
     }
     if (state.token) writeStore();
     applyState();
+    /* The server has just said an admin switched this tablet off. It may not
+       run the funnel, so drop whatever journey is on screen and take it to
+       the disabled panel on /kiosk. Only on the TRANSITION: a tablet booting
+       already-disabled is redirected by init()'s own gate check. */
+    if (!wasDisabled && state.status === "DISABLED") {
+      if (FC.getSessionId()) FC.resetJourney();
+      enforceGate(document);
+    }
   }
 
   function heartbeatSeconds() {
@@ -981,7 +1001,9 @@
     if (!state.token || !state.idleAt) return;
     if (now() < state.idleAt) return;
     var attract = attractUrl();
-    if (samePath(attract)) {
+    // A disabled tablet waits on /kiosk; sending it to the attract screen
+    // would only bounce it straight back through the gate every timeout.
+    if (samePath(attract) || state.status === "DISABLED") {
       resetIdle(); // already home — just re-arm, don't thrash barba.go()
       return;
     }
@@ -1093,6 +1115,14 @@
      a normal browser; it is not something to hand to a shopper. */
   var ENF_KEY = "flx_kiosk_gate"; // holds "off" — absence means enforced
 
+  /* THE OPT-OUT IS OFF (2026-10-23). Only a paired, ACTIVE device may use the
+     site, so ?kiosk=off is ignored, Flexicare.kiosk.enforce(false) is refused,
+     and an opt-out a device stored before this shipped is wiped at boot — so a
+     device that was handed the link is back behind the gate on its next page
+     load. Flip this to true to get the developer escape hatch back; nothing
+     else has to change. */
+  var GATE_OPTOUT_ENABLED = false;
+
   function captureEnforceFlag() {
     var raw = null;
     try {
@@ -1100,6 +1130,15 @@
     } catch (e) {
       var m = /[?&]kiosk(?:=([^&]*))?/.exec(location.search || "");
       if (m) raw = m[1] == null ? "" : decodeURIComponent(m[1]);
+    }
+    if (!GATE_OPTOUT_ENABLED) {
+      setGate(true); // wipe any stored opt-out
+      if (raw !== null && /^(off|0|false|no)$/i.test(raw) && window.console)
+        console.warn(
+          "[kiosk] ?kiosk=off is disabled on this build and was ignored — " +
+            "see GATE_OPTOUT_ENABLED in flexicare-kiosk.js."
+        );
+      return;
     }
     if (raw === null) return; // absent — leave any stored preference alone
     var on = !/^(off|0|false|no)$/i.test(raw);
@@ -1119,6 +1158,7 @@
      gate failing open would put a shopper on an unpaired journey, which is
      exactly what it exists to prevent. */
   function gateOn() {
+    if (!GATE_OPTOUT_ENABLED) return true;
     try {
       return localStorage.getItem(ENF_KEY) !== "off";
     } catch (e) {
@@ -1139,7 +1179,9 @@
      can report exactly what init() decided, rather than re-deriving it. */
   function gateBlock(scope) {
     if (!gateOn()) return "off for this device — ?kiosk re-enables it";
-    if (state.token)
+    // A disabled kiosk still holds a valid token; it falls through to the
+    // checks below and is sent to /kiosk, which shows its disabled panel.
+    if (state.token && state.status !== "DISABLED")
       return state.dev ? "paired (dev code)" : "paired — token present";
     if (state.busy) return "a pair request is in flight";
     // The page can pair, so redirecting it would be a loop. This is how /kiosk
@@ -1165,11 +1207,13 @@
     var target = pairUrl();
     if (window.console)
       console.warn(
-        "[kiosk] this device is not paired — redirecting to " +
-          target +
-          ". Pair it (the dev code is " +
-          DEV_CODE +
-          "), or turn the gate off for this device with ?kiosk=off."
+        state.token
+          ? "[kiosk] an admin has DISABLED this tablet — redirecting to " +
+              target +
+              ". It comes back once the admin sets it ACTIVE again."
+          : "[kiosk] this device is not paired — redirecting to " +
+              target +
+              ". Pair it with a code from the admin dashboard."
       );
     go(target);
     return true;
@@ -1177,8 +1221,16 @@
 
   K.enforce = function (on) {
     if (arguments.length) {
-      setGate(!!on);
-      applyState();
+      if (!on && !GATE_OPTOUT_ENABLED) {
+        if (window.console)
+          console.warn(
+            "[kiosk] the pairing gate cannot be turned off on this build — " +
+              "see GATE_OPTOUT_ENABLED in flexicare-kiosk.js."
+          );
+      } else {
+        setGate(!!on);
+        applyState();
+      }
     }
     return gateOn();
   };
@@ -1188,10 +1240,15 @@
     var out = {
       enforced: gateOn(),
       paired: !!state.token,
+      status: state.status,
       dev: !!state.dev,
       target: pairUrl(),
       wouldRedirect: !why,
-      reason: why || "not paired — this page redirects",
+      reason:
+        why ||
+        (state.token
+          ? "disabled by an admin — this page redirects"
+          : "not paired — this page redirects"),
     };
     if (window.console) console.table ? console.table([out]) : console.log(out);
     return out;

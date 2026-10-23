@@ -208,7 +208,7 @@ html[data-kiosk-locked] :is(input, textarea, [contenteditable="true"]) {
 
    Leave the tab open. Because pairing is required on every screen, the **pairing gate**
    takes you straight to `/kiosk` — it is on by default and there is nothing to arm.
-   (`?kiosk=off` turns it off for one device, for development only.)
+   (There is no way to turn it off: `?kiosk=off` was disabled on 2026-10-23.)
 4. **Pair the device.** Enter the code from the admin UI. The panel should flip to
    "Paired" with the store name. Confirm:
    ```js

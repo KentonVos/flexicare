@@ -948,7 +948,8 @@ funnel.
   session — the spin page's "unavailable" copy, `data-product-next-web` — is now
   effectively unreachable. It stays as the honest fallback if the gate is turned off, but
   nothing new should be built on it.
-- **The escape hatch is `?kiosk=off`** (`localStorage flx_kiosk_gate`, `?kiosk` or
+- **DISABLED 2026-10-23 (`GATE_OPTOUT_ENABLED = false`) — and a DISABLED kiosk is gated
+  too, sent to `/kiosk`.** When on: **the escape hatch is `?kiosk=off`** (`localStorage flx_kiosk_gate`, `?kiosk` or
   `kiosk.enforce(true)` to restore), per device, for developing in a normal browser. Note
   the polarity: storage holds an *opt-out*, so an untouched device — and one whose
   `localStorage` throws — is enforced. **The gate fails closed**; failing open would put

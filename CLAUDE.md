@@ -22,15 +22,24 @@ publishes — full table in `docs/webflow-mcp.md` §8:
 **Do not assume a visual bug is a code bug until you have confirmed the site was
 published since the change.**
 
-**Demo mode is OFF (2026-10-23) — `DEMO_ENABLED = false` in `flexicare-spin.js`.** A
-`?kiosk=off&demo` link handed to the client for a copy review was used at a live
-activation, and shoppers were shown prize cards with the shared placeholder code
-`FLX-DEMO-CODE` that the backend never saw (a demo spin never calls `POST /spin`, and
-the demo lead form never PATCHes). Every `?demo` passage below describes the mode as it
-works when that constant is `true`. **Never hand anyone a test link on the production
-site:** a link outlives its purpose and the site is trading. `?kiosk=off` is still live
-and still sticky per device; a device with it set now walks the funnel as a `WEB`
-session and gets the wheel's "unavailable" panel instead of a fake prize.
+**Only a paired, ACTIVE tablet can use the site (2026-10-23).** A `?kiosk=off&demo`
+link handed to the client for a copy review was used at a live activation, and shoppers
+were shown prize cards with the shared placeholder code `FLX-DEMO-CODE` that the backend
+never saw (a demo spin never calls `POST /spin`, and the demo lead form never PATCHes).
+So both bypasses are now off, each behind one constant:
+- **`DEMO_ENABLED = false`** in `flexicare-spin.js` — every `?demo` variant is ignored.
+- **`GATE_OPTOUT_ENABLED = false`** in `flexicare-kiosk.js` — `?kiosk=off` is ignored,
+  `kiosk.enforce(false)` is refused, and a stored opt-out is wiped at boot.
+- **A DISABLED kiosk is gated too**: it is sent to `/kiosk` (its disabled panel), at boot
+  or the moment `/kiosks/me` / a heartbeat reports it, with the journey reset. The idle
+  reset brings it back to `/` once it is ACTIVE again.
+
+The one page an unpaired browser can still open is `/terms-and-conditions`
+(`data-kiosk-enforce="off"`, read-only, its CTA leads back into the gate). Every
+`?demo` / `?kiosk=off` passage below describes those modes as they work when the
+constants are `true`. **There is no bypass for a developer either now** — testing the
+funnel needs a real pairing code. **Never hand anyone a test link on the production
+site:** a link outlives its purpose and the site is trading.
 
 **Open items that will bite, in rough priority order:**
 1. **Investigate before touching: the landing page reportedly locks up Chrome on an
@@ -376,7 +385,8 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
   there is no device token — sign in first, then the funnel. **So there is no public web
   visitor any more:** everything that branches on a `WEB` session (the spin page's
   "unavailable" copy, `data-product-next-web`) is now effectively unreachable. Leave it
-  as the fallback, don't build on it. Turn the gate off for ONE DEVICE with `?kiosk=off`
+  as the fallback, don't build on it. **(The opt-out below is DISABLED 2026-10-23 —
+  `GATE_OPTOUT_ENABLED = false`; see the top of this file.)** Turn the gate off for ONE DEVICE with `?kiosk=off`
   (`localStorage flx_kiosk_gate`; `?kiosk` restores) — that is for developing in a
   normal browser, not for shoppers. **Storage holds an OPT-OUT, so the gate fails
   CLOSED**: an untouched device, and one whose `localStorage` throws, is enforced.

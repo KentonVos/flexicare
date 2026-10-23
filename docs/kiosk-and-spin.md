@@ -353,6 +353,10 @@ Anything downstream that branches on a `WEB` session — the spin page's
 effectively unreachable. Leave it in place, since it is the honest fallback if
 the gate is ever turned off, but do not build new work on it.
 
+> **DISABLED 2026-10-23** (`GATE_OPTOUT_ENABLED = false` in `flexicare-kiosk.js`): `?kiosk=off`
+> is ignored and a stored opt-out is wiped at boot. Only a paired, ACTIVE tablet gets
+> past the gate; a DISABLED one is sent to `/kiosk`. What follows is how it works when on.
+
 **The escape hatch is `?kiosk=off`**, stored per **device** in `localStorage`
 (`flx_kiosk_gate`) beside the token and the `?fullscreen` flag, for the same
 reason all three are: it describes a device, so it survives a reboot. `?kiosk`
