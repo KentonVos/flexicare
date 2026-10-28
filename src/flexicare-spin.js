@@ -354,10 +354,12 @@
    ------------------------------------------------------------
    DEV-ONLY DEMO MODE  —  ?demo   (alias: ?spindemo)
 
-   DISABLED 2026-10-23 — see DEMO_ENABLED below. A ?kiosk=off&demo test link
-   handed out for a copy review was used at a live activation, and shoppers
-   were given demo prizes with the shared code FLX-DEMO-CODE that the backend
-   never saw. Everything below describes the mode as it works when it is on.
+   STAGING DOMAIN ONLY (*.webflow.io, since 2026-10-28) — see DEMO_ENABLED
+   below. A ?kiosk=off&demo test link handed out for a copy review was used
+   at a live activation (2026-10-23), and shoppers were given demo prizes with
+   the shared code FLX-DEMO-CODE that the backend never saw. On the live domain
+   it is ignored; on staging it works as described below, with a TEST MODE
+   banner on screen for as long as it is armed.
 
    The real page needs a COMPLETED session on a PAIRED tablet, which needs a
    pairing code from the admin UI. That is the right gate for production and a
@@ -1838,16 +1840,18 @@
 
   var DEMO_STORE_KEY = "fcSpinDemo";
 
-  /* DEMO MODE IS OFF (2026-10-23). A demo spin hands out a prize card that
-     looks real and exists nowhere on the server, so on a live site it is a way
-     to promise shoppers prizes nobody can honour. With this false every ?demo
-     variant is ignored, Flexicare.spin.demo() cannot arm it, and a tab that was
-     armed before this shipped is disarmed on its next page load (the flag is in
-     sessionStorage, so a reload alone would otherwise keep it). The dev-pairing
-     demo is gated here too, so turning DEV_PAIRING_ENABLED back on in
-     flexicare-kiosk.js does not bring fake awards back with it. Flip this to
-     true to get the whole mode back; nothing else has to change. */
-  var DEMO_ENABLED = false;
+  /* DEMO MODE WORKS ON THE STAGING DOMAIN ONLY (2026-10-28; see
+     FC.isTestHost in flexicare-core.js). A demo spin hands out a prize card
+     that looks real and exists nowhere on the server, so on the live domain it
+     is a way to promise shoppers prizes nobody can honour — which happened on
+     2026-10-23, when a live-domain demo link was used at an activation. There,
+     every ?demo variant is ignored, Flexicare.spin.demo() cannot arm it, and a
+     tab armed earlier is disarmed on its next page load (the flag is in
+     sessionStorage, so a reload alone would otherwise keep it). The
+     dev-pairing demo is gated here too. On staging it works as described in
+     the header, and paintDemoBanner() keeps a TEST MODE banner on screen for
+     as long as it is armed. */
+  var DEMO_ENABLED = !!(FC.isTestHost && FC.isTestHost());
 
   function readParam(name) {
     try {
@@ -1881,8 +1885,8 @@
         window.console
       )
         console.warn(
-          "[spin] ?demo is disabled on this build and was ignored — " +
-            "see DEMO_ENABLED in flexicare-spin.js."
+          "[spin] ?demo only works on the staging domain (*.webflow.io) and " +
+            "was ignored — see DEMO_ENABLED in flexicare-spin.js."
         );
       return;
     }
@@ -1900,6 +1904,36 @@
         sessionStorage.removeItem(DEMO_STORE_KEY);
       else sessionStorage.setItem(DEMO_STORE_KEY, kind);
     } catch (e) {}
+  }
+
+  /* The TEST MODE banner, on screen for as long as the demo flag is armed in
+     this tab. The flag is journey-wide, so the warning is too: it lives in the
+     persistent shell (<body>), painted at script load and whenever the flag
+     changes, never per page. data-js-injected keeps transition.js's shell sync
+     off it, and pointer-events:none means it can never eat a tap meant for the
+     page underneath. It exists so nobody — staff or shopper — can mistake a
+     demo prize for a real one. */
+  var DEMO_BANNER_ID = "fc-demo-banner";
+
+  function paintDemoBanner() {
+    var el = document.getElementById(DEMO_BANNER_ID);
+    if (!readDemoParam()) {
+      if (el && el.parentNode) el.parentNode.removeChild(el);
+      return;
+    }
+    if (el || !document.body) return;
+    el = document.createElement("div");
+    el.id = DEMO_BANNER_ID;
+    el.setAttribute("data-js-injected", "");
+    el.setAttribute("role", "note");
+    el.textContent = "Test mode · prizes are not real";
+    el.style.cssText =
+      "position:fixed;top:0;left:0;right:0;z-index:2147483647;" +
+      "padding:calc(env(safe-area-inset-top, 0px) + 4px) 8px 4px;" +
+      "background:#ffd400;color:#111;text-align:center;" +
+      "font:600 12px/1.3 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;" +
+      "letter-spacing:.08em;text-transform:uppercase;pointer-events:none";
+    document.body.appendChild(el);
   }
 
   function readDemoParam() {
@@ -2878,6 +2912,7 @@
         sessionStorage.removeItem(DEMO_STORE_KEY);
       else sessionStorage.setItem(DEMO_STORE_KEY, String(kind).toLowerCase());
     } catch (e) {}
+    paintDemoBanner();
     return readDemoParam();
   };
 
@@ -2907,7 +2942,9 @@
      come before boot(): on an already-loaded document boot() runs synchronously
      on the next line, and init() reads the stored flag. */
   captureDemoFlag();
-  if (document.readyState === "loading")
+  paintDemoBanner(); // after the capture, so ?demo=off removes it on this load
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", paintDemoBanner);
     document.addEventListener("DOMContentLoaded", boot);
-  else boot();
+  } else boot();
 })();

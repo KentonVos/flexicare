@@ -153,10 +153,11 @@
      data-product-next-web) is now effectively unreachable. Leave it be — it is
      the honest fallback if the gate is ever turned off — but do not build on it.
 
-     THE ?kiosk=off OPT-OUT IS DISABLED (2026-10-23) — see GATE_OPTOUT_ENABLED.
-     A copy-review link carrying it was used at a live activation, so it is
-     ignored now, and an opt-out stored before that is wiped on the next page
-     load. When it is on: ?kiosk=off turns the gate off for ONE DEVICE
+     THE ?kiosk=off OPT-OUT WORKS ON THE STAGING DOMAIN ONLY (*.webflow.io,
+     since 2026-10-28) — see GATE_OPTOUT_ENABLED. A copy-review link carrying it
+     was used at a live activation (2026-10-23), so on the live domain it is
+     ignored and a stored opt-out is wiped on the next page load. Where it
+     works: ?kiosk=off turns the gate off for ONE DEVICE
      (localStorage, like ?fullscreen — it describes a device, so it survives a
      reboot) and ?kiosk re-enables it. Note the storage polarity: the key holds
      an OPT-OUT, so a fresh device — and a device whose localStorage throws —
@@ -1115,13 +1116,14 @@
      a normal browser; it is not something to hand to a shopper. */
   var ENF_KEY = "flx_kiosk_gate"; // holds "off" — absence means enforced
 
-  /* THE OPT-OUT IS OFF (2026-10-23). Only a paired, ACTIVE device may use the
-     site, so ?kiosk=off is ignored, Flexicare.kiosk.enforce(false) is refused,
-     and an opt-out a device stored before this shipped is wiped at boot — so a
-     device that was handed the link is back behind the gate on its next page
-     load. Flip this to true to get the developer escape hatch back; nothing
-     else has to change. */
-  var GATE_OPTOUT_ENABLED = false;
+  /* THE OPT-OUT WORKS ON THE STAGING DOMAIN ONLY (2026-10-28; see
+     FC.isTestHost in flexicare-core.js). On the live domain only a paired,
+     ACTIVE device may use the site: ?kiosk=off is ignored,
+     Flexicare.kiosk.enforce(false) is refused, and a stored opt-out is wiped
+     at boot. It was off everywhere from 2026-10-23, after a copy-review link
+     carrying it was used at a live activation. localStorage is per origin, so
+     an opt-out stored on the staging domain can never reach the live one. */
+  var GATE_OPTOUT_ENABLED = !!(FC.isTestHost && FC.isTestHost());
 
   function captureEnforceFlag() {
     var raw = null;
@@ -1135,8 +1137,8 @@
       setGate(true); // wipe any stored opt-out
       if (raw !== null && /^(off|0|false|no)$/i.test(raw) && window.console)
         console.warn(
-          "[kiosk] ?kiosk=off is disabled on this build and was ignored — " +
-            "see GATE_OPTOUT_ENABLED in flexicare-kiosk.js."
+          "[kiosk] ?kiosk=off only works on the staging domain (*.webflow.io) " +
+            "and was ignored — see GATE_OPTOUT_ENABLED in flexicare-kiosk.js."
         );
       return;
     }
@@ -1224,8 +1226,8 @@
       if (!on && !GATE_OPTOUT_ENABLED) {
         if (window.console)
           console.warn(
-            "[kiosk] the pairing gate cannot be turned off on this build — " +
-              "see GATE_OPTOUT_ENABLED in flexicare-kiosk.js."
+            "[kiosk] the pairing gate can only be turned off on the staging " +
+              "domain (*.webflow.io) — see GATE_OPTOUT_ENABLED in flexicare-kiosk.js."
           );
       } else {
         setGate(!!on);

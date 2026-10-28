@@ -353,9 +353,10 @@ Anything downstream that branches on a `WEB` session — the spin page's
 effectively unreachable. Leave it in place, since it is the honest fallback if
 the gate is ever turned off, but do not build new work on it.
 
-> **DISABLED 2026-10-23** (`GATE_OPTOUT_ENABLED = false` in `flexicare-kiosk.js`): `?kiosk=off`
-> is ignored and a stored opt-out is wiped at boot. Only a paired, ACTIVE tablet gets
-> past the gate; a DISABLED one is sent to `/kiosk`. What follows is how it works when on.
+> **STAGING DOMAIN ONLY (since 2026-10-28)** (`GATE_OPTOUT_ENABLED` in `flexicare-kiosk.js`):
+> on the live domain `?kiosk=off` is ignored and a stored opt-out is wiped at boot, so only
+> a paired, ACTIVE tablet gets past the gate; a DISABLED one is sent to `/kiosk`. What
+> follows is how it works on `*.webflow.io`.
 
 **The escape hatch is `?kiosk=off`**, stored per **device** in `localStorage`
 (`flx_kiosk_gate`) beside the token and the `?fullscreen` flag, for the same
@@ -900,12 +901,13 @@ wrapper. Clear it with `?demo=off` when you're done.
 
 ## 9. Demoing the whole journey without a tablet — `?demo`
 
-> **DISABLED 2026-10-23.** `DEMO_ENABLED` in `flexicare-spin.js` is `false`, so every
-> `?demo` / `?spindemo` URL below is ignored (with a console warning), and a tab armed
-> before the change is disarmed on its next page load. A copy-review link
+> **STAGING DOMAIN ONLY (since 2026-10-28).** `DEMO_ENABLED` in `flexicare-spin.js` is
+> true only on `*.webflow.io` (`FC.isTestHost()`), so on the live domain every `?demo` /
+> `?spindemo` URL below is ignored (with a console warning) and an armed tab is disarmed
+> on its next page load. It was off everywhere from 2026-10-23, after a copy-review link
 > (`?kiosk=off&demo`) was used at a live activation and handed shoppers fake
-> `FLX-DEMO-CODE` prizes. Flip the constant to `true` to bring the mode back, and only
-> ever on a branch preview, never on `main` while the site is trading.
+> `FLX-DEMO-CODE` prizes. On staging it works as below, with a yellow TEST MODE banner on
+> every page while armed. Client link: `https://discovery-flexicare.webflow.io/?kiosk=off&demo`.
 
 The real page needs a `COMPLETED` session on a **paired** tablet, and pairing needs
 a code from the admin UI. That is the right gate for production and a miserable one

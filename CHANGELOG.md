@@ -14,6 +14,23 @@ Format:
 
 ---
 
+## 2026-10-28 — Demo link back, on the staging domain only
+
+- `src/flexicare-core.js`, `src/flexicare-kiosk.js`, `src/flexicare-spin.js`,
+  `CLAUDE.md`, `ARCHITECTURE.md`, `docs/kiosk-and-spin.md`, `docs/kiosk-tablet-setup.md`
+- New `FC.isTestHost()` in core: true on the Webflow staging domain (`*.webflow.io`).
+  `DEMO_ENABLED` and `GATE_OPTOUT_ENABLED` now equal it instead of `false`, so
+  `?kiosk=off&demo` works again on `discovery-flexicare.webflow.io` for client testing,
+  while on `flexi-play.co.za` both stay ignored exactly as on 2026-10-23 (stored opt-outs
+  and armed demo flags are still wiped there).
+- While demo is armed, a fixed yellow "TEST MODE · PRIZES ARE NOT REAL" banner sits at
+  the top of every page (`paintDemoBanner`, `#fc-demo-banner`, `data-js-injected`,
+  `pointer-events:none`), so a demo prize cannot be mistaken for a real one.
+- Client link: `https://discovery-flexicare.webflow.io/?kiosk=off&demo`. Test runs still
+  create real `WEB` sessions in the production API.
+- No Webflow change. To review copy before it goes live, publish to the staging domain
+  only.
+
 ## 2026-10-23 — Build watch: tablets reload themselves onto a new build
 
 - `src/flexicare-core.js`, `_headers`, `CLAUDE.md`, `ARCHITECTURE.md`,

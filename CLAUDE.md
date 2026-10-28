@@ -22,24 +22,30 @@ publishes — full table in `docs/webflow-mcp.md` §8:
 **Do not assume a visual bug is a code bug until you have confirmed the site was
 published since the change.**
 
-**Only a paired, ACTIVE tablet can use the site (2026-10-23).** A `?kiosk=off&demo`
-link handed to the client for a copy review was used at a live activation, and shoppers
-were shown prize cards with the shared placeholder code `FLX-DEMO-CODE` that the backend
-never saw (a demo spin never calls `POST /spin`, and the demo lead form never PATCHes).
-So both bypasses are now off, each behind one constant:
-- **`DEMO_ENABLED = false`** in `flexicare-spin.js` — every `?demo` variant is ignored.
-- **`GATE_OPTOUT_ENABLED = false`** in `flexicare-kiosk.js` — `?kiosk=off` is ignored,
-  `kiosk.enforce(false)` is refused, and a stored opt-out is wiped at boot.
+**On the LIVE domain only a paired, ACTIVE tablet can use the site (2026-10-23).** A
+`?kiosk=off&demo` link handed to the client for a copy review was used at a live
+activation, and shoppers were shown prize cards with the shared placeholder code
+`FLX-DEMO-CODE` that the backend never saw (a demo spin never calls `POST /spin`, and the
+demo lead form never PATCHes). Since 2026-10-28 both bypasses work ONLY on the Webflow
+staging domain — `FC.isTestHost()` in `flexicare-core.js`, true on `*.webflow.io`:
+- **`DEMO_ENABLED`** in `flexicare-spin.js` — on the live domain every `?demo` variant is
+  ignored. On staging it works, with a yellow TEST MODE banner on screen while armed.
+- **`GATE_OPTOUT_ENABLED`** in `flexicare-kiosk.js` — on the live domain `?kiosk=off` is
+  ignored, `kiosk.enforce(false)` is refused, and a stored opt-out is wiped at boot.
+
+**The client test link is `https://discovery-flexicare.webflow.io/?kiosk=off&demo`.** To
+let the client review copy before it goes live, publish to the staging domain only. A
+test run there still creates a real `WEB` session in the PRODUCTION API.
 - **A DISABLED kiosk is gated too**: it is sent to `/kiosk` (its disabled panel), at boot
   or the moment `/kiosks/me` / a heartbeat reports it, with the journey reset. The idle
   reset brings it back to `/` once it is ACTIVE again.
 
 The one page an unpaired browser can still open is `/terms-and-conditions`
 (`data-kiosk-enforce="off"`, read-only, its CTA leads back into the gate). Every
-`?demo` / `?kiosk=off` passage below describes those modes as they work when the
-constants are `true`. **There is no bypass for a developer either now** — testing the
-funnel needs a real pairing code. **Never hand anyone a test link on the production
-site:** a link outlives its purpose and the site is trading.
+`?demo` / `?kiosk=off` passage below describes those modes as they work on the staging
+domain. On the live domain there is no bypass for anyone, developers included. **Never
+hand anyone a test link on the live domain:** a link outlives its purpose and the site
+is trading.
 
 **Tablets now update themselves (2026-10-23) — the BUILD WATCH in `flexicare-core.js`.**
 Barba never reloads and keeps every page's HTML in memory with no expiry, so an open
@@ -338,7 +344,7 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
   ARE the walk-the-funnel case. So when the spin page jumps straight to a prize, a panel
   shortcut is armed: the console says which, one lap clears it, `?demo=off` clears it
   now.
-- **DISABLED 2026-10-23 (`DEMO_ENABLED = false`, see the top of this file).** When on:
+- **STAGING DOMAIN ONLY since 2026-10-28 (`DEMO_ENABLED`, see the top of this file).** There:
   **`?demo` is sticky for the whole browser tab, and it is the ONLY way to see the
   wheel without a paired tablet** (or a dev pairing, which implies it). Set it once anywhere (`/?demo`), walk the funnel,
   and the spin page runs its whole sequence: lead form (pre-filled) → wheel → prize.
@@ -398,8 +404,8 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
   there is no device token — sign in first, then the funnel. **So there is no public web
   visitor any more:** everything that branches on a `WEB` session (the spin page's
   "unavailable" copy, `data-product-next-web`) is now effectively unreachable. Leave it
-  as the fallback, don't build on it. **(The opt-out below is DISABLED 2026-10-23 —
-  `GATE_OPTOUT_ENABLED = false`; see the top of this file.)** Turn the gate off for ONE DEVICE with `?kiosk=off`
+  as the fallback, don't build on it. **(The opt-out below works on the staging domain
+  only — `GATE_OPTOUT_ENABLED`; see the top of this file.)** Turn the gate off for ONE DEVICE with `?kiosk=off`
   (`localStorage flx_kiosk_gate`; `?kiosk` restores) — that is for developing in a
   normal browser, not for shoppers. **Storage holds an OPT-OUT, so the gate fails
   CLOSED**: an untouched device, and one whose `localStorage` throws, is enforced.

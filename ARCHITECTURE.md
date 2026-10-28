@@ -436,6 +436,8 @@ The persistent brain. Holds:
   `Access-Control-Expose-Headers: ETag` in `_headers`) + Webflow's `Last Published`
   stamp. Checked on every arrival there and every 5 min while idle; one reload per
   10 min at most. The only sanctioned `location.reload()` in the codebase.
+- `FC.isTestHost()` — true on the Webflow staging domain (`*.webflow.io`), the only
+  place `?demo` (spin) and `?kiosk=off` (kiosk) work. Both read it once, at load.
 - Buffered avatar choice — `setAvatar()/getAvatar()/hasAvatar()/clearAvatar()`, plus
   `FC.avatarGender` (kept separately so it survives `clearAvatar()` and can still pre-fill
   onboarding). Shape `{ id, slug, url, race, gender, ageGroup, variant }`; only `id` is
@@ -954,8 +956,8 @@ funnel.
   session — the spin page's "unavailable" copy, `data-product-next-web` — is now
   effectively unreachable. It stays as the honest fallback if the gate is turned off, but
   nothing new should be built on it.
-- **DISABLED 2026-10-23 (`GATE_OPTOUT_ENABLED = false`) — and a DISABLED kiosk is gated
-  too, sent to `/kiosk`.** When on: **the escape hatch is `?kiosk=off`** (`localStorage flx_kiosk_gate`, `?kiosk` or
+- **Staging domain only since 2026-10-28 (`GATE_OPTOUT_ENABLED` = `FC.isTestHost()`) — and
+  a DISABLED kiosk is gated too, sent to `/kiosk`.** On `*.webflow.io`: **the escape hatch is `?kiosk=off`** (`localStorage flx_kiosk_gate`, `?kiosk` or
   `kiosk.enforce(true)` to restore), per device, for developing in a normal browser. Note
   the polarity: storage holds an *opt-out*, so an untouched device — and one whose
   `localStorage` throws — is enforced. **The gate fails closed**; failing open would put

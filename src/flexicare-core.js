@@ -76,6 +76,18 @@
     },
   };
 
+  /* ----------------------------- test host -----------------------------
+     The Webflow staging domain (*.webflow.io) is the ONLY place the two test
+     modes work: ?demo (flexicare-spin.js) and ?kiosk=off (flexicare-kiosk.js).
+     On the live domain both are ignored, so a test link that ends up on a
+     store tablet cannot hand out fake prizes — which is what happened on
+     2026-10-23, when a live-domain copy-review link was used at an activation.
+     Both scripts read this once, at load. Note the staging domain still talks
+     to the PRODUCTION API, so a test run there creates a real WEB session. */
+  FC.isTestHost = function () {
+    return /\.webflow\.io$/i.test(location.hostname || "");
+  };
+
   /* --------------------------- layout mode --------------------------- */
   /* Set by the head snippet (Site Settings → Custom Code → Head) before
        first paint, and mirrored here so page controllers never have to read
