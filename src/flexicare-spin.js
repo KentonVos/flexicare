@@ -265,9 +265,14 @@
                                 Marks what gets relabelled in state "form".
                                 Without it the button's own text is used.
 
-     THE LEAD FORM — gates the wheel (state "form", before "ready"):
-     Put all of this inside a [data-spin-when="form"] panel. The wheel is
-     already rendered behind it, so submitting only flips the state.
+     THE LEAD FORM — OPTIONAL. Gates the wheel (state "form", before "ready")
+     ONLY when the page has a [data-spin-when] panel listing "form". Without
+     one the page goes straight to "ready" (see hasLeadForm()). /spin-to-win
+     has had NO form since 2026-11-11 (phase 2 copy rewrite: onboarding
+     already collects the WhatsApp number, the one field a spin needs).
+     To bring it back, put all of this inside a [data-spin-when="form"]
+     panel. The wheel is already rendered behind it, so submitting only
+     flips the state.
 
      [data-spin-lead-name]      <input>. Prefilled from session.first_name.
      [data-spin-lead-surname]   <input>.
@@ -344,6 +349,12 @@
                      | "redeemed"     staff have already handed it over
                      | "expired"      the claim code lapsed
                      | "voided"       an admin cancelled it
+                     | "whatsapp"     REPLACES all five award states above
+                                      when the page has a panel for it (since
+                                      2026-11-12): the prize is NOT shown on
+                                      screen; a QR opens WhatsApp and the bot's
+                                      reply tells the shopper what they won.
+                                      See paintAward().
                      | "nophone"      no phone number on the session
                      | "unavailable"  web session, wheel down, already spun…
                      | "error"        anything unexpected
@@ -657,6 +668,7 @@
 
   function isAwardState(mode) {
     return (
+      mode === "whatsapp" ||
       mode === "prize" ||
       mode === "consolation" ||
       mode === "redeemed" ||
@@ -1805,7 +1817,18 @@
     write("[data-spin-expires]", expires || "");
     show("[data-spin-expires-wrap]", !!expires && status === "AWARDED");
 
-    if (status === "REDEEMED") setState("redeemed");
+    /* Phase 2 (2026-11-12): the prize is NOT revealed on screen. When the page
+       has a [data-spin-when] panel listing "whatsapp", EVERY award goes there
+       — a win, a consolation, and a revisit of one already redeemed, expired
+       or voided. That panel shows ONE fixed QR that opens WhatsApp; the
+       shopper sends the pre-filled message and the bot matches their number
+       (captured at onboarding) and replies with the prize. The award is still
+       painted into the hidden prize panels above, so taking the whatsapp
+       panel out of the Designer brings the on-screen prize card straight back.
+       The wheel's slice labels are switched off in the Designer
+       (data-spin-labels="off") so the landing does not give the prize away. */
+    if (hasPanel("whatsapp")) setState("whatsapp");
+    else if (status === "REDEEMED") setState("redeemed");
     else if (status === "EXPIRED") setState("expired");
     else if (status === "VOIDED") setState("voided");
     else setState(consolation ? "consolation" : "prize");
@@ -2043,7 +2066,7 @@
     }
     // "journey" (bare ?demo) and "form" both open on the lead form; the only
     // difference is intent, and "wheel" is how you skip it.
-    if (kind === "journey" || kind === "form") state.needLead = true;
+    if (kind === "journey" || kind === "form") state.needLead = hasLeadForm();
     if (kind === "unavailable" || kind === "error") {
       consumeDemoShortcut();
       return showError(null, "wheel");
@@ -2154,14 +2177,15 @@
             return null;
           });
         }
-        /* The lead form gates the wheel. It collects the phone number
-           itself, so it comes BEFORE the nophone check — otherwise a session
-           that never got a number would be bounced back to onboarding by a
-           panel the form exists to replace. */
-        state.needLead = !leadDone(id);
+        /* The lead form (when the page has one) gates the wheel. It collects
+           the phone number itself, so it comes BEFORE the nophone check —
+           otherwise a session that never got a number would be bounced back
+           to onboarding by a panel the form exists to replace. */
+        state.needLead = hasLeadForm() && !leadDone(id);
         if (!state.needLead && !session.phone_number) {
-          // The form was already completed, so a missing number here means
-          // onboarding failed silently AND the form did too. Send them back.
+          // No form, or it was already completed, so a missing number here
+          // means onboarding's phone PATCH failed silently (and the form, if
+          // there is one, did too). Send them back.
           setState("nophone");
           return null;
         }
@@ -2209,6 +2233,28 @@
      via /contact/*, and name, surname, id_type and id_number via the identity
      endpoint the backend added. submitLead() is the one function that sends
      them; see the header comment for the ordering and why it matters. */
+
+  /* Does this page HAVE a lead form? The form is optional, and the Designer
+     decides: a [data-spin-when] panel that lists "form" turns the gate on.
+     Without one, entering state "form" would strand the shopper — the wheel
+     drawn behind a panel that does not exist, and the CTA relabelled as a
+     submit that validates fields that are not there. So no panel, no gate.
+     /spin-to-win's form was removed on 2026-11-11; put a panel back and the
+     gate returns with it. */
+  function hasLeadForm() {
+    return hasPanel("form");
+  }
+
+  // Does any [data-spin-when] panel on this page list `name`? Optional states
+  // (the lead form, the WhatsApp QR) switch on by the Designer adding a panel.
+  function hasPanel(name) {
+    var panels = slots("[data-spin-when]");
+    for (var i = 0; i < panels.length; i++) {
+      var list = (panels[i].getAttribute("data-spin-when") || "").split(/\s+/);
+      if (list.indexOf(name) !== -1) return true;
+    }
+    return false;
+  }
 
   // Per-session, so a reload does not re-ask. sessionStorage, not local:
   // the next shopper on a kiosk must never inherit this.
