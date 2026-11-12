@@ -24,13 +24,18 @@
               (The avatar page can't send it itself — that endpoint needs a
               session id and the session is created HERE.)
           Failure of either does NOT block navigation — the images poll later
-          and show a graceful fallback. Only a failed SESSION CREATE blocks.
+          and show a graceful fallback.
        3. Sends the WhatsApp number: PATCH …/contact/phone { phone_number }.
-          Also non-blocking, and also fine on an IN_PROGRESS session (that
-          endpoint only rejects ABANDONED ones). Number + consent are still
-          mirrored onto Flexicare.contact for any later CRM wiring.
-       4. Navigates to /archetype via barba.go() (never a reload — a reload
-          before the upload finishes would drop the in-memory selfie/avatar).
+          BLOCKING since 2026-11-12 (see sendPhone): the prize now arrives on
+          WhatsApp and the bot finds the shopper BY THIS NUMBER, so a session
+          without it is a shopper who never hears back. Retried on network
+          errors / 5xx / 429; if it still fails the shopper stays here with a
+          message in [data-onboarding-form-error] and taps again. So a failed
+          SESSION CREATE or a failed PHONE SAVE blocks; nothing else does.
+          Number + consent are mirrored onto Flexicare.contact.
+       4. Navigates to data-onboarding-next (/what-is-flexicare since phase 2)
+          via barba.go() (never a reload — a reload before the upload
+          finishes would drop the in-memory selfie/avatar).
 
    Both the selfie path and the avatar path funnel through this page, so
    gender is captured here for BOTH routes. If the user came via the avatar
@@ -85,6 +90,9 @@
                                 (A native <input type="checkbox"> also works if
                                 you ever want one — the script syncs its checked
                                 state — but a div is the intended path here.)
+                                A LINK inside this row (the T&Cs link in the
+                                label) is left alone — it navigates and does
+                                NOT toggle consent. See onClick.
      [data-onboarding-submit]   REQUIRED. The "See my two selves →" button.
                                 Gets class `is-disabled` + aria-disabled while
                                 the form is invalid (style `.is-disabled`; a
@@ -100,7 +108,12 @@
      data-onboarding-busy-label  submit btn; label while submitting (default "Sending…")
      [data-onboarding-label]     optional inner text node of the submit button
                                  (safer label-swap target when it has nested markup)
-     [data-onboarding-form-error] optional element for API/session errors
+     [data-onboarding-form-error] where API/session errors AND a failed
+                                 WhatsApp-number save are written. Without it
+                                 they reach only the console. Shown by clearing
+                                 its inline display, so its CLASS must not be
+                                 display:none (on /onboarding it is
+                                 .onboarding-form-error, added 2026-11-12).
 
    NON-NATIVE FORM + GLASS FIELDS
      • [data-onboarding-form] may sit on a plain <div> (e.g. an Embed wrapper) —
@@ -378,22 +391,56 @@
     return FC.hasPhoto() ? maybeUploadPhoto() : maybeSelectAvatar();
   }
 
-  // PATCH …/contact/phone with the E.164 number. Non-blocking: the session is
-  // already created and the quiz can proceed without it. The endpoint accepts
-  // IN_PROGRESS sessions (it only rejects ABANDONED ones), so this doesn't have
-  // to wait for the results screen.
-  function maybeSendPhone(f) {
-    if (!f.whatsapp) return Promise.resolve();
-    return FC.api("/sessions/" + FC.getSessionId() + "/contact/phone", {
-      method: "PATCH",
-      body: { phone_number: f.whatsapp },
-    }).catch(function (err) {
-      if (window.console)
-        console.warn(
-          "[onboarding] phone save failed (continuing):",
-          (err && (err.detail || err.message)) || err
-        );
+  /* PATCH …/contact/phone with the E.164 number — and it MUST land.
+     Until 2026-11-12 this was fire-and-forget. Then the prize moved to
+     WhatsApp: the shopper scans a fixed QR after the spin and the bot finds
+     them BY THE NUMBER STORED HERE. A silent failure meant a shopper who
+     played the whole journey and never heard back, and found out only at the
+     spin page ("No Phone"). So:
+       • network error, 5xx, 429 → retried after PHONE_RETRY_DELAYS (a 429's
+         Retry-After is honoured up to PHONE_MAX_WAIT_MS, then we give up)
+       • 422 → the number itself; retrying cannot help, so stop at once
+       • 409 → the number is locked by a spin that already happened (or the
+         session is closed). Same rule as flexicare-spin.js: as good as saved.
+     Rejects with err.phoneSave = true so onSubmit can say the right thing.
+     The endpoint accepts IN_PROGRESS sessions, so this need not wait. */
+  var PHONE_RETRY_DELAYS = [800, 2000];
+  var PHONE_MAX_WAIT_MS = 5000;
+
+  function delay(ms) {
+    return new Promise(function (resolve) {
+      setTimeout(resolve, ms);
     });
+  }
+
+  function sendPhone(f) {
+    if (!f.whatsapp) return Promise.resolve(); // isValid() makes this unreachable
+    var attempt = 0;
+    function once() {
+      return FC.api("/sessions/" + FC.getSessionId() + "/contact/phone", {
+        method: "PATCH",
+        body: { phone_number: f.whatsapp },
+      }).catch(function (err) {
+        var status = err && err.status;
+        if (status === 409) return null;
+        var retryable = !status || status === 429 || status >= 500;
+        var wait = PHONE_RETRY_DELAYS[attempt];
+        if (status === 429 && err.retryAfter != null)
+          wait = Math.max(wait || 0, err.retryAfter * 1000);
+        if (retryable && attempt < PHONE_RETRY_DELAYS.length && wait <= PHONE_MAX_WAIT_MS) {
+          attempt++;
+          if (window.console)
+            console.warn(
+              "[onboarding] phone save failed — retry " + attempt + " in " + wait + "ms:",
+              (err && (err.detail || err.message)) || err
+            );
+          return delay(wait).then(once);
+        }
+        if (err) err.phoneSave = true;
+        throw err;
+      });
+    }
+    return once();
   }
 
   /* ------------------------------ navigation ------------------------------ */
@@ -427,9 +474,17 @@
     setBusy(true);
     ensureSession(f)
       .then(function () {
-        // Both are optional and non-blocking; run them together so the
-        // interaction isn't two round trips long.
-        return Promise.all([maybeSendPhoto(), maybeSendPhone(f)]);
+        /* Together, so the interaction isn't two round trips long. The photo
+           never rejects (optional); the phone can (see sendPhone). Its error
+           is held until the photo has SETTLED, so a re-tap can never start a
+           second upload of a selfie that is still in flight — by then it has
+           either been sent and cleared, or failed and is still buffered. */
+        var phone = sendPhone(f).then(null, function (err) {
+          return { phoneError: err || new Error("phone save failed") };
+        });
+        return Promise.all([maybeSendPhoto(), phone]).then(function (r) {
+          if (r[1] && r[1].phoneError) throw r[1].phoneError;
+        });
       })
       .then(function () {
         FC.contact = {
@@ -449,6 +504,16 @@
            NEVER retry without the header: that would quietly create a WEB
            session on a tablet, and the shopper would do the whole quiz only
            to be told at the wheel that they cannot spin. */
+        /* The WhatsApp number did not save. The session exists, so a re-tap
+           reuses it (ensureSession) and only the phone is tried again. */
+        if (err && err.phoneSave) {
+          showFormError(
+            err.status === 422
+              ? "That WhatsApp number doesn't look right. Please check it and try again."
+              : "We couldn't save your WhatsApp number. Please check the connection and try again — we need it to send you your prize."
+          );
+          return;
+        }
         if (err && (err.status === 401 || err.status === 403) && FC.kiosk) {
           if (err.status === 401 && FC.kiosk.unpair)
             FC.kiosk.unpair("401 on session create");
@@ -504,6 +569,17 @@
     // Custom (non-native) consent box. Native checkboxes are handled in onChange.
     var consentEl = t.closest("[data-onboarding-consent]");
     if (consentEl && state.form) {
+      /* A LINK inside the consent row is not a toggle. The consent label holds
+         the Terms & Conditions link, and this branch preventDefaults every
+         click in the row — so without this bail a tap on it would flip the
+         checkbox AND never navigate. That is the worst of both: consent
+         recorded for someone who was trying to go and read what they were
+         consenting to. Let it through and Barba takes it from here.
+         Scoped with contains() so an <a> ANCESTOR of the whole row (if the
+         card is ever wrapped in a link) cannot disable the toggle entirely. */
+      var innerLink = t.closest("a");
+      if (innerLink && consentEl.contains(innerLink)) return;
+
       var nativeCb =
         (consentEl.matches &&
           consentEl.matches("input[type=checkbox]") &&
