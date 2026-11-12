@@ -8,10 +8,12 @@
 
 Read this first; it is what a fresh session would otherwise have to rediscover.
 
-**Unpublished Webflow changes are waiting: the PHASE 2 COPY REWRITE (2026-11-11).** The
-connector writes to the Designer, the browser shows the last publish (2026-09-15, which
-shipped everything listed here before — the T&Cs page included). Full table in
-`docs/webflow-mcp.md` §8. Source: Matte BLK's "Flexicare Copy Rewrite v3" PDF.
+**PHASE 2 IS ON STAGING ONLY (published to `discovery-flexicare.webflow.io` 2026-11-12;
+`flexi-play.co.za` is still the 2026-09-15 publish).** The code for it is LIVE on `main`
+(tag `v1.2.0`) and is backward-compatible with the old live pages. Going live is one more
+Webflow publish to the custom domains — Kenton's call, after testing; the QR image is
+still missing. Full table in `docs/webflow-mcp.md` §8. Source: Matte BLK's "Flexicare
+Copy Rewrite v3" PDF, plus the client's WhatsApp-prize update of 2026-11-12.
 - new copy on `/`, `/start`, `/avatar` (+ sub-line), `/onboarding` (badge, headline,
   WhatsApp/advisor sub-copy, consent tail, CTA "Start the quiz"),
   `/meet-your-two-selves` (Without/With Flexicare labels, CTA), `/flexicare-product`

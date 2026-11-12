@@ -156,12 +156,12 @@ Everything below is in the Designer and **not on the live site until someone hit
 Publish**. The connector reads the Designer; the browser shows the last publish — that
 distinction has already burned one debugging round.
 
-**Last publish: 2026-09-15 07:24 (SAST)** — `data_sites_tool > get_site`,
+**2026-11-12 08:37 UTC: phase 2 published to the STAGING subdomain only** (`publish_site` with `publishToWebflowSubdomain: true`, `customDomains: []`). The custom domains `flexi-play.co.za` / `www.` still carry **the 2026-09-15 07:24 (SAST) publish** — `data_sites_tool > get_site`,
 `lastPublished`. Everything dated up to 2026-09-14 below has therefore SHIPPED; it is
 kept as history. Pending as of 2026-11-11: the phase 2 rows, plus a Designer edit on
 Home dated 2026-10-16 that was not made from here.
 
-**Phase 2 copy rewrite — PENDING (2026-11-11).** Source: Matte BLK "Copy Rewrite v3".
+**Phase 2 copy rewrite — ON STAGING, NOT LIVE (2026-11-11/12).** Source: Matte BLK "Copy Rewrite v3".
 Push `src/flexicare-spin.js` (`hasLeadForm()`) before publishing — the lead form's
 removal depends on it.
 
