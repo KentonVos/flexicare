@@ -8,16 +8,37 @@
 
 Read this first; it is what a fresh session would otherwise have to rediscover.
 
-**Unpublished Webflow changes are waiting.** The connector writes to the Designer, the
-browser shows the last publish. Five edits are sitting there and are inert until Kenton
-publishes — full table in `docs/webflow-mcp.md` §8:
-- `data-journey-start` moved onto the Barba container on Home (the journey reset does
-  not fire on navigation without it)
-- the head snippet's viewport now ends `, viewport-fit=cover`
-- the last `saturate()` removed from the spin wheel CSS
-- a new head block: kiosk touch hardening, scoped `html[data-kiosk-locked]`
-- on `/spin-to-win`, `data-spin-when="ready spinning"` moved off `spin-stage` onto its
-  new parent `spin-stage-wrapper` (so the new heading hides with the wheel)
+**Unpublished Webflow changes are waiting: the PHASE 2 COPY REWRITE (2026-11-11).** The
+connector writes to the Designer, the browser shows the last publish (2026-09-15, which
+shipped everything listed here before — the T&Cs page included). Full table in
+`docs/webflow-mcp.md` §8. Source: Matte BLK's "Flexicare Copy Rewrite v3" PDF.
+- new copy on `/`, `/start`, `/avatar` (+ sub-line), `/onboarding` (badge, headline,
+  WhatsApp/advisor sub-copy, consent tail, CTA "Start the quiz"),
+  `/meet-your-two-selves` (Without/With Flexicare labels, CTA), `/flexicare-product`
+  (headline, sub-line, CTA "I've scanned. Let me spin."), `/spin-to-win` (badge,
+  headline, long Discovery CTA)
+- a NEW page **`/what-is-flexicare`** between `/onboarding` and `/archetype`
+  (`data-onboarding-next` and `/archetype`'s `data-quiz-back` both point at it)
+- **THE PRIZE IS NO LONGER SHOWN ON SCREEN (2026-11-12).** After the spin, EVERY outcome
+  (win or "not this time") shows a new `[data-spin-when="whatsapp"]` panel on
+  `/spin-to-win` with ONE FIXED QR that opens WhatsApp; the shopper sends the message
+  and the bot matches their number (from onboarding) and replies with the prize. The
+  wheel's slice labels are off (`data-spin-labels="off"`) so the landing gives nothing
+  away. Code: `paintAward()` routes to `whatsapp` when that panel exists — delete the
+  panel and the on-screen prize cards come back. **The QR frame is EMPTY** until the
+  bot team supplies the WhatsApp link. (The PDF's QR on `/flexicare-product` was
+  built and removed — `docs/webflow-mcp.md` §11.)
+- **Onboarding will not move on until the WhatsApp number is saved** (2026-11-12,
+  `sendPhone()` in `flexicare-onboarding.js`). The bot matches shoppers by that number,
+  so do not "helpfully" make it non-blocking again. Errors show in
+  `[data-onboarding-form-error]`, which did not exist on the page before that day.
+- **`/spin-to-win`'s lead form REMOVED** — needs the `flexicare-spin.js` change
+  (`hasLeadForm()`) pushed BEFORE this publish, or the wheel waits on a form that is
+  not there
+- Home was ALSO edited in the Designer on 2026-10-16, not from here — a publish ships
+  that too
+- The quiz questions themselves (incl. both "live copy errors" in the PDF) are backend
+  data from `GET /quiz`, not Webflow — they change in the admin, not here.
 
 **Do not assume a visual bug is a code bug until you have confirmed the site was
 published since the change.**
@@ -305,7 +326,13 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
   `barba.go()` — the destination ran its entrance animation, init and skeleton twice.
   Rules: resolve within the incoming container (or `state.wrap`), filter to nodes that are
   actually attached, and never navigate to the page you are already on (`samePath()`).
-- **A lead form gates the spin wheel, and all six fields now reach the backend.**
+- **`/spin-to-win` has NO lead form since 2026-11-11 (phase 2), and the gate is
+  optional.** `hasLeadForm()` turns state `form` on only when a `[data-spin-when]`
+  panel lists `form`; with none, the page goes straight to `ready`, and the phone the
+  spin needs comes from onboarding's WhatsApp number (missing → `nophone`). Surname,
+  email and ID are no longer collected. Everything below still applies if a form
+  panel is ever put back.
+- **(When present) a lead form gates the spin wheel, and all six fields reach the backend.**
   State `form` sits between `loading` and `ready`; the wheel renders behind the panel
   and only unlocks once the form is submitted (remembered per session in
   `sessionStorage`). `submitLead()` fires three PATCHes in a fixed order — phone, email,

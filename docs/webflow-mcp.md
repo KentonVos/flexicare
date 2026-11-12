@@ -49,6 +49,7 @@ Site: **Discovery Flexicare** — `6a54e16eeed40a39998fba5b`
 | `/` Home | `6a54e171eed40a39998fbb48` | landing (nav collapsed) |
 | `/start` | `6a5f2613fdf8a6920c430f09` | — |
 | `/onboarding` | `6a61ddeb7f41df31564fe7da` | flexicare-onboarding.js |
+| `/what-is-flexicare` | `6af47ef580b5faf83d35ccdb` | — (static; CTA is a page link to `/archetype`) |
 | `/selfie` | `6a60bd8aca652f52cf387928` | flexicare-selfie.js |
 | `/avatar` | `6a86fb4607ddef4a002cf36d` | flexicare-avatar.js |
 | `/archetype` | `6a63194ca30beefe75a6448b` | flexicare-quiz.js (ROUTING) |
@@ -97,6 +98,19 @@ string, write it back whole. Getting this wrong takes the site down site-wide.
 **`set_style` replaces an element's entire class list**, and multiple names
 become combo classes.
 
+**`set_text` rejects a div — target its String child (2026-11-11).** Most copy on
+this site is a Block (`div`) holding a `String` node, and `set_text` on the Block
+fails with "This element doesn't support text". Pass the String node's id instead
+(the one with `textContent` in a `children_depth` query). Headings and Spans accept it
+directly. Inline structure survives: editing only the String before a Span (the green
+"You get smart.") or after a Link (the consent T&Cs link) leaves those intact.
+
+**`data_element_builder`'s `set_text` does NOT apply to a TextBlock.** The block is
+created with Webflow's default "This is some text inside of a div block." — and the
+success message says nothing. Create, then `set_text` the new String child, then read
+back. `data_whtml_builder` has no such problem, keeps `data-*` attributes, and reuses
+an existing class when the name matches (no "name 2" duplicates when no `css` is sent).
+
 **Don't trust a partial query as a complete answer.** A wrap attribute being
 absent does not mean its inner slot is absent — querying only
 `data-spin-expires-wrap` produced a wrong "the expiry line doesn't exist"
@@ -142,6 +156,34 @@ Everything below is in the Designer and **not on the live site until someone hit
 Publish**. The connector reads the Designer; the browser shows the last publish — that
 distinction has already burned one debugging round.
 
+**Last publish: 2026-09-15 07:24 (SAST)** — `data_sites_tool > get_site`,
+`lastPublished`. Everything dated up to 2026-09-14 below has therefore SHIPPED; it is
+kept as history. Pending as of 2026-11-11: the phase 2 rows, plus a Designer edit on
+Home dated 2026-10-16 that was not made from here.
+
+**Phase 2 copy rewrite — PENDING (2026-11-11).** Source: Matte BLK "Copy Rewrite v3".
+Push `src/flexicare-spin.js` (`hasLeadForm()`) before publishing — the lead form's
+removal depends on it.
+
+| Page | Change |
+|---|---|
+| `/` | Badge → "Quality healthcare can be expensive. Flexicare is different." Headline → "See what private health cover actually looks like for you." NEW sub-line "60 seconds. No paperwork." (`text-size-large`, `data-text-reveal`, `data-anim="3"`) after the headline. CTA → "Show me". |
+| `/start` | Headline → "One has Flexicare. One doesn't." Sub → "Same person. Two very different outcomes. Use your face or pick an avatar, we'll show you both." |
+| `/avatar` | NEW sub-line "This is the face we're building your Flexicare story around." under the headline (the PDF says under the grid; the grid fills its column, so it sits in the heading column). |
+| `/onboarding` | Badge "Before we start." · headline "Where should we send your Flexicare recommendation?" · sub "We'll WhatsApp your personalised Flexicare match after the quiz. A Discovery advisor may follow up to walk you through your options." (verbatim — consent touchpoint 1) · consent tail " and confirm I'm happy for Discovery to contact me about my Flexicare recommendation." (T&Cs link untouched) · CTA "Start the quiz" · `data-onboarding-next` → `/what-is-flexicare`. **2026-11-12:** NEW empty `[data-onboarding-form-error]` (`onboarding-form-error`, `role="alert"`) after `consent-wrapper` — the page had no form-error element at all before. |
+| `/what-is-flexicare` | **NEW PAGE** (id `6af47ef580b5faf83d35ccdb`), duplicated from `/onboarding` (9-ancestor shell verified), form + tag removed. Headline, sub, two glass cards (`what-points` / `what-point` / `what-point-text`, `data-lg-preset="panel"`). Nav: Back → `/onboarding`, CTA "See what cover could look like for you" → page link `/archetype` (all `data-onboarding-*` hooks stripped). Typos in the PDF fixed: "could like" → "could look like", "specialists visits" → "specialist visits". |
+| `/archetype` | `data-quiz-next-text-last="Show me my match"` (was "See your 2 selves"); `data-quiz-back="/what-is-flexicare"` (Back on Q1). |
+| `/meet-your-two-selves` | Panel tags → "Without Flexicare" / "With Flexicare". Both `[data-reveal-next]` CTAs → "See my Flexicare match". Headline unchanged (already "Meet your two selves, [Name]"). |
+| `/flexicare-product` | Headline String → "The version of you with Flexicare doesn't get lucky. " (green span kept). NEW sub-line (`text-size-large is-product-sub`). CTA stays "Spin to Win". Badge unchanged. (A QR section was built and then REMOVED on 2026-11-12 — see §11.) |
+| `/spin-to-win` | NEW badge `tag-wrapper is-spin-badge` > `glass-tag` > "Your Flexicare match is confirmed." above the headline. Headline → "Now spin for your prize." `[data-spin-go-text]` → "Spin to Win with Flexicare, administered by Discovery Health". **`form-stage` (`data-spin-when="form"`) REMOVED** with all its fields (and the stray `.fc-error` / `.fc-field` divs §9 asked about). **2026-11-12:** `data-spin-labels="off"` on the wrapper (blank slices), and a NEW `[data-spin-when="whatsapp"]` QR panel shown after every spin instead of the prize — §11. New class `whatsapp-qr-frame`. |
+
+New classes (no existing class was edited): `is-product-sub` (combo on
+`text-size-large`), `is-spin-badge` (combo on `tag-wrapper`), `what-points`,
+`what-point`, `what-point-text`. (The six `qr-*` classes were created and then deleted
+with the QR section.)
+
+**History (all shipped in the 2026-09-15 publish):**
+
 | When | Page / scope | Change |
 |---|---|---|
 | 2026-08-31 | Home | `data-journey-start="true"` moved off `<body>` onto `glass-content-wrapper` (the `data-barba="container"` element). Without it the journey reset fires on a hard load but not on a navigation. |
@@ -149,6 +191,7 @@ distinction has already burned one debugging round.
 | 2026-09-01 | Site head | `saturate()` removed from `[data-spin-wheel]` and `[data-spin-hub]` — the last one on the site. |
 | 2026-09-01 | Site head | New fifth block: kiosk touch hardening, scoped `html[data-kiosk-locked]`. |
 | 2026-09-02 | `/spin-to-win` | `data-spin-when="ready spinning"` moved off `spin-stage` onto its new parent `spin-stage-wrapper`, so the new `spin-heading-wrapper` H1 hides with the wheel instead of staying on screen over the prize panel. `data-spin-stage` stayed on `spin-stage`. |
+| 2026-09-14 | `/terms-and-conditions` | **NEW PAGE** (id `6aa7e971351baec82b46ed60`), duplicated from `/start` so the 9-ancestor shell matches, then `/start`'s `character-grid-wrapper` removed and the full Flexicare T&Cs built inside the container. See §10. |
 
 The site head is ONE freeform block and `set_site_freeform_code` replaces it wholesale.
 Read it in full, edit surgically, and diff the returned content against what you sent.
@@ -181,17 +224,127 @@ pairing CSS, kiosk touch hardening.
   guess: bottom edge inside the square wheel stage. Restyle freely.
 - Before go-live: swap the staging API base in `flexicare-core.js`, and drop
   `slider.js` / `orb-tuner.js` from the footer.
-- The spin page's lead form collects **surname, ID type and ID number with no
-  backend endpoint to send them to** (buffered in memory, lost on reload). The
-  CTA says "Call me back". Chase the backend before go-live.
-- `/spin-to-win` still has two stray `.fc-error` divs (from the copied onboarding
-  component) containing the literal text "data-onboarding-error", plus an empty
-  `.fc-field` div at the bottom of `form-stage`. Their attributes are stripped so
-  they are inert, but the text will render — they need DELETING in the Designer
-  (element removal, so it needs Kenton's explicit yes).
+- ~~The spin lead form's surname/ID fields had no endpoint~~ and ~~the stray
+  `.fc-error` / `.fc-field` divs in `form-stage`~~ — both moot: the whole form panel was
+  removed on 2026-11-11 (phase 2, Kenton's explicit instruction). `data-spin-lead-label`
+  is still on the spin wrapper; it is inert without a form panel and is what the CTA
+  says in state `form` if one is ever put back.
 - `/kiosk`'s error box still holds Webflow's default div text. Harmless since
   `flexicare-kiosk.js` clears it on boot, but misleading on the canvas.
 - Two combo classes created from here on 2026-08-28, both placeholders to restyle:
   `.field-glass.is-invalid` (red ring on an invalid lead field) and
   `.fc-error.is-lead-copy` (the lead error message). The red `#FF6B6B` is a guess —
   the palette is lime/indigo/teal and has no error colour.
+
+## 10. The Terms and Conditions page (built 2026-09-14)
+
+`/terms-and-conditions` — page id `6aa7e971351baec82b46ed60`. Operator/compliance
+page holding the Flexicare product terms verbatim from the supplied PDF.
+
+**How it was built.** `create_page` with `duplicateOf: /start`, which is the only
+reliable way to get the 9-ancestor Barba shell exactly right (same trick as `/kiosk`
+from `/onboarding`). `/start`'s `character-grid-wrapper` was then removed from inside
+`data-barba="container"` and the document built with `data_whtml_builder`.
+
+**Attributes on the Barba container** (`glass-content-wrapper`):
+- `data-kiosk-enforce="off"` — **load-bearing.** The pairing gate is on by default and
+  redirects every tokenless arrival to `/kiosk`. Without this nobody can read the terms
+  on an unpaired phone or a compliance reviewer's laptop.
+- `data-progress` was **removed** (it was `"1"` on `/start`). `updateProgress` returns
+  early when the attribute is absent, so opening the terms mid-journey now leaves the
+  progress bar where it was instead of slamming it to 100%.
+- No `data-journey-start` — reading the terms must never reset a shopper's run.
+
+**Structure.** `terms-page` → `terms-header` (h1 + lede) + `terms-scroll` → `terms-doc`,
+which holds 32 `terms-section` blocks (clauses 1–30, Annexure A, Privacy Statement) plus
+a `terms-footnote` carrying the two regulatory disclaimer paragraphs.
+
+**New classes, all `terms-*`** — no existing class was touched, per the rule in §1:
+`terms-page`, `-header`, `-title`, `-lede`, `-scroll`, `-doc`, `-section`, `-h2`, `-h3`,
+`-lead`, `-l1`, `-l2`, `-l3`, `-note`, `-footnote`, `-fineprint`.
+
+Two deliberate choices in that CSS:
+- **Colour is inherited, never set.** The palette is variable-driven and muted text on
+  this site is done with `opacity` (`.text-style-muted` is `opacity: 0.6`), so the terms
+  classes follow that convention rather than hardcoding a hex that would be wrong the
+  moment the palette moves.
+- **Hanging indents, not nested elements.** Each clause is ONE `<p>` using
+  `padding-left` + negative `text-indent`, which is why 250-odd numbered clauses did not
+  become 750 Webflow elements. `terms-l1/l2/l3` are separate standalone classes rather
+  than combos, and the indents shrink at the 767px breakpoint.
+
+**Scrolling works on the kiosk tablets.** The touch-hardening block scopes
+`overscroll-behavior: none` to `html[data-kiosk-locked]`, which only stops scroll
+*chaining*; `touch-action: manipulation` keeps pan. `terms-scroll` adds
+`overscroll-behavior: contain` of its own.
+
+**Still open on this page:**
+- ~~Nothing links to it.~~ **DONE 2026-09-14** — the `/onboarding` consent label now
+  carries an inline Text Link on "Terms & Conditions" (page link, not a URL, so it
+  survives a slug change), and the terms page's nav CTA goes back to `/onboarding`.
+  That CTA lives in `button-navigation-wrapper`, which is OUTSIDE the Barba container,
+  but `data-barba-sync="nav"` means `syncRegions()` replaces its innerHTML from the
+  incoming page — so the terms page's own button is what is on screen there.
+  **This required a code change:** see `src/flexicare-onboarding.js` `onClick`. The
+  consent branch preventDefaults every click inside `[data-onboarding-consent]`, and
+  the label is inside it, so the link both toggled consent and refused to navigate.
+  - **Still open: the round trip empties the form.** `init()` sets `state.consent =
+    false` on every `afterEnter`, and Barba rebuilds the container, so the name and
+    WhatsApp `<input>`s come back blank. A shopper who types their details, taps the
+    terms out of diligence and comes back has to start again. Nothing buffers those
+    fields today (`FC.avatarGender` is the only thing carried in). Fix would be to
+    buffer name/whatsapp/gender on `FC` and restore them in `init()` — deliberately
+    NOT consent, which should stay a fresh act after reading.
+- The spin lead form also collects personal information under these terms and has no
+  link to them yet.
+- The page has two `h1`s: the shell's "Health Cover. Your Way" (which sits in
+  `top-right-wrapper`, OUTSIDE the Barba container, so it is on every page) and
+  `terms-title`. Matches what `/start` already does; flagged rather than changed.
+- The scroll region's height comes from the glass card, which is `height: 100%` all the
+  way up. It reads correctly in the tree but has NOT been seen rendered — check it in
+  preview at tablet and phone width before publishing.
+
+## 11. The WhatsApp QR — moved from the product page to AFTER THE SPIN (2026-11-12)
+
+**History.** The PDF's Screen 11 put a QR on `/flexicare-product` ("Scan first. Then
+spin."). It was built 2026-11-11 and removed 2026-11-12 (element + six `qr-*` classes;
+the product CTA went back to "Spin to Win").
+
+**The flow now (client update, 2026-11-12):** the shopper completes the whole journey and
+taps Spin to Win. The wheel spins and lands — with **blank slices**, so the landing does
+not reveal the prize — and then, for **every** outcome (a win or "not this time"), the
+spin page shows a QR that opens WhatsApp. The shopper sends the pre-filled message; the
+bot matches the sender's number to the one captured at `/onboarding` and replies with
+the prize. Nothing is shown on screen about what they won.
+
+**Webflow (`/spin-to-win`, UNPUBLISHED):**
+- `data-spin-labels="off"` on the `[data-spin]` wrapper (`spin-wrapper`). Slice icons
+  were already off (`data-spin-icons` defaults to off). Slice COLOURS still show — if
+  the admin colours the consolation slice differently (the demo data makes it grey),
+  that slice alone gives a "no prize" landing away.
+- NEW panel, last child of the wrapper, id `3db2dcb6-…-661c681b7d2f`:
+  `spin-panel is-prize [data-spin-when="whatsapp"]` > `spin-card` (glass) >
+  `spin-prize-content-wrapper` (tag "One last step", `spin-card_prize` "Your result is
+  waiting on WhatsApp", **`whatsapp-qr-frame`** (new class, 11rem white square — EMPTY),
+  `spin-card_body` "Scan with your phone camera and send the message that opens. Use the
+  phone with the WhatsApp number you gave us, and we'll reply with your result.") +
+  `btn-wrapper` > Done (`[data-spin-done="/"]`) + the two `green-win-glow`s. All classes
+  reused from the prize card except the frame. The copy is a placeholder written here —
+  not from the client.
+- The pre-boot rule in the site head (`[data-spin]:not([data-spin-state])
+  [data-spin-when]`) already hides the new panel until the script picks a state.
+
+**Code (`flexicare-spin.js`):** `paintAward()` sends every award to state `whatsapp`
+when `hasPanel("whatsapp")`; the award is still written into the (hidden) prize panels,
+so deleting the whatsapp panel restores the on-screen prize card with no code change.
+`isAwardState()` includes `whatsapp`, so the kiosk heartbeat still reports `prize`.
+
+**To finish:** put ONE Image in `whatsapp-qr-frame` — a QR of the bot's `wa.me` link
+(number + pre-filled message), supplied by the WhatsApp/bot team. Upload the PNG as an
+asset and `set_image_asset`, or drop it in the Designer.
+
+**Known weak point of a fixed QR:** the bot can only match the shopper if they scan
+with the phone whose number they typed at onboarding. The other half — the number
+actually being saved — is covered since 2026-11-12: onboarding retries the phone PATCH
+and will not move on until it lands (`sendPhone()`), showing its message in the new
+`[data-onboarding-form-error]` (class `onboarding-form-error`) under the consent row.

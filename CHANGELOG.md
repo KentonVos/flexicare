@@ -14,6 +14,57 @@ Format:
 
 ---
 
+## 2026-11-12 — The prize moves to WhatsApp: QR after the spin, blank wheel
+
+- `src/flexicare-spin.js`, `CLAUDE.md`, `docs/webflow-mcp.md`, `docs/kiosk-and-spin.md`
+- Client update: the prize is no longer shown on screen. After the spin, every outcome
+  shows a QR that opens WhatsApp; the shopper sends the message and the bot (matching
+  the sender's number to the one from onboarding) replies with the prize.
+- `flexicare-spin.js`: new state `whatsapp`. `paintAward()` routes EVERY award there
+  (awarded, consolation, redeemed, expired, voided) when the page has a
+  `[data-spin-when]` panel listing `whatsapp` — `hasPanel()`, which `hasLeadForm()` now
+  uses too. Without that panel, behaviour is exactly as before. `isAwardState()`
+  includes `whatsapp` so the kiosk heartbeat still reports `prize`.
+- Webflow (`/spin-to-win`, UNPUBLISHED): `data-spin-labels="off"` on the wrapper; NEW
+  whatsapp panel (reuses the prize card classes; new `whatsapp-qr-frame`) with
+  placeholder copy. **The QR frame is EMPTY** until the bot team gives the `wa.me` link.
+- Push this BEFORE publishing: without it the new panel never shows and the prize card
+  still does.
+- `src/flexicare-onboarding.js`: the WhatsApp number save is now BLOCKING (`sendPhone`,
+  replacing fire-and-forget `maybeSendPhone`). The bot finds the shopper by this
+  number, so a silent failure meant a full journey with no reply. Network/5xx/429 are
+  retried twice (0.8 s, 2 s; a 429 Retry-After over 5 s gives up); 422 stops at once;
+  409 (locked by a spin) counts as saved. On failure the shopper stays on the form
+  with a message; a re-tap reuses the session. The phone error is held until the
+  photo upload settles, so a re-tap cannot double-upload a selfie.
+- Webflow `/onboarding`: NEW empty `[data-onboarding-form-error]` (class
+  `onboarding-form-error`, `role="alert"`) under the consent row. Before this the page
+  had NO form-error element, so every onboarding error — session create, "this tablet
+  needs to be paired again" — went to the console only.
+
+## 2026-11-11 — Phase 2 copy rewrite; spin lead form removed
+
+- `src/flexicare-spin.js`, `CLAUDE.md`, `docs/webflow-mcp.md`, `docs/kiosk-and-spin.md`
+- Source: Matte BLK "Flexicare Copy Rewrite v3" (27 Oct 2026).
+- `flexicare-spin.js`: the lead form is now OPTIONAL. New `hasLeadForm()` — true only
+  when a `[data-spin-when]` panel lists `form`. Both the real path and the demo path set
+  `needLead` through it, so with no form panel the page goes `loading` → `ready` and
+  never strands the shopper behind a form that is not there (with the CTA relabelled
+  as a submit). The phone a spin needs comes from onboarding's WhatsApp number; a
+  session without one still gets the `nophone` panel. Surname, email and ID are no
+  longer collected. **Must be pushed before the Webflow publish.**
+- Webflow (Designer, UNPUBLISHED — `docs/webflow-mcp.md` §8): new copy on `/`,
+  `/start`, `/avatar`, `/onboarding`, `/meet-your-two-selves`, `/flexicare-product`,
+  `/spin-to-win`; the spin `form-stage` panel removed; NEW page `/what-is-flexicare`
+  between onboarding and the quiz (`data-onboarding-next`, `/archetype`'s
+  `data-quiz-back`); `/archetype` `data-quiz-next-text-last="Show me my match"`.
+- 2026-11-12: the PDF's WhatsApp QR section on the product page was built, then REMOVED
+  (element + six `qr-*` classes) — shoppers now receive a WhatsApp automatically, so
+  there is nothing to scan. Product CTA back to "Spin to Win". `docs/webflow-mcp.md` §11.
+- NOT done here, because it is backend data (`GET /quiz`): the rewritten quiz
+  questions/options, and the PDF's two "live copy errors" (Q4 "expected medical bill",
+  Archetype C Q3 "health insurance").
+
 ## 2026-10-28 — Demo link back, on the staging domain only
 
 - `src/flexicare-core.js`, `src/flexicare-kiosk.js`, `src/flexicare-spin.js`,
@@ -87,6 +138,19 @@ Format:
   `WEB` session, and the wheel now shows its "unavailable" panel instead of a
   fake prize.
 - No Webflow change.
+
+## 2026-09-14 — A link inside the consent row navigates instead of toggling
+
+- `src/flexicare-onboarding.js`
+- The consent branch of `onClick` preventDefaults every click inside
+  `[data-onboarding-consent]`, so the new Terms & Conditions link in the consent
+  label would have flipped the checkbox AND been prevented from navigating —
+  consent recorded for someone trying to go and read the terms. It now bails out
+  for an `<a>` that is inside the consent row (scoped with `contains()` so a link
+  wrapping the whole row cannot kill the toggle).
+- Webflow side: the consent label on `/onboarding` is now three inline pieces —
+  text, a Text Link "Terms & Conditions" (page link to the new
+  `/terms-and-conditions`), text. New class `consent-terms-link`. UNPUBLISHED.
 
 ## 2026-09-11 — Dev pairing (`5555-5555`) disabled, and dev devices signed out
 

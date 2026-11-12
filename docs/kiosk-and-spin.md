@@ -152,8 +152,9 @@ code can never be lost to a page swap. States:
 | State | When |
 |---|---|
 | `loading` | resolving the session and the wheel |
-| `form` | the lead form must be completed before the wheel unlocks |
+| `form` | the lead form must be completed before the wheel unlocks — **only if the page has a `form` panel** (`hasLeadForm()`). `/spin-to-win` has none since 2026-11-11, so it goes `loading` → `ready` |
 | `ready` | wheel drawn, button live |
+| `whatsapp` | **replaces every award state** when the page has a `whatsapp` panel (`/spin-to-win` does since 2026-11-12): a fixed QR that opens WhatsApp; the bot replies with the prize. The prize is never shown on screen, and the wheel's slice labels are off |
 | `spinning` | turning — button disabled |
 | `prize` | won a real prize; show the claim code |
 | `consolation` | the "try again" segment; **no claim-code emphasis** |
@@ -974,6 +975,11 @@ So if the spin page jumps straight to a prize: a panel shortcut is armed. The
 console says which, one lap clears it, and `?demo=off` clears it now.
 
 ### The lead form
+
+**Removed from `/spin-to-win` on 2026-11-11 (phase 2 copy rewrite).** With no
+`[data-spin-when]` panel listing `form`, `hasLeadForm()` is false and every path —
+real and demo, including `?demo=form` — goes straight to the wheel. The rest of this
+section describes the form for when a panel is put back.
 
 Bare `?demo` opens on the lead form, because that is the step the end-to-end run is
 usually there to check.
