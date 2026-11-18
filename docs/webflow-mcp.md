@@ -334,7 +334,9 @@ heading lost `data-spin-prize-name` (the API no longer sends a prize name) and r
 "This reward is no longer valid" / "Please ask a Flexicare promoter in store for help."
 Same day, after Kenton's staging test: the gap the QR left is filled by a WhatsApp
 icon (asset `whatsapp-icon.svg` `6afd5f33606cf082f38051cf`, new class `whatsapp-icon`:
-9rem wide, 6.5rem on phones, centred), placed where the QR frame was.
+centred), placed where the QR frame was — enlarged the same day to 16rem wide (10rem
+on phones) because the gap between the heading and the body was too big. Published
+08:34:51 UTC on both domains.
 
 Everything below is history.
 

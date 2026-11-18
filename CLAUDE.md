@@ -4,12 +4,13 @@
      Keep it short and behavioural. Deep detail lives in ARCHITECTURE.md,
      which you should read on demand (it is NOT auto-loaded). -->
 
-## ⚠️ Where things stand (last updated 2026-09-08)
+## ⚠️ Where things stand (last updated 2026-11-18)
 
 Read this first; it is what a fresh session would otherwise have to rediscover.
 
-**PHASE 2 IS LIVE (2026-11-18 08:24 UTC, `flexi-play.co.za` + staging, code tag
-`v1.3.0`).** Staging and the custom domains carry the same publish. Full table in
+**PHASE 2 IS LIVE (first publish 2026-11-18 08:24 UTC; latest 08:34:51 UTC by Kenton,
+`flexi-play.co.za` + staging, code tag `v1.3.0`).** Staging and the custom domains carry
+the same publish, and the Designer had nothing unpublished after it. Full table in
 `docs/webflow-mcp.md` §8. Source: Matte BLK's "Flexicare Copy Rewrite v3" PDF, the
 client's WhatsApp-prize update of 2026-11-12, and the backend handover of 2026-11-17
 (`docs/frontend-handover-2026-11-17.md`, which supersedes `docs/api-contract.md` for the
