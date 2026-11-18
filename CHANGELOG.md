@@ -16,6 +16,7 @@ Format:
 
 ## 2026-11-18 — WhatsApp auto-sends: no QR, wheel never lands; "Prefer not to say"
 
+- Pushed as `v1.3.0` and PUBLISHED to flexi-play.co.za + staging 2026-11-18 08:24 UTC.
 - Later the same day (Kenton): prize names are BACK on the wheel (`data-spin-labels="on"`),
   and the wheel keeps turning behind the WhatsApp card instead of fading out — the wheel
   panel is now `data-spin-when="ready spinning whatsapp"`, and `windDown()` leaves it

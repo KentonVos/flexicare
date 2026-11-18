@@ -8,17 +8,14 @@
 
 Read this first; it is what a fresh session would otherwise have to rediscover.
 
-**PHASE 2 IS ON STAGING ONLY (published to `discovery-flexicare.webflow.io` 2026-11-12;
-`flexi-play.co.za` is still the 2026-09-15 publish).** The code for it is LIVE on `main`
-(tag `v1.2.0`) and is backward-compatible with the old live pages. Going live is one more
-Webflow publish to the custom domains — Kenton's call, after testing. Full table in
+**PHASE 2 IS LIVE (2026-11-18 08:24 UTC, `flexi-play.co.za` + staging, code tag
+`v1.3.0`).** Staging and the custom domains carry the same publish. Full table in
 `docs/webflow-mcp.md` §8. Source: Matte BLK's "Flexicare Copy Rewrite v3" PDF, the
 client's WhatsApp-prize update of 2026-11-12, and the backend handover of 2026-11-17
 (`docs/frontend-handover-2026-11-17.md`, which supersedes `docs/api-contract.md` for the
 spin, the phone/consent PATCH and `gender`).
-**⚠️ Until the custom domains are republished, the LIVE spin page is broken against the
-current backend:** since 2026-11-17 `POST /spin` returns no prize, so the September
-pages (no whatsapp panel) show an empty "You Won!" card. Publish phase 2 before trading.
+(Never put the September pages back: since 2026-11-17 `POST /spin` returns no prize, so a
+spin page without the whatsapp panel shows an empty "You Won!" card.)
 - new copy on `/`, `/start`, `/avatar` (+ sub-line), `/onboarding` (badge, headline,
   WhatsApp/advisor sub-copy, consent tail, CTA "Start the quiz"),
   `/meet-your-two-selves` (Without/With Flexicare labels, CTA), `/flexicare-product`
