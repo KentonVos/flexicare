@@ -30,9 +30,9 @@ spin page without the whatsapp panel shows an empty "You Won!" card.)
   panel on `/spin-to-win` says "Check your WhatsApp / Your result is on its way". The
   wheel never lands: it spins up on tap, turns for at least `data-spin-min`, slows, and
   the panel fades in while it is still turning (`spinUp`/`windDown` in
-  `flexicare-spin.js`) — and since the wheel panel lists `whatsapp` too, the wheel
-  stays on screen behind that card and KEEPS TURNING (`data-spin-cruise`) until the
-  page is left. Never let it stop there. Prize names are on the slices again
+  `flexicare-spin.js`) — it keeps turning (`data-spin-cruise`) as its panel fades out
+  and is stopped only once hidden. Kenton does NOT want the wheel visible behind the
+  card (tried and reverted 2026-11-18): the wheel panel is `data-spin-when="ready spinning"`. Prize names are on the slices again
   (`data-spin-labels="on"`, Kenton 2026-11-18). `VOIDED` (revisit only) shows the voided panel.
   (A fixed QR existed 2026-11-12 → 18 and was removed once WhatsApp auto-fired; the
   PDF's QR on `/flexicare-product` was built and removed too — `docs/webflow-mcp.md` §11.)

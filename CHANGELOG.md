@@ -16,6 +16,9 @@ Format:
 
 ## 2026-11-18 — WhatsApp auto-sends: no QR, wheel never lands; "Prefer not to say"
 
+- Then reverted the "wheel stays behind the card" part (Kenton): the wheel panel is back
+  to `data-spin-when="ready spinning"`, so the wheel fades out — still turning, and
+  stopped once hidden. WhatsApp icon enlarged to 16rem (10rem on phones).
 - Pushed as `v1.3.0` and PUBLISHED to flexi-play.co.za + staging 2026-11-18 08:24 UTC.
 - Later the same day (Kenton): prize names are BACK on the wheel (`data-spin-labels="on"`),
   and the wheel keeps turning behind the WhatsApp card instead of fading out — the wheel
