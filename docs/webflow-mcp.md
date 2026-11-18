@@ -170,16 +170,34 @@ removal depends on it.
 | `/` | Badge → "Quality healthcare can be expensive. Flexicare is different." Headline → "See what private health cover actually looks like for you." NEW sub-line "60 seconds. No paperwork." (`text-size-large`, `data-text-reveal`, `data-anim="3"`) after the headline. CTA → "Show me". |
 | `/start` | Headline → "One has Flexicare. One doesn't." Sub → "Same person. Two very different outcomes. Use your face or pick an avatar, we'll show you both." |
 | `/avatar` | NEW sub-line "This is the face we're building your Flexicare story around." under the headline (the PDF says under the grid; the grid fills its column, so it sits in the heading column). |
-| `/onboarding` | Badge "Before we start." · headline "Where should we send your Flexicare recommendation?" · sub "We'll WhatsApp your personalised Flexicare match after the quiz. A Discovery advisor may follow up to walk you through your options." (verbatim — consent touchpoint 1) · consent tail " and confirm I'm happy for Discovery to contact me about my Flexicare recommendation." (T&Cs link untouched) · CTA "Start the quiz" · `data-onboarding-next` → `/what-is-flexicare`. **2026-11-12:** NEW empty `[data-onboarding-form-error]` (`onboarding-form-error`, `role="alert"`) after `consent-wrapper` — the page had no form-error element at all before. |
-| `/what-is-flexicare` | **NEW PAGE** (id `6af47ef580b5faf83d35ccdb`), duplicated from `/onboarding` (9-ancestor shell verified), form + tag removed. Headline, sub, two glass cards (`what-points` / `what-point` / `what-point-text`, `data-lg-preset="panel"`). Nav: Back → `/onboarding`, CTA "See what cover could look like for you" → page link `/archetype` (all `data-onboarding-*` hooks stripped). Typos in the PDF fixed: "could like" → "could look like", "specialists visits" → "specialist visits". |
+| `/onboarding` | Badge "Before we start." · headline "Where should we send your Flexicare recommendation?" · sub "We'll WhatsApp your personalised Flexicare match after the quiz. A Discovery advisor may follow up to walk you through your options." (verbatim — consent touchpoint 1) · consent tail " and confirm I'm happy for Discovery to contact me about my Flexicare recommendation." (T&Cs link untouched) · CTA "Start the quiz" · `data-onboarding-next` → `/what-is-flexicare`. **2026-11-12:** NEW empty `[data-onboarding-form-error]` (`onboarding-form-error`, `role="alert"`) after `consent-wrapper` — the page had no form-error element at all before. | **2026-11-18:** third gender pill `fc-gender-opt` "Prefer not to say", `data-gender="prefer_not_to_say"`, `data-liquid-glass="true"` like the other two, after Male.
+| `/what-is-flexicare` | **NEW PAGE** (id `6af47ef580b5faf83d35ccdb`), duplicated from `/onboarding` (9-ancestor shell verified), form + tag removed. Headline, sub, two glass cards (`what-points` / `what-point` / `what-point-text`, `data-lg-preset="panel"`). Nav: Back → `/onboarding`, CTA "See what cover could look like for you" → page link `/archetype` (all `data-onboarding-*` hooks stripped). Typos in the PDF fixed: "could like" → "could look like", "specialists visits" → "specialist visits". | **2026-11-12 REDESIGN (published to STAGING 2026-11-12 10:03 UTC, not live):** rebuilt on the product page card to Kenton's mock-up — ONE glass card (`product-card-wrapper is-what` inside a new `what-is-wrapper`) holding the tag "What is flexicare? +" (green `+` = `is-green` span), the headline (`heading-style-product-heading is-what`, 4.75em at tablet so it sits on two lines), "Flexicare covers:" (`what-covers-heading`), a six-item check list (`product-list-item is-what` > `check-wrapper is-what` + check2.svg asset, `what-list-text`) and the R445 / FlexiFund line (`what-body`), plus the product page's three glows and its glass orb (`product-orb-wrapper is-what`, all its `data-orb-*` copied, sat lower: `bottom:-38%` at tablet). The sub "Most people assume…" is not in the mock-up and is gone. The container is now `glass-content-wrapper product`, like the product page. **The old content (`onboarding-container` with `what-points`) is HIDDEN, not deleted** (visibility off) — delete it, and the three `what-point*` classes, on Kenton's yes. No controller hooks (`data-product-*`, `data-reveal-skeleton-target`) were copied, so `flexicare-product.js` stays off this page.
 | `/archetype` | `data-quiz-next-text-last="Show me my match"` (was "See your 2 selves"); `data-quiz-back="/what-is-flexicare"` (Back on Q1). |
 | `/meet-your-two-selves` | Panel tags → "Without Flexicare" / "With Flexicare". Both `[data-reveal-next]` CTAs → "See my Flexicare match". Headline unchanged (already "Meet your two selves, [Name]"). |
 | `/flexicare-product` | Headline String → "The version of you with Flexicare doesn't get lucky. " (green span kept). NEW sub-line (`text-size-large is-product-sub`). CTA stays "Spin to Win". Badge unchanged. (A QR section was built and then REMOVED on 2026-11-12 — see §11.) |
-| `/spin-to-win` | NEW badge `tag-wrapper is-spin-badge` > `glass-tag` > "Your Flexicare match is confirmed." above the headline. Headline → "Now spin for your prize." `[data-spin-go-text]` → "Spin to Win with Flexicare, administered by Discovery Health". **`form-stage` (`data-spin-when="form"`) REMOVED** with all its fields (and the stray `.fc-error` / `.fc-field` divs §9 asked about). **2026-11-12:** `data-spin-labels="off"` on the wrapper (blank slices), and a NEW `[data-spin-when="whatsapp"]` QR panel shown after every spin instead of the prize — §11. New class `whatsapp-qr-frame`. |
+| `/spin-to-win` | NEW badge `tag-wrapper is-spin-badge` > `glass-tag` > "Your Flexicare match is confirmed." above the headline. Headline → "Now spin for your prize." `[data-spin-go-text]` → "Spin to Win with Flexicare, administered by Discovery Health". **`form-stage` (`data-spin-when="form"`) REMOVED** with all its fields (and the stray `.fc-error` / `.fc-field` divs §9 asked about). **2026-11-12:** `data-spin-labels="off"` on the wrapper (blank slices), and a NEW `[data-spin-when="whatsapp"]` QR panel shown after every spin instead of the prize — §11. New class `whatsapp-qr-frame`. | **2026-11-18:** QR frame deleted, panel copy rewritten (§11).
 
 New classes (no existing class was edited): `is-product-sub` (combo on
 `text-size-large`), `is-spin-badge` (combo on `tag-wrapper`), `what-points`,
-`what-point`, `what-point-text`. (The six `qr-*` classes were created and then deleted
+`what-point`, `what-point-text`. 2026-11-12 redesign + logo: `what-is-wrapper`,
+`what-covers-heading`, `what-list-text`, `what-body`, `top-center-wrapper`,
+`discovery-logo`, and combo `is-what` on `product-card-wrapper`, `product-wrapper`,
+`product-list-item`, `check-wrapper`, `product-orb-wrapper` and
+`heading-style-product-heading`.
+
+**Discovery logo in the top bar — ALL 13 shell pages, 2026-11-12 (published to STAGING
+2026-11-12 10:03 UTC, not live).** New asset `discovery-logo.svg` (`6af58a4e30ac59bce64af709`, white
+wordmark + mark, 221×44). On every page, `flexi-top-wrapper` now has THREE children:
+`top-left-wrapper` (Flexicare logo), NEW `top-center-wrapper` > `img.discovery-logo`
+(alt "Discovery"), `top-right-wrapper` (tagline). `flexi-top-wrapper` is
+`space-between`, so the logo sits in the gap between the other two. Width 9.25rem
+(5.5rem on phones, where it fits with the tagline wrapping to two lines). This is
+SHELL: `walkShellClasses()` matches the top bar child-by-child, so the logo must stay
+on every page in the same position — a page without it misaligns the sync for every
+page loaded after it. Pages: `/`, `/start`, `/onboarding`, `/what-is-flexicare`,
+`/selfie`, `/avatar`, `/archetype`, `/flexicare`, `/meet-your-two-selves`,
+`/flexicare-product`, `/spin-to-win`, `/kiosk`, `/terms-and-conditions` (404/401/style
+guide have no shell). Any NEW page must be duplicated from one of these. (The six `qr-*` classes were created and then deleted
 with the QR section.)
 
 **History (all shipped in the 2026-09-15 publish):**
@@ -305,6 +323,21 @@ Two deliberate choices in that CSS:
   preview at tablet and phone width before publishing.
 
 ## 11. The WhatsApp QR — moved from the product page to AFTER THE SPIN (2026-11-12)
+
+**2026-11-18: THE QR IS GONE.** WhatsApp now fires automatically when `POST /spin`
+succeeds, so the `whatsapp-qr-frame` element (and its class) was deleted from
+`/spin-to-win` on Kenton's instruction, and the panel copy became: tag "Check your
+WhatsApp", heading "Your result is on its way", body "We've sent your spin result to the
+WhatsApp number you gave us. It should arrive in a few seconds. If you've won, show the
+message to a Flexicare promoter in store to collect your prize." The voided panel's
+heading lost `data-spin-prize-name` (the API no longer sends a prize name) and reads
+"This reward is no longer valid" / "Please ask a Flexicare promoter in store for help."
+Same day, after Kenton's staging test: the gap the QR left is filled by a WhatsApp
+icon (asset `whatsapp-icon.svg` `6afd5f33606cf082f38051cf`, new class `whatsapp-icon`:
+9rem wide, 6.5rem on phones, centred), placed where the QR frame was.
+
+Everything below is history.
+
 
 **History.** The PDF's Screen 11 put a QR on `/flexicare-product` ("Scan first. Then
 spin."). It was built 2026-11-11 and removed 2026-11-12 (element + six `qr-*` classes;

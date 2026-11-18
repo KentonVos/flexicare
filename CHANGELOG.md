@@ -14,6 +14,54 @@ Format:
 
 ---
 
+## 2026-11-18 — WhatsApp auto-sends: no QR, wheel never lands; "Prefer not to say"
+
+- Later the same day (Kenton): prize names are BACK on the wheel (`data-spin-labels="on"`),
+  and the wheel keeps turning behind the WhatsApp card instead of fading out — the wheel
+  panel is now `data-spin-when="ready spinning whatsapp"`, and `windDown()` leaves it
+  cruising (`data-spin-cruise`, default 0.35 of full speed) whenever its panel stays
+  visible; teardown stops it. WhatsApp icon (`whatsapp-icon`) fills the QR's old spot.
+
+- `src/flexicare-spin.js`, `src/flexicare-onboarding.js`, `src/flexicare-quiz.js`
+  (comments only), `CLAUDE.md`, `docs/kiosk-and-spin.md`, `docs/webflow-mcp.md`,
+  `docs/api-contract.md`, NEW `docs/frontend-handover-2026-11-17.md` (the backend
+  developer's handover, verbatim)
+- Backend change (handover §7): `POST /spin` now returns a receipt only — no prize, no
+  `segment_index`, no claim code — and the backend sends the result to the shopper's
+  WhatsApp itself. So:
+  - spin: the wheel starts turning ON TAP (`spinUp`, `data-spin-ramp`), turns for at
+    least `data-spin-min`, slows (`windDown`, `data-spin-settle`) and the WhatsApp
+    panel fades in while it is still turning; it is stopped once hidden. It never
+    lands on a slice. `land()`/`landingRotation()` and `data-spin-turns` / `-duration` /
+    `-ease` / `-ease-out` / `-wait` are gone. The `?demo` spin uses the same motion and
+    no longer picks a random segment. `VOIDED` goes to the voided panel, not WhatsApp.
+  - Webflow `/spin-to-win`: QR frame + `whatsapp-qr-frame` class DELETED; new panel copy
+    ("Check your WhatsApp" / "Your result is on its way" / …); voided panel copy.
+- Onboarding: third gender pill "Prefer not to say" (`data-gender="prefer_not_to_say"`,
+  Webflow) — the script needed no logic change, only its contract comment. The phone
+  PATCH now sends `marketing_consent` (the consent tick, a JSON boolean, handover §9.2).
+- Checked against the handover: API base is production; production serves the new
+  six-question routing quiz (R06 R07 R08 R01 R02 R09) and the quiz code takes it as-is;
+  `/routing/preview` returns archetypes for the new codes; no page uses `{echo}`.
+- Tested in a local copy of the staging pages (new scripts swapped in, network stubbed
+  for onboarding): spin timeline sampled frame by frame; onboarding sent
+  `gender: "prefer_not_to_say"` and `marketing_consent: true`.
+
+## 2026-11-12 — Discovery logo in every top bar; `/what-is-flexicare` redesigned
+
+- Webflow only (no code change); `docs/webflow-mcp.md` §8, `ARCHITECTURE.md` shell tree
+- Discovery logo (new asset `discovery-logo.svg`) added to the top bar of all 13 shell
+  pages, between the Flexicare logo and the tagline: `top-center-wrapper` >
+  `img.discovery-logo`. It is shell, so it has to be on every page at the same
+  position — a new page must be duplicated from an existing one.
+- `/what-is-flexicare` rebuilt on the product page's card, to Kenton's mock-up: tag,
+  headline, "Flexicare covers:" check list, the R445/FlexiFund line, the product
+  glows and glass orb. New classes only (`what-*`, `is-what` combos). The old content
+  block is hidden, not deleted, pending a yes.
+- Published to the STAGING domain 2026-11-12 10:03 UTC; NOT on flexi-play.co.za. Previewed
+  before that by injecting the same markup and CSS into the staging page (tablet 800×1280, phone
+  390×844, desktop 1440×900).
+
 ## 2026-11-12 — The prize moves to WhatsApp: QR after the spin, blank wheel
 
 - `src/flexicare-spin.js`, `CLAUDE.md`, `docs/webflow-mcp.md`, `docs/kiosk-and-spin.md`

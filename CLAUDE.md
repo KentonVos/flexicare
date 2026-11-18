@@ -11,9 +11,14 @@ Read this first; it is what a fresh session would otherwise have to rediscover.
 **PHASE 2 IS ON STAGING ONLY (published to `discovery-flexicare.webflow.io` 2026-11-12;
 `flexi-play.co.za` is still the 2026-09-15 publish).** The code for it is LIVE on `main`
 (tag `v1.2.0`) and is backward-compatible with the old live pages. Going live is one more
-Webflow publish to the custom domains — Kenton's call, after testing; the QR image is
-still missing. Full table in `docs/webflow-mcp.md` §8. Source: Matte BLK's "Flexicare
-Copy Rewrite v3" PDF, plus the client's WhatsApp-prize update of 2026-11-12.
+Webflow publish to the custom domains — Kenton's call, after testing. Full table in
+`docs/webflow-mcp.md` §8. Source: Matte BLK's "Flexicare Copy Rewrite v3" PDF, the
+client's WhatsApp-prize update of 2026-11-12, and the backend handover of 2026-11-17
+(`docs/frontend-handover-2026-11-17.md`, which supersedes `docs/api-contract.md` for the
+spin, the phone/consent PATCH and `gender`).
+**⚠️ Until the custom domains are republished, the LIVE spin page is broken against the
+current backend:** since 2026-11-17 `POST /spin` returns no prize, so the September
+pages (no whatsapp panel) show an empty "You Won!" card. Publish phase 2 before trading.
 - new copy on `/`, `/start`, `/avatar` (+ sub-line), `/onboarding` (badge, headline,
   WhatsApp/advisor sub-copy, consent tail, CTA "Start the quiz"),
   `/meet-your-two-selves` (Without/With Flexicare labels, CTA), `/flexicare-product`
@@ -21,15 +26,33 @@ Copy Rewrite v3" PDF, plus the client's WhatsApp-prize update of 2026-11-12.
   headline, long Discovery CTA)
 - a NEW page **`/what-is-flexicare`** between `/onboarding` and `/archetype`
   (`data-onboarding-next` and `/archetype`'s `data-quiz-back` both point at it)
-- **THE PRIZE IS NO LONGER SHOWN ON SCREEN (2026-11-12).** After the spin, EVERY outcome
-  (win or "not this time") shows a new `[data-spin-when="whatsapp"]` panel on
-  `/spin-to-win` with ONE FIXED QR that opens WhatsApp; the shopper sends the message
-  and the bot matches their number (from onboarding) and replies with the prize. The
-  wheel's slice labels are off (`data-spin-labels="off"`) so the landing gives nothing
-  away. Code: `paintAward()` routes to `whatsapp` when that panel exists — delete the
-  panel and the on-screen prize cards come back. **The QR frame is EMPTY** until the
-  bot team supplies the WhatsApp link. (The PDF's QR on `/flexicare-product` was
-  built and removed — `docs/webflow-mcp.md` §11.)
+- **THE PRIZE IS NO LONGER SHOWN ON SCREEN, AND THERE IS NO QR (2026-11-18).** The
+  backend sends the prize + claim code to the shopper's WhatsApp ITSELF the moment
+  `POST /spin` succeeds, and the response no longer says what was won (no prize, no
+  `segment_index`, no claim code). After every spin the `[data-spin-when="whatsapp"]`
+  panel on `/spin-to-win` says "Check your WhatsApp / Your result is on its way". The
+  wheel never lands: it spins up on tap, turns for at least `data-spin-min`, slows, and
+  the panel fades in while it is still turning (`spinUp`/`windDown` in
+  `flexicare-spin.js`) — and since the wheel panel lists `whatsapp` too, the wheel
+  stays on screen behind that card and KEEPS TURNING (`data-spin-cruise`) until the
+  page is left. Never let it stop there. Prize names are on the slices again
+  (`data-spin-labels="on"`, Kenton 2026-11-18). `VOIDED` (revisit only) shows the voided panel.
+  (A fixed QR existed 2026-11-12 → 18 and was removed once WhatsApp auto-fired; the
+  PDF's QR on `/flexicare-product` was built and removed too — `docs/webflow-mcp.md` §11.)
+- **Onboarding gender has a third pill, "Prefer not to say"** (2026-11-18,
+  `data-gender="prefer_not_to_say"`, sent verbatim to `POST /sessions`), and the phone
+  PATCH now carries `marketing_consent` = the consent tick. The tick is REQUIRED to
+  submit, so every shopper is recorded as consenting — if Discovery needs an optional
+  marketing opt-in, that is a separate checkbox, not this one.
+- **The staging demo link NEVER sends a WhatsApp.** `?kiosk=off` means no device token,
+  so the session is `WEB` and `POST /spin` would 409; `?demo` never calls `/spin` at
+  all. To demo the real message: a device PAIRED on the staging domain (pairing is per
+  domain; fresh code from the production admin), no `?demo` (`?demo=off`), and a phone
+  number that has never spun (one spin per number, campaign-wide). It is a REAL award:
+  real stock, a real claim code — ask the admin to void demo awards.
+- **CORS:** the backend handover says CORS will be locked to the production frontend
+  origin before go-live. If `discovery-flexicare.webflow.io` is not on that list, the
+  staging site (and every client review link) stops working the moment it happens.
 - **Onboarding will not move on until the WhatsApp number is saved** (2026-11-12,
   `sendPhone()` in `flexicare-onboarding.js`). The bot matches shoppers by that number,
   so do not "helpfully" make it non-blocking again. Errors show in
@@ -41,6 +64,11 @@ Copy Rewrite v3" PDF, plus the client's WhatsApp-prize update of 2026-11-12.
   that too
 - The quiz questions themselves (incl. both "live copy errors" in the PDF) are backend
   data from `GET /quiz`, not Webflow — they change in the admin, not here.
+- **Also on staging since its 2026-11-12 10:03 UTC republish (not live):** the
+  Discovery logo in the top bar of all 13 shell pages (`top-center-wrapper` >
+  `img.discovery-logo` inside `flexi-top-wrapper`) and `/what-is-flexicare` rebuilt on
+  the product page's card. The logo is SHELL: keep it on every page, same position, or
+  the shell class sync misaligns. The old what-is content is hidden, not deleted.
 
 **Do not assume a visual bug is a code bug until you have confirmed the site was
 published since the change.**
@@ -106,7 +134,9 @@ the tab booted with and the outcome of the last check.
    kiosk tablets those hosts fall back to `DEFAULTS`. Run `LiquidGlass.exportPresets()`
    on Kenton's machine and paste into `PRESETS` in `src/glass.js`. See the glass bullet
    below and `docs/webflow-mcp.md` §9.
-3. **The API base is STAGING** in `flexicare-core.js`. Swap before go-live.
+3. ~~The API base is STAGING~~ — it is **PRODUCTION** (`admin.flexi-play.co.za`), and
+   the deployed CDN copy was checked on 2026-11-18. Production serves the new six-question
+   routing quiz and is where WhatsApp is connected.
 4. ~~The dev pairing code `5555-5555` is live~~ **DISABLED 2026-09-11.**
    `DEV_PAIRING_ENABLED` in `flexicare-kiosk.js` is `false`: the code is rejected like
    any wrong code, and a device still holding the fake token is signed out on its next
@@ -182,9 +212,10 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
     price from `recommended_price_cents`.
 14. `src/flexicare-spin.js` — `/spin-to-win`, the prize wheel. The one KIOSK-ONLY page:
     a `WEB` session gets a hard 409 from `POST /spin`. Draws the wheel as SVG from
-    `GET /prizes/wheel` (segment count/order/labels/colours are all admin data) and
-    animates to the `segment_index` the SERVER returns — there is no client-side
-    randomness here and there must never be. Also owns the **lead form** that gates
+    `GET /prizes/wheel` (segment count/order/labels/colours are all admin data). The
+    server decides the outcome and (since 2026-11-17) does not tell the page: the wheel
+    spins and fades out without landing, and the result arrives on WhatsApp. There is
+    no client-side randomness here and there must never be. Also owns the **lead form** that gates
     the wheel (state `form`, before `ready`) — see the bullet below.
 15. `src/slider.js` — **NOT a content slider.** This is the "Liquid Glass Tuner", a dev-only control panel gated behind `?tune` in the URL. Ignore it for production changes unless the task is about tuning glass presets.
 16. `src/orb-tuner.js` — dev-only orb-motion control panel, gated behind `?orbtune`
@@ -466,10 +497,12 @@ Then these, in this exact order (order is load-bearing — see ARCHITECTURE.md):
   `WEB` session on a tablet. A 401 means the token was revoked: clear it and show the
   unpaired screen. And the inverse — **never clear the token on a network error or a
   5xx**; only a 401 does that, or flaky store wifi strands the tablet.
-- **The server owns the spin outcome.** `segment_index` in the `/spin` response IS the
-  result; the wheel only animates to it. Don't add client-side randomness, don't
-  "pre-pick" a segment while waiting, and don't treat a second `200` from a re-called
-  `/spin` as a second prize — it is idempotent and returns the same award.
+- **The server owns the spin outcome, and the page never learns it.** Since 2026-11-17
+  the `/spin` response is a receipt with no prize and no `segment_index`, so the wheel
+  must NEVER come to rest on a slice (it would contradict the WhatsApp message): it
+  fades out while still turning. Don't add client-side randomness, don't "pick" a
+  segment to land on, and don't treat a second `200` from a re-called `/spin` as a
+  second prize — it is idempotent and returns the same receipt.
 - **The wheel is drawn by JS, not authored in Webflow.** `GET /prizes/wheel` decides how
   many segments there are and what they say. Webflow supplies an EMPTY square
   `[data-spin-wheel]` (it is cleared on every render) plus the pointer, hub and button

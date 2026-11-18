@@ -154,7 +154,7 @@ code can never be lost to a page swap. States:
 | `loading` | resolving the session and the wheel |
 | `form` | the lead form must be completed before the wheel unlocks — **only if the page has a `form` panel** (`hasLeadForm()`). `/spin-to-win` has none since 2026-11-11, so it goes `loading` → `ready` |
 | `ready` | wheel drawn, button live |
-| `whatsapp` | **replaces every award state** when the page has a `whatsapp` panel (`/spin-to-win` does since 2026-11-12): a fixed QR that opens WhatsApp; the bot replies with the prize. The prize is never shown on screen, and the wheel's slice labels are off |
+| `whatsapp` | **replaces every award state except `VOIDED`** when the page has a `whatsapp` panel (`/spin-to-win` does since 2026-11-12): "Check your WhatsApp". Since 2026-11-18 there is no QR — the backend sends the prize to WhatsApp itself on `POST /spin`, whose response no longer names the prize or a segment, so the wheel never lands: its panel lists `whatsapp` too, so it keeps turning behind the card |
 | `spinning` | turning — button disabled |
 | `prize` | won a real prize; show the claim code |
 | `consolation` | the "try again" segment; **no claim-code emphasis** |

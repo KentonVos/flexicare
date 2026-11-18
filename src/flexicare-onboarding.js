@@ -10,6 +10,8 @@
      Collects first name, WhatsApp number, gender (required), and the
      T&Cs consent, then on submit:
        1. Creates the session   POST /sessions  { language, first_name, gender }
+          gender is "male" | "female" | "prefer_not_to_say" — whatever the
+          chosen pill's data-gender says (2026-11-18: third pill added).
           → stores the id via Flexicare.setSessionId (secret, sessionStorage)
           and the first name via Flexicare.setFirstName (used by later pages).
        2. Sends whichever "photo" the user chose — the two paths are
@@ -25,7 +27,8 @@
               session id and the session is created HERE.)
           Failure of either does NOT block navigation — the images poll later
           and show a graceful fallback.
-       3. Sends the WhatsApp number: PATCH …/contact/phone { phone_number }.
+       3. Sends the WhatsApp number: PATCH …/contact/phone
+          { phone_number, marketing_consent } (consent since 2026-11-18).
           BLOCKING since 2026-11-12 (see sendPhone): the prize now arrives on
           WhatsApp and the bot finds the shopper BY THIS NUMBER, so a session
           without it is a shopper who never hears back. Retried on network
@@ -70,7 +73,12 @@
                                 script until the number is non-empty & invalid.
      [data-onboarding-gender]   Optional wrapper (nice for grouping).
      [data-gender="male"] /
-     [data-gender="female"]     REQUIRED. The two clickable gender options —
+     [data-gender="female"] /
+     [data-gender="prefer_not_to_say"]
+                                REQUIRED (the third since 2026-11-18). The
+                                clickable gender options — the value is sent
+                                to POST /sessions verbatim, so it must be one
+                                of exactly those three strings —
                                 plain WEBFLOW DIVS work great here. The selected
                                 one gets a class toggled on it + aria-pressed.
                                 The class defaults to `is-selected`; override it
@@ -144,7 +152,7 @@
 
   var state = {
     form: null,
-    gender: null, // "male" | "female" | null
+    gender: null, // "male" | "female" | "prefer_not_to_say" | null
     consent: false,
     busy: false,
   };
@@ -419,7 +427,14 @@
     function once() {
       return FC.api("/sessions/" + FC.getSessionId() + "/contact/phone", {
         method: "PATCH",
-        body: { phone_number: f.whatsapp },
+        /* marketing_consent travels with the number and is locked with it
+           after the spin (handover §3.10/§9.2). It is the consent tick on this
+           form: "...happy for Discovery to contact me about my Flexicare
+           recommendation". A real JSON boolean — the string "true" is a 422.
+           The tick is REQUIRED to submit, so in practice this is always true;
+           if Discovery ever needs a separate, optional marketing opt-in, it
+           needs its own checkbox, not this one. */
+        body: { phone_number: f.whatsapp, marketing_consent: f.consent === true },
       }).catch(function (err) {
         var status = err && err.status;
         if (status === 409) return null;

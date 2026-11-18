@@ -6,9 +6,10 @@
 
    WHAT THIS PAGE DOES
      The very last beat, and the only KIOSK-ONLY one in the funnel. After the
-     product page, a shopper on an in-store tablet spins a wheel and wins one
-     of six physical prizes (or a consolation "try again" segment), then shows
-     the claim code to a Clicks team member.
+     product page, a shopper on an in-store tablet spins a wheel for one of
+     six physical prizes (or a consolation "try again" segment). The result
+     and its claim code arrive on their WhatsApp; they show that message to a
+     Flexicare promoter in store. Nothing about the prize is shown here.
 
        1. GET /sessions/{id}   — one call answers everything: is it COMPLETED,
           is it a KIOSK session, is there a phone number, has it already spun,
@@ -16,24 +17,35 @@
        2. GET /prizes/wheel    — the segments. ADMIN DATA: count, order,
           labels and colours all come from here. Nothing about the wheel is
           hard-coded, including how many slices it has.
-       3. POST /sessions/{id}/spin  — THE SERVER DECIDES. Stock and pacing are
-          enforced server-side; this page only animates to the index it is
-          told to land on.
+       3. POST /sessions/{id}/spin  — THE SERVER DECIDES, and since 2026-11-17
+          it does not tell this page what it decided. The response is a
+          receipt (award_id, status, location, first_name): no prize, no
+          segment_index, no claim code. The backend sends the prize and its
+          claim code to the shopper's WhatsApp itself, within seconds of the
+          spin (via Discovery). This page's whole job is the spin moment and
+          the "check your WhatsApp" panel.
 
-   THE SERVER OWNS THE OUTCOME
+   THE SERVER OWNS THE OUTCOME — AND THE WHEEL NEVER CLAIMS ONE
      There is no client-side randomness anywhere in this file, and there must
-     never be. `segment_index` in the response IS the result. We spin at a
-     constant speed while the request is in flight and only then decelerate
-     onto the segment — which is also why the wheel starts turning on tap,
-     BEFORE the response: it buys the latency for free instead of making the
-     shopper watch a spinner.
+     never be. Because the kiosk does not know the result, the wheel must not
+     come to rest on a segment (handover §7.2): a slice under the pointer would
+     contradict the WhatsApp message. So: the wheel starts turning on tap
+     (spinUp), keeps turning while the request is in flight and for at least
+     data-spin-min seconds, then slows (windDown) and the result panel
+     cross-fades in WHILE IT IS STILL TURNING. If the wheel's panel also lists
+     the result state (on /spin-to-win it does: the WhatsApp card is a modal
+     over the wheel), it keeps turning behind it until the page is left;
+     otherwise it is stopped once its panel has faded out. On an error it
+     stops where it is, under the error panel. (Until 2026-11-17 the response carried segment_index and the wheel
+     landed on it; that path is gone.)
 
    IDEMPOTENT BY DESIGN
      The server records exactly one award per session. Re-calling POST /spin
-     returns the SAME award — same claim code, same segment. So a double-tap,
-     a dropped connection or a reload mid-animation is safe, and a second 200
-     is never a second prize. On re-entry we don't even ask: `has_prize` on
-     the session tells us, and GET /sessions/{id}/prize re-shows it.
+     returns the SAME receipt (same award_id), and the shopper is messaged
+     once. So a double-tap, a dropped connection or a reload mid-animation is
+     safe, and a second 200 is never a second prize. On re-entry we don't even
+     ask: `has_prize` on the session tells us, and GET /sessions/{id}/prize
+     re-shows the receipt.
 
    WHY A WEB VISITOR SEES A DEAD END HERE (and that is correct)
      POST /spin on a `channel: "WEB"` session is a hard 409. Rather than let
@@ -61,15 +73,23 @@
                                   data-spin-lead-label="Submit"  what the CTA
                                      says while the lead form is up; it reverts
                                      to its authored text afterwards
-                                  data-spin-turns="1"     extra full rotations
-                                     before landing
-                                  data-spin-duration="1.5" seconds of the
-                                     landing tween
                                   data-spin-idle-turn="1" seconds per rotation
-                                     while waiting for the response
+                                     at full speed
+                                  data-spin-ramp="0.6"    seconds to reach full
+                                     speed after the tap
                                   data-spin-min="2"       minimum seconds of
-                                     spinning before landing may start, even if
+                                     spinning before the wind-down, even if
                                      the API answers instantly
+                                  data-spin-settle="0.9"  seconds of slowing
+                                     before the result panel starts to fade in
+                                     (the wheel is still turning as it goes)
+                                  data-spin-cruise="0.35" speed (fraction of
+                                     full) the wheel keeps turning at behind
+                                     the result panel, when the wheel's panel
+                                     lists that state too; it never stops there
+                                  (data-spin-turns / -duration / -ease /
+                                     -ease-out / -wait drove the old landing
+                                     on a segment and are now ignored.)
                                   data-spin-pointer-angle="0"  where the pointer
                                      sits, in degrees clockwise from 12 o'clock.
                                      The script publishes this back as the CSS
@@ -482,9 +502,10 @@
     rotor: null, // the back <g> (panes); kept for convenience
     rotors: null, // BOTH spinning groups — panes and content. Tweened together.
     idleTween: null,
-    landTween: null,
+    rampTween: null, // tweens idleTween's timeScale: the spin-up and wind-down
     spinStartedAt: 0,
-    waitTimer: null, // fires only if the API is slow — see onSpin
+    waitTimer: null, // the data-spin-min hold, then the settle — see onSpin
+    stopTimer: null, // stops the wheel once its panel has faded out
     busy: false, // a spin request is in flight
     mode: null, // current data-spin-state
     wheelReq: null, // in-flight GET /prizes/wheel
@@ -1540,16 +1561,10 @@
     return num(state.wrap, "data-spin-pointer-angle", 0);
   }
 
-  /* Where the rotor must end up for `index` to sit under the pointer.
-     A segment's centre starts at (index + 0.5) * step; rotating the wheel by
-     R moves it to centre + R, and we want that to equal the pointer angle. */
-  function landingRotation(index, count) {
-    var step = 360 / count;
-    var centre = (index + 0.5) * step;
-    var target = pointerAngle() - centre;
-    return ((target % 360) + 360) % 360;
-  }
-
+  /* Full speed is one turn per data-spin-idle-turn seconds, forever, until
+     something stops it. The spin-up and the wind-down never touch this tween's
+     duration — they tween its timeScale (rampTween), so speed changes are
+     smooth and the rotation itself never jumps. */
   function startIdleSpin() {
     if (!state.rotors || !state.rotors.length || !window.gsap) return;
     var perTurn = num(state.wrap, "data-spin-idle-turn", 1, 0.4);
@@ -1567,70 +1582,106 @@
 
   function stopTweens() {
     clearWait();
+    if (state.stopTimer) clearTimeout(state.stopTimer);
+    state.stopTimer = null;
+    if (state.rampTween) {
+      state.rampTween.kill();
+      state.rampTween = null;
+    }
     if (state.idleTween) {
       state.idleTween.kill();
       state.idleTween = null;
-    }
-    if (state.landTween) {
-      state.landTween.kill();
-      state.landTween = null;
     }
   }
 
-  function land(index, count, done) {
-    var w = state.wrap;
-    var turns = num(w, "data-spin-turns", 3, 0);
-    var duration = num(w, "data-spin-duration", 3, 0.3);
-    var target = landingRotation(index, count);
+  function canAnimate() {
+    return !!(state.rotors && state.rotors.length && window.gsap && !reduced());
+  }
 
-    /* ONE motion, or a deceleration — decided by whether the wheel is already
-       turning.
+  // On tap: from rest to full speed over data-spin-ramp seconds.
+  function spinUp() {
+    if (!canAnimate()) return;
+    startIdleSpin();
+    var ramp = num(state.wrap, "data-spin-ramp", 0.6, 0);
+    if (state.idleTween && ramp > 0) {
+      state.idleTween.timeScale(0);
+      state.rampTween = window.gsap.to(state.idleTween, {
+        timeScale: 1,
+        duration: ramp,
+        ease: "power1.in",
+      });
+    }
+  }
 
-       Normally it is not: we wait for the server's answer (a few hundred ms)
-       and then run a single ease-in-out that winds up and settles in one
-       gesture. That is the whole animation.
+  // Run fn once the wheel has turned for at least data-spin-min seconds since
+  // the tap. A fast API answer must still look like a spin.
+  function afterMinSpin(token, fn) {
+    var minMs = num(state.wrap, "data-spin-min", 2, 0) * 1000;
+    var hold = canAnimate() ? Math.max(0, minMs - (now() - state.spinStartedAt)) : 0;
+    clearWait();
+    state.waitTimer = setTimeout(function () {
+      state.waitTimer = null;
+      if (alive(token)) fn();
+    }, hold);
+  }
 
-       If the request was slow enough that we fell back to spinning while we
-       waited (see onSpin), starting an ease-IN-out from a moving wheel would
-       brake it to a stop and then accelerate again — a visible hitch. So in
-       that case we only decelerate, which is the physically correct
-       continuation of a wheel already in motion. */
-    var ease = state.idleTween
-      ? attr(w, "data-spin-ease-out", "power4.out")
-      : attr(w, "data-spin-ease", "power2.inOut");
-
-    if (!state.rotors || !state.rotors.length || !window.gsap || reduced()) {
+  /* The end of a spin. The kiosk does not know the result (§7.2), so the wheel
+     must NOT come to rest pointing at a slice: slow it, and let the result
+     panel take over while it is still turning. show() flips the state, which
+     cross-fades the wheel's panel out (applyWhen); once that fade is done the
+     wheel is off screen and is stopped. */
+  function windDown(token, show) {
+    if (!state.idleTween || !canAnimate()) {
       stopTweens();
-      setRotation(target);
-      if (done) done();
+      show();
       return;
     }
-
-    var from = currentRotation();
-    // Always forward, never backwards: normalise the current angle, then add
-    // the whole turns on top so the deceleration reads as one continuous spin.
-    var delta = ((target - from) % 360 + 360) % 360;
-    var to = from + turns * 360 + delta;
-
-    if (state.idleTween) {
-      state.idleTween.kill();
-      state.idleTween = null;
-    }
-    state.landTween = window.gsap.to(state.rotors, {
-      rotation: to,
-      duration: duration,
-      ease: ease,
-      svgOrigin: CX + " " + CY,
-      onComplete: function () {
-        state.landTween = null;
-        if (done) done();
-      },
+    var settle = num(state.wrap, "data-spin-settle", 0.9, 0);
+    var cruise = num(state.wrap, "data-spin-cruise", 0.35, 0.05, 1);
+    var outDur = panelCfg().outDur;
+    if (state.rampTween) state.rampTween.kill();
+    // Slows to a cruise over the settle AND the panel fade — never to zero.
+    state.rampTween = window.gsap.to(state.idleTween, {
+      timeScale: cruise,
+      duration: settle + outDur + 0.3,
+      ease: "power2.out",
     });
+    clearWait();
+    state.waitTimer = setTimeout(function () {
+      state.waitTimer = null;
+      if (!alive(token)) return;
+      show();
+      /* If the wheel's panel lists the new state too (/spin-to-win's does:
+         "ready spinning whatsapp", 2026-11-18), the wheel stays on screen
+         behind the result modal — so it KEEPS TURNING at the cruise speed,
+         forever, and teardown stops it. Stopping it there would land it on a
+         slice. Only a wheel that has faded away is stopped. */
+      if (wheelVisibleIn(state.mode)) return;
+      if (state.stopTimer) clearTimeout(state.stopTimer);
+      state.stopTimer = setTimeout(function () {
+        state.stopTimer = null;
+        if (alive(token) && !wheelVisibleIn(state.mode)) stopTweens();
+      }, (outDur + 0.3) * 1000);
+    }, settle * 1000);
+  }
+
+  // Does the panel holding the wheel show in `mode`?
+  function wheelVisibleIn(mode) {
+    var stage = slot("[data-spin-stage]") || slot("[data-spin-wheel]");
+    var p = stage;
+    while (p && p !== state.wrap && p.nodeType === 1) {
+      if (p.hasAttribute("data-spin-when")) {
+        var list = (p.getAttribute("data-spin-when") || "").split(/\s+/);
+        if (list.indexOf(mode) === -1) return false;
+      }
+      p = p.parentNode;
+    }
+    return !!stage;
   }
 
   function onSpin() {
     if (state.busy || state.mode !== "ready" || cooling()) return;
-    if (state.demo) return demoSpin(); // dev only — never touches the API
+    if (state.demo) return demoSpin(); // never touches the API
     var id = FC.getSessionId();
     if (!id) return;
 
@@ -1641,66 +1692,30 @@
 
     var token = state.token;
 
-    /* We deliberately do NOT start the wheel here.
-
-       A single speed-up-and-slow-down has to know where it ends before it
-       begins, so the good case is: ask the server, get an answer in a few
-       hundred milliseconds, then run one uninterrupted 3s gesture. Starting
-       first and retargeting later is what produces the two-part motion this
-       replaced — a flat spin, then a separate braking phase.
-
-       The exception is a slow answer. After data-spin-wait we start turning
-       anyway rather than leave the shopper looking at a frozen wheel, and
-       land() then decelerates instead of easing in. On store wifi that is
-       worth having; it just should not be the shape of the normal case. */
-    var waitMs = num(state.wrap, "data-spin-wait", 0.4, 0) * 1000;
-    state.waitTimer = setTimeout(function () {
-      state.waitTimer = null;
-      if (!alive(token) || !state.busy) return;
-      dbg("slow response — spinning while we wait");
-      startIdleSpin();
-    }, waitMs);
+    /* Handover §7.2: start turning on tap, before the request — the response
+       carries nothing the animation needs, so there is no reason to wait for
+       it. A slow answer just means a longer spin (no client timeout here;
+       the backend's guidance is nothing shorter than ~20 s). */
+    spinUp();
 
     /* The header is what proves this spin is happening on the tablet that
        started the session. Without it the server cannot tell, and answers 403. */
     FC.api("/sessions/" + id + "/spin", { method: "POST", kiosk: true })
       .then(function (award) {
         if (!alive(token)) return;
-        clearWait();
-        /* data-spin-min only matters on the fallback path: once the wheel IS
-           turning, cutting straight to the landing would read as a stutter.
-           On the normal path the single tween is the whole animation and
-           there is nothing to hold for. */
-        var hold = 0;
-        if (state.idleTween) {
-          var minSpin = num(state.wrap, "data-spin-min", 2, 0) * 1000;
-          hold = Math.max(0, minSpin - (now() - state.spinStartedAt));
-        }
-        setTimeout(function () {
-          if (!alive(token)) return;
+        afterMinSpin(token, function () {
           state.busy = false;
           state.award = award;
           FC.award = award; // survives a Barba swap, like every other result
-          var count = (state.segments && state.segments.length) || 0;
-          var index = award && award.segment_index;
-          if (count && typeof index === "number" && index >= 0 && index < count)
-            land(index, count, function () {
-              if (alive(token)) paintAward(award);
-            });
-          else {
-            // The server named a segment this wheel doesn't have (a stale
-            // wheel cached at boot, most likely). Don't fake a landing —
-            // stop where we are and show the prize, which is the real result.
-            stopTweens();
+          windDown(token, function () {
             paintAward(award);
-          }
-        }, hold);
+          });
+        });
       })
       .catch(function (err) {
-        clearWait();
         if (!alive(token)) return;
         state.busy = false;
-        stopTweens(); // stop the wheel where it is — never land on an error
+        stopTweens(); // stop the wheel where it is — on an error nothing was won
         handleSpinError(err);
       });
   }
@@ -1817,27 +1832,25 @@
     write("[data-spin-expires]", expires || "");
     show("[data-spin-expires-wrap]", !!expires && status === "AWARDED");
 
-    /* Phase 2 (2026-11-12): the prize is NOT revealed on screen. When the page
-       has a [data-spin-when] panel listing "whatsapp", EVERY award goes there
-       — a win, a consolation, and a revisit of one already redeemed, expired
-       or voided. That panel shows ONE fixed QR that opens WhatsApp; the
-       shopper sends the pre-filled message and the bot matches their number
-       (captured at onboarding) and replies with the prize. The award is still
-       painted into the hidden prize panels above, so taking the whatsapp
-       panel out of the Designer brings the on-screen prize card straight back.
-       The wheel's slice labels are switched off in the Designer
-       (data-spin-labels="off") so the landing does not give the prize away. */
-    if (hasPanel("whatsapp")) setState("whatsapp");
+    /* The prize is NOT revealed on screen (phase 2). Since 2026-11-17 the
+       backend sends it to the shopper's WhatsApp itself the moment the spin is
+       recorded, and the response no longer even says what it was (§7.2) — so
+       when the page has a [data-spin-when] panel listing "whatsapp", every
+       award goes there: "check your WhatsApp", nothing to scan, no prize name,
+       no code. The ONE exception is VOIDED (an admin cancelled it, seen only
+       on a revisit): that gets the voided panel, "no longer valid" (§7.3),
+       when the page has one. REDEEMED and EXPIRED stay on the WhatsApp panel —
+       the message itself carries the detail. Without a whatsapp panel the old
+       per-status cards come back, but they expect prize data the API no
+       longer sends: keep the panel. */
+    if (status === "VOIDED" && hasPanel("voided")) setState("voided");
+    else if (hasPanel("whatsapp")) setState("whatsapp");
     else if (status === "REDEEMED") setState("redeemed");
     else if (status === "EXPIRED") setState("expired");
     else if (status === "VOIDED") setState("voided");
     else setState(consolation ? "consolation" : "prize");
 
-    dbg("award", {
-      status: status,
-      segment: award.segment_index,
-      consolation: consolation,
-    });
+    dbg("award", { status: status, consolation: consolation });
   }
 
   function formatExpiry(iso) {
@@ -2027,7 +2040,6 @@
       prize: consolation
         ? { code: "TRY_AGAIN", name: "Try again next time", label: "Try again" }
         : { code: "WATER_BOTTLE", name: "Flexicare water bottle", label: "Water bottle" },
-      segment_index: consolation ? 6 : 1,
       is_consolation: consolation,
       claim_code: "FLX-DEMO-CODE",
       status: status,
@@ -2101,26 +2113,23 @@
       });
   }
 
-  // The ONLY place a segment is ever chosen client-side, and it exists purely
-  // so the deceleration can be watched without a backend. The real spin takes
-  // segment_index from the server and nothing else.
+  // The same motion as a real spin (spinUp → data-spin-min → windDown), with
+  // no API call. Nothing is chosen: like the real response, the demo award
+  // names no segment, and the wheel never stops on one.
   function demoSpin() {
     var count = (state.segments && state.segments.length) || 0;
-    if (!count) return;
-    var index = Math.floor(Math.random() * count);
-    var seg = state.segments[index];
-    var a = demoAward(seg && seg.is_consolation ? "consolation" : "prize");
-    a.segment_index = index;
-    if (seg) {
-      a.prize = { code: seg.code, name: seg.label, label: seg.label };
-      a.is_consolation = !!seg.is_consolation;
-    }
-    // No API to wait for, so this is always the single-motion case — which
-    // is exactly what you want when tuning the curve.
+    if (!count || state.busy) return;
+    var a = demoAward("prize");
+    state.busy = true;
+    state.spinStartedAt = now();
     setState("spinning");
     var token = state.token;
-    land(index, count, function () {
-      if (alive(token)) paintAward(a);
+    spinUp();
+    afterMinSpin(token, function () {
+      state.busy = false;
+      windDown(token, function () {
+        paintAward(a);
+      });
     });
   }
 

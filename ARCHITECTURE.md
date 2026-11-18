@@ -702,7 +702,10 @@ body
             padding-global
               container-large
                 <scroll wrapper>
-                  top-section-wrapper          (the logo + progress bar)
+                  top-section-wrapper          (the logos + progress bar)
+                    flexi-top-wrapper          left (Flexicare) / center (Discovery,
+                                               since 2026-11-12) / right (tagline)
+                    fill-bar > gradient-line   data-progress-bar
                   glass-content-wrapper        data-barba="container"
         button-navigation-wrapper       data-barba-sync="nav", data-nav-reveal,
                                           data-show-except="landing"

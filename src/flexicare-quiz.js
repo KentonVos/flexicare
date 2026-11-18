@@ -11,11 +11,17 @@
        ROUTING stage (this page, /archetype):
          • GET /quiz?lang=en once (cached on the controller so the
            later FLEX page reuses it — no second fetch).
-         • Render the 5 ROUTING questions (archetype == null) in order.
+         • Render EVERY ROUTING question (archetype == null) in the order the
+           API returns. Never assume a count or a code: since 2026-11-17 the
+           API sends SIX (R06 R07 R08 R01 R02 R09) where it used to send five,
+           and the admin can change the set without a frontend release. The
+           progress label and the "all answered" check read the list length.
          • On each pick: POST /sessions/{id}/answers  (upsert, one answer).
-         • R03 has drives_echo — its chosen option LABEL is stashed on
-           Flexicare.echo for later pages to echo into copy.
-         • After the 5th: POST /routing/preview → store the archetype
+         • A question with drives_echo has its chosen option LABEL stashed on
+           Flexicare.echo for later pages to echo into copy. (Since the
+           2026-11 rewrite NO question drives the echo, so Flexicare.echo
+           stays empty; nothing on the live pages uses it.)
+         • After the last: POST /routing/preview → store the archetype
            (A/B/C) on Flexicare.archetype, then navigate to data-quiz-done
            (the reveal page — /meet-your-two-selves — NOT a loading screen).
 

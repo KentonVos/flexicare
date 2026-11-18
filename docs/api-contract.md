@@ -6,6 +6,13 @@
 >
 > **Base URL is configured in one place:** `Flexicare.config.apiBase` in
 > `src/flexicare-core.js` (PRODUCTION since 2026-09-09).
+>
+> **⚠️ SUPERSEDED IN PART (2026-11-18)** by `docs/frontend-handover-2026-11-17.md`, the
+> backend developer's newer handover. Where they differ, the newer one wins — notably:
+> `POST /spin` and `GET /prize` return a receipt with NO prize, `segment_index` or
+> claim code (WhatsApp delivers them); `PATCH …/contact/phone` takes
+> `marketing_consent`; `gender` accepts `prefer_not_to_say`; `GET /quiz` returns six
+> routing questions; `PATCH …/identity` exists.
 
 ---
 
